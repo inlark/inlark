@@ -1,0 +1,182 @@
+---
+import { ArrowUpRight, Download } from '@inlark/ui/icons'
+import InboxWindow from './InboxWindow.astro'
+import { GitHubIcon } from './GitHubIcon'
+import { links, version } from '../data/links'
+
+// A fixed seed keeps the sky identical between builds.
+let seed = 11
+const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+const stars = Array.from({ length: 64 }, () => ({
+  x: random() * 100,
+  y: Math.pow(random(), 1.4) * 100,
+  size: random() < 0.12 ? 2 : 1,
+  opacity: 0.12 + random() * 0.5,
+  delay: random() * 6,
+  duration: 3 + random() * 5,
+}))
+---
+
+<section id="top" class="relative isolate overflow-hidden pt-32 sm:pt-44">
+  <div class="absolute inset-x-0 top-0 -z-10 h-[680px]" aria-hidden="true">
+    {stars.map((s) => (
+      <span
+        class="star"
+        style={`left:${s.x}%;top:${s.y}%;width:${s.size}px;height:${s.size}px;--o:${s.opacity.toFixed(2)};animation-delay:${s.delay.toFixed(1)}s;animation-duration:${s.duration.toFixed(1)}s`}
+      />
+    ))}
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-4xl px-5 text-center">
+    <a
+      href={links.releases}
+      class="rise group inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-white/[0.03] py-1.5 pr-3 pl-2 text-[0.8rem] text-ink-2 transition-colors hover:border-white/20 hover:text-ink"
+    >
+      <span class="rounded-full bg-dawn/15 px-2 py-0.5 font-mono text-[0.68rem] text-dawn">
+        v{version}
+      </span>
+      Early preview for Linux
+      <ArrowUpRight
+        size={14}
+        className="text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+      />
+    </a>
+
+    <h1 class="display rise mt-8 text-[clamp(3.1rem,8.6vw,6.9rem)]" style="--delay:.08s">
+      Linux deserves <br class="hidden sm:block" />
+      <em class="dawn-text pr-[0.06em]">beautiful</em> email.
+    </h1>
+
+    <p
+      class="rise mx-auto mt-7 max-w-[37rem] text-lg leading-relaxed text-ink-2 sm:text-[1.3rem]"
+      style="--delay:.16s"
+    >
+      Inlark is a fast, keyboard-first mail client for the accounts you already own. Every JMAP and
+      IMAP inbox in one calm place, with no hosted service in between and no telemetry.
+    </p>
+
+    <div class="rise mt-10 flex flex-wrap justify-center gap-3" style="--delay:.24s">
+      <a href="#install" class="btn btn-primary">
+        <Download size={17} /> Download for Linux
+      </a>
+      <a href={links.repo} class="btn btn-ghost">
+        <GitHubIcon className="size-4" /> View source
+      </a>
+    </div>
+    <p class="rise mt-5 font-mono text-[0.7rem] tracking-wide text-ink-3" style="--delay:.3s">
+      AppImage · deb · rpm · Nix<span class="hidden sm:inline">&nbsp; — &nbsp;</span>
+      <span class="block sm:inline">free software, AGPL-3.0</span>
+    </p>
+  </div>
+
+  <div class="stage relative mx-auto mt-16 max-w-[1240px] px-3 sm:mt-24 sm:px-8">
+    <div class="sun" aria-hidden="true"></div>
+    <div class="horizon" aria-hidden="true"></div>
+    <div class="window @container">
+      <InboxWindow animate />
+    </div>
+    <p class="sr-only">
+      Inlark’s unified inbox, showing conversations from four accounts in one list, each marked with
+      the colour of its account.
+    </p>
+  </div>
+</section>
+
+<style>
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    opacity: var(--o);
+    animation: twinkle ease-in-out infinite;
+  }
+
+  .dawn-text {
+    font-style: italic;
+    font-weight: 360;
+    background: linear-gradient(95deg, #d8d5ff 5%, #f0c8d6 55%, var(--color-dawn) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .stage {
+    --window-height: clamp(420px, 52vw, 640px);
+  }
+
+  /* The light the window rises into. */
+  .sun {
+    position: absolute;
+    left: 50%;
+    top: -300px;
+    width: min(1600px, 180vw);
+    aspect-ratio: 16 / 9;
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      rgb(242 184 139 / 0.42) 0%,
+      rgb(224 158 190 / 0.26) 24%,
+      rgb(140 128 240 / 0.17) 46%,
+      rgb(72 75 211 / 0.07) 64%,
+      transparent 74%
+    );
+    filter: blur(24px);
+    pointer-events: none;
+    transform: translate(-50%, 0);
+    animation: sunrise 2.8s var(--ease-out-expo) 0.15s both;
+  }
+
+  /* The curve of the horizon, lit from behind, that the window sits in front of. */
+  .horizon {
+    --r: 1700px;
+    position: absolute;
+    left: 50%;
+    top: calc(var(--window-height) * 0.3);
+    width: calc(var(--r) * 2);
+    height: calc(var(--r) * 2);
+    margin-left: calc(var(--r) * -1);
+    border-radius: 50%;
+    background: var(--color-night);
+    box-shadow:
+      0 -1px 0 rgb(255 220 196 / 0.55),
+      0 -2px 12px rgb(242 184 139 / 0.35),
+      0 -40px 120px -20px rgb(200 150 220 / 0.3),
+      inset 0 40px 80px -40px rgb(170 166 236 / 0.22);
+    pointer-events: none;
+  }
+
+  .window {
+    position: relative;
+    z-index: 2;
+    height: var(--window-height);
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.2),
+      rgb(255 255 255 / 0.06) 22%,
+      rgb(255 255 255 / 0.03)
+    );
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.55),
+      0 50px 140px -30px rgb(0 0 0 / 0.95),
+      0 -30px 140px -60px rgb(242 184 139 / 0.45);
+    transform-origin: 50% 0;
+    animation: window-in 1.7s var(--ease-out-expo) 0.3s both;
+  }
+  .window::before {
+    content: '';
+    position: absolute;
+    inset: 0 12% auto;
+    height: 1px;
+    z-index: 3;
+    background: linear-gradient(90deg, transparent, rgb(255 226 206 / 0.7), transparent);
+  }
+  .window :global(.app) {
+    height: 100%;
+    border-radius: 15px;
+    overflow: hidden;
+  }
+  .window :global(.app-shell) {
+    border-radius: 15px;
+  }
+</style>

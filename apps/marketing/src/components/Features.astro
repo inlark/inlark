@@ -1,0 +1,332 @@
+---
+import {
+  Archive,
+  ChevronDown,
+  FolderInput,
+  Inbox,
+  Moon,
+  Search,
+  Sun,
+  Undo2,
+  X,
+} from '@inlark/ui/icons'
+import { Mark } from './Mark'
+import { AccountMark, MailRow, SenderTile } from './mail/MailRow'
+import { accountById, accounts, inbox } from '../data/mail'
+
+const unified = [inbox[0], inbox[2], inbox[3], inbox[5]].map((c) => ({ ...c, unread: false }))
+const scrollRows = [...inbox, ...inbox]
+---
+
+<section id="features" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
+  <div class="reveal mx-auto max-w-3xl text-center">
+    <p class="eyebrow">Everyday email, done well</p>
+    <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">
+      Everything you reach for. Nothing in the way.
+    </h2>
+    <p class="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-ink-2">
+      Conversations, folders, search, attachments, drafts, replies and forwarding — the complete
+      everyday client, with care in every detail.
+    </p>
+  </div>
+
+  <div class="mt-16 grid gap-4 md:grid-cols-3">
+    <!-- Unified inbox -->
+    <article class="card reveal flex flex-col md:col-span-2">
+      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
+        <h3 class="text-xl font-semibold tracking-[-0.01em]">Every account, one calm inbox</h3>
+        <p class="mt-2.5 max-w-md leading-relaxed text-ink-2">
+          Personal, work and side projects arrive together in one timeline, each marked with its
+          account. Replies go out from the address the message was sent to.
+        </p>
+      </div>
+      <div class="app relative mt-8 flex-1 px-6 pb-6 sm:px-10" data-theme="dark">
+        <div class="mb-3 flex flex-wrap gap-1.5">
+          <span class="flex items-center gap-1.5 rounded-full bg-(--selected) px-2.5 py-1 text-[11.5px] text-(--text-strong)">
+            <Inbox size={13} /> All accounts
+          </span>
+          {accounts.map((a) => (
+            <span class="flex items-center gap-1.5 rounded-full border border-(--border-strong) px-2.5 py-1 text-[11.5px] text-(--secondary)">
+              <AccountMark account={a} size={12} /> {a.name}
+            </span>
+          ))}
+        </div>
+        <div class="@container overflow-hidden rounded-[10px] border border-(--border) bg-(--bg)">
+          {unified.map((c) => (
+            <MailRow conversation={c} />
+          ))}
+        </div>
+        <div class="absolute right-10 bottom-3 hidden items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] shadow-[0_18px_50px_#000a] sm:flex">
+          <span class="text-(--muted)">From</span>
+          <AccountMark account={accountById.studio} size={14} />
+          <span class="text-(--text-strong)">{accountById.studio.email}</span>
+          <ChevronDown size={12} className="text-(--muted)" />
+        </div>
+      </div>
+    </article>
+
+    <!-- Command palette -->
+    <article class="card reveal flex flex-col" style="--delay:.08s">
+      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
+        <h3 class="text-xl font-semibold tracking-[-0.01em]">
+          <span class="kbd mr-1 text-[0.8em]">Ctrl</span>
+          <span class="kbd mr-2 text-[0.8em]">K</span> for everything
+        </h3>
+        <p class="mt-2.5 leading-relaxed text-ink-2">
+          Every action, folder and account is a few letters away, with its shortcut beside it.
+        </p>
+      </div>
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
+        <div class="overflow-hidden rounded-[12px] border border-(--border-strong) bg-(--raised) shadow-[0_24px_60px_#0009]">
+          <div class="flex items-center gap-2.5 border-b border-(--border) px-3.5 py-3 text-[13px]">
+            <Search size={14} className="text-(--muted)" />
+            <span class="text-(--text-strong)">
+              arch<span class="caret"></span>
+            </span>
+          </div>
+          <div class="p-1.5 text-[12px]">
+            <div class="px-2 pt-1.5 pb-1 text-[10.5px] text-(--faint)">Conversation</div>
+            <div class="flex items-center gap-2.5 rounded-[7px] bg-(--selected) px-2 py-1.5 text-(--text-strong)">
+              <Archive size={14} /> Archive <span class="app-kbd ml-auto">E</span>
+            </div>
+            <div class="flex items-center gap-2.5 px-2 py-1.5 text-(--secondary)">
+              <FolderInput size={14} /> Move to folder… <span class="app-kbd ml-auto">V</span>
+            </div>
+            <div class="px-2 pt-2.5 pb-1 text-[10.5px] text-(--faint)">Go to</div>
+            <div class="flex items-center gap-2.5 px-2 py-1.5 text-(--secondary)">
+              <Archive size={14} /> Archive
+              <span class="ml-auto flex gap-1">
+                <span class="app-kbd">G</span>
+                <span class="app-kbd">A</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Search -->
+    <article class="card reveal flex flex-col">
+      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
+        <h3 class="text-xl font-semibold tracking-[-0.01em]">Search that goes all the way back</h3>
+        <p class="mt-2.5 leading-relaxed text-ink-2">
+          Search runs on your server across every folder and every year. Narrow it by sender,
+          recipient, subject, date or attachment.
+        </p>
+      </div>
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
+        <div class="flex items-center gap-2.5 rounded-[9px] border border-(--accent-solid) bg-(--bg) px-3 py-2.5 text-[13px] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-solid)_22%,transparent)]">
+          <Search size={14} className="text-(--muted)" />
+          <span class="text-(--text-strong)">invoice</span>
+          <span class="app-kbd ml-auto">/</span>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-1.5 text-[11.5px]">
+          {['From: Northwind', 'After: 2024-01-01', 'Has attachments'].map((chip) => (
+            <span class="flex items-center gap-1.5 rounded-md border border-(--border-strong) bg-(--surface) py-1 pr-1.5 pl-2 text-(--secondary)">
+              {chip} <X size={11} className="text-(--muted)" />
+            </span>
+          ))}
+        </div>
+        <p class="mt-4 text-[11.5px] text-(--muted)">
+          <span class="text-(--text-strong)">31 conversations</span> · 2024 – today
+        </p>
+      </div>
+    </article>
+
+    <!-- Scale -->
+    <article class="card reveal relative flex flex-col" style="--delay:.08s">
+      <div
+        class="scroller app pointer-events-none absolute inset-0 opacity-[0.14]"
+        data-theme="dark"
+        aria-hidden="true"
+      >
+        <div class="scroller-track @container">
+          {scrollRows.map((c) => (
+            <MailRow conversation={c} compact />
+          ))}
+        </div>
+      </div>
+      <div class="relative flex flex-1 flex-col justify-end p-8 sm:p-10">
+        <p class="display scale-number text-[clamp(3.4rem,6vw,4.6rem)]">250,000</p>
+        <h3 class="mt-3 text-xl font-semibold tracking-[-0.01em]">Years of mail, still instant</h3>
+        <p class="mt-2.5 leading-relaxed text-ink-2">
+          conversations in one unified inbox, yet only the few dozen on screen are ever drawn. Big
+          archives stay smooth to scroll.
+        </p>
+      </div>
+    </article>
+
+    <!-- Undo -->
+    <article class="card reveal flex flex-col" style="--delay:.16s">
+      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
+        <h3 class="text-xl font-semibold tracking-[-0.01em]">Every mistake, one key from undone</h3>
+        <p class="mt-2.5 leading-relaxed text-ink-2">
+          Archive, trash, move, star or mark as spam, then take it back with{' '}
+          <span class="kbd text-[0.85rem]">Z</span> — even if another client changed the mailbox in
+          between.
+        </p>
+      </div>
+      <div class="app relative mt-8 h-48 flex-1 px-6 sm:px-8" data-theme="dark">
+        {[
+          ['Archived 3 conversations', 1],
+          ['Moved to Receipts', 0.45],
+          ['Marked as spam', 0.18],
+        ].map(([text, opacity], i) => (
+          <div
+            class="toast-stack absolute inset-x-6 flex items-center gap-3 rounded-[10px] border border-(--border-strong) bg-(--raised) py-2.5 pr-2.5 pl-4 text-[12.5px] text-(--text-strong) shadow-[0_18px_50px_#000a] sm:inset-x-8"
+            style={`top:${i * 54}px;opacity:${opacity};transform:scale(${1 - i * 0.04});z-index:${3 - i}`}
+          >
+            {text}
+            <span class="ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-(--accent)">
+              <Undo2 size={13} /> Undo <span class="app-kbd">Z</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </article>
+
+    <!-- Themes -->
+    <article class="card reveal flex flex-col md:col-span-2">
+      <div class="grid flex-1 gap-8 p-8 sm:p-10 md:grid-cols-[1fr_1.35fr] md:items-center">
+        <div>
+          <h3 class="text-xl font-semibold tracking-[-0.01em]">Dark and light, with equal care</h3>
+          <p class="mt-2.5 leading-relaxed text-ink-2">
+            Quiet surfaces, readable type and subtle emphasis in both themes — or let Inlark follow
+            your desktop. Rich HTML mail keeps the look its sender designed.
+          </p>
+          <div class="mt-6 inline-flex rounded-lg border border-line-strong p-1 text-sm text-ink-2">
+            <span class="flex items-center gap-1.5 rounded-md bg-white/[0.07] px-3 py-1 text-ink">
+              <Moon size={14} /> Dark
+            </span>
+            <span class="flex items-center gap-1.5 px-3 py-1">
+              <Sun size={14} /> Light
+            </span>
+            <span class="px-3 py-1">System</span>
+          </div>
+        </div>
+        <div class="theme-split relative h-60 overflow-hidden rounded-[12px] border border-line-strong">
+          {(['dark', 'light'] as const).map((theme) => (
+            <div
+              class={`app theme-pane theme-${theme} absolute inset-0 bg-(--bg) p-6`}
+              data-theme={theme}
+            >
+              <div class="flex items-center gap-2 text-[11px] text-(--muted)">
+                <AccountMark account={accountById.studio} size={13} /> Studio
+                <span class="text-(--faint)">·</span> Conversation
+              </div>
+              <p class="mt-2 text-[17px] font-semibold tracking-[-0.01em] whitespace-nowrap text-(--text-strong)">
+                A few thoughts on the new direction
+              </p>
+              <div class="mt-4 flex items-center gap-3 border-t border-(--border) pt-4 text-[12px]">
+                <SenderTile name="Maya Chen" tint="#a69aef" />
+                <span class="font-medium text-(--text-strong)">Maya Chen</span>
+                <span class="ml-auto text-[11px] text-(--muted)">9:41 AM</span>
+              </div>
+              <p class="mt-3 pl-[34px] text-[12.5px] leading-[1.65] text-(--text)">
+                I took another look at the explorations this morning. The quieter direction feels
+                right — it gets out of the way and lets the work breathe.
+              </p>
+            </div>
+          ))}
+          <svg
+            class="pointer-events-none absolute inset-0 size-full"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <line
+              x1="60"
+              y1="0"
+              x2="44"
+              y2="100"
+              stroke="rgb(255 255 255 / 0.28)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
+        </div>
+      </div>
+    </article>
+
+    <!-- Desktop integration -->
+    <article class="card reveal flex flex-col" style="--delay:.08s">
+      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
+        <h3 class="text-xl font-semibold tracking-[-0.01em]">At home on your desktop</h3>
+        <p class="mt-2.5 leading-relaxed text-ink-2">
+          Native notifications, a tray icon with your unread count, and every{' '}
+          <span class="font-mono text-[0.88em] text-ink">mailto:</span> link opens a new message.
+        </p>
+      </div>
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
+        <div class="flex items-center justify-end gap-3 rounded-t-[10px] bg-black/50 px-3 py-1.5 text-[11px] text-(--secondary)">
+          <span class="flex items-center gap-1.5">
+            <Mark size={12} /> 9
+          </span>
+          <span>Mon 28 Sep</span>
+          <span class="text-(--text-strong)">09:41</span>
+        </div>
+        <div class="notification mt-3 flex gap-3 rounded-[14px] border border-(--border-strong) bg-(--raised) p-3.5 shadow-[0_24px_60px_#000b]">
+          <span class="grid size-8 shrink-0 place-items-center rounded-[9px] bg-linear-to-br from-[#6268ef] to-[#292397]">
+            <Mark size={16} />
+          </span>
+          <div class="min-w-0 text-[12px] leading-snug">
+            <p class="flex gap-2 text-(--muted)">
+              Inlark <span class="text-(--faint)">now</span>
+            </p>
+            <p class="mt-0.5 font-semibold text-(--text-strong)">Maya Chen</p>
+            <p class="truncate text-(--secondary)">A few thoughts on the new direction</p>
+          </div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<style>
+  .caret {
+    display: inline-block;
+    width: 1.5px;
+    height: 1.05em;
+    margin-left: 1px;
+    vertical-align: -0.15em;
+    background: var(--accent);
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .scroller {
+    mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
+  }
+  .scroller-track {
+    animation: scroll-mail 14s linear infinite;
+  }
+  @keyframes scroll-mail {
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  .scale-number {
+    font-weight: 330;
+    letter-spacing: -0.035em;
+    background: linear-gradient(180deg, #fff 30%, #aaa6ec);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .toast-stack {
+    transform-origin: 50% 0;
+  }
+
+  .theme-dark {
+    clip-path: polygon(0 0, 60% 0, 44% 100%, 0 100%);
+  }
+  .theme-light {
+    clip-path: polygon(60% 0, 100% 0, 100% 100%, 44% 100%);
+  }
+</style>

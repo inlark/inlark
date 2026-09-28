@@ -1,0 +1,153 @@
+---
+import { AlertCircle, Check, FileText, Send } from '@inlark/ui/icons'
+
+const points = [
+  {
+    title: 'Drafts that outlast anything',
+    text: 'Every draft is saved on your device as you write, then synced to your server. Quitting, crashing or losing the connection won’t take your words with it.',
+  },
+  {
+    title: 'Sending you can trust',
+    text: 'Each message says exactly where it stands. If the connection drops mid-send, Inlark marks it unconfirmed and never sends it again on its own.',
+  },
+  {
+    title: 'Partial delivery, handled',
+    text: 'When a server refuses some recipients, you see exactly who, with a new draft ready for just them.',
+  },
+  {
+    title: 'Honest about your server',
+    text: 'If a server can’t move or delete a message safely, Inlark turns that action off and tells you why, instead of guessing.',
+  },
+]
+---
+
+<section id="reliability" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
+  <div class="grid items-center gap-14 lg:grid-cols-[1fr_1.05fr] lg:gap-20">
+    <div class="reveal">
+      <p class="eyebrow">Dependable by design</p>
+      <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">Nothing you write gets lost.</h2>
+      <dl class="mt-10 grid gap-x-8 gap-y-8 sm:grid-cols-2">
+        {points.map((p) => (
+          <div>
+            <dt class="font-semibold text-ink">{p.title}</dt>
+            <dd class="mt-2 leading-relaxed text-ink-2">{p.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="reveal relative" style="--delay:.1s" aria-hidden="true">
+      <div class="status-glow"></div>
+      <div class="app relative" data-theme="dark">
+        <div class="overflow-hidden rounded-[16px] border border-(--border-strong) bg-(--bg) shadow-[0_40px_100px_-30px_#000]">
+          <header class="flex items-center gap-2.5 border-b border-(--border) px-5 py-4">
+            <Send size={15} className="text-(--muted)" />
+            <span class="text-[14px] font-semibold text-(--text-strong)">Send status</span>
+            <span class="ml-auto text-[11px] text-(--muted)">Today</span>
+          </header>
+
+          <div class="status-item border-b border-(--border) px-5 py-4" style="--i:0">
+            <div class="flex items-center gap-3">
+              <span class="grid size-6 place-items-center rounded-full bg-(--green)/15 text-(--green)">
+                <Check size={13} strokeWidth={2.2} />
+              </span>
+              <span class="text-[13px] font-medium text-(--text-strong)">
+                Re: Coffee sometime next week?
+              </span>
+              <span class="ml-auto text-[11px] text-(--muted)">9:02 AM</span>
+            </div>
+            <p class="mt-1.5 pl-9 text-[12px] text-(--muted)">
+              <span class="text-(--secondary)">Sent · Copy in Sent pending.</span> Delivered. Its
+              copy in Sent hasn’t been saved yet.
+            </p>
+          </div>
+
+          <div class="status-item border-b border-(--border) px-5 py-4" style="--i:1">
+            <div class="flex items-center gap-3">
+              <span class="grid size-6 place-items-center rounded-full bg-[#d4b36e]/15 text-(--star)">
+                <AlertCircle size={13} strokeWidth={2} />
+              </span>
+              <span class="text-[13px] font-medium text-(--text-strong)">Quarterly numbers</span>
+              <span class="ml-auto rounded-[5px] bg-[#d4b36e]/12 px-1.5 py-px text-[10.5px] text-(--star)">
+                Delivery unconfirmed
+              </span>
+            </div>
+            <p class="mt-1.5 pl-9 text-[12px] leading-relaxed text-(--muted)">
+              The server may have accepted this message. Check again before sending a replacement,
+              or recipients may get it twice.
+            </p>
+            <div class="mt-3 pl-9">
+              <span class="inline-flex rounded-[6px] border border-(--border-strong) bg-(--surface) px-2.5 py-1 text-[11.5px] text-(--text)">
+                Check again
+              </span>
+            </div>
+          </div>
+
+          <div class="status-item px-5 py-4" style="--i:2">
+            <div class="flex items-center gap-3">
+              <span class="grid size-6 place-items-center rounded-full bg-(--accent)/15 text-(--accent)">
+                <Send size={12} />
+              </span>
+              <span class="text-[13px] font-medium text-(--text-strong)">
+                Plans for the offsite
+              </span>
+              <span class="ml-auto rounded-[5px] bg-(--accent)/12 px-1.5 py-px text-[10.5px] text-(--accent)">
+                Partially sent
+              </span>
+            </div>
+            <p class="mt-1.5 pl-9 text-[12px] text-(--muted)">
+              Not delivered to <span class="text-(--secondary)">kai@oldmail.example</span>. Everyone
+              else received it.
+            </p>
+            <div class="mt-3 pl-9">
+              <span class="inline-flex items-center gap-1.5 rounded-[6px] bg-(--accent-solid) px-2.5 py-1 text-[11.5px] text-white">
+                <FileText size={12} /> Create draft to refused recipients
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="draft-chip absolute -bottom-5 -left-4 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] text-(--secondary) shadow-[0_18px_50px_#000c] sm:-left-8">
+          <span class="size-1.5 rounded-full bg-(--green)"></span> Saved on this device
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .status-glow {
+    position: absolute;
+    inset: 10% -10% -10%;
+    background: radial-gradient(closest-side, rgb(98 104 239 / 0.22), transparent);
+    filter: blur(40px);
+  }
+  .status-item {
+    opacity: 0;
+    transform: translateY(8px);
+    transition:
+      opacity 0.8s var(--ease-out-expo),
+      transform 0.8s var(--ease-out-expo);
+    transition-delay: calc(0.25s + var(--i) * 0.14s);
+  }
+  :global(.is-visible) .status-item {
+    opacity: 1;
+    transform: none;
+  }
+  .draft-chip {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.8s var(--ease-out-expo) 0.8s;
+  }
+  :global(.is-visible) .draft-chip {
+    opacity: 1;
+    transform: none;
+  }
+  @media (scripting: none) {
+    .status-item,
+    .draft-chip {
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>

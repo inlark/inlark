@@ -1,0 +1,43 @@
+---
+import { Install } from './Install'
+import { links, version } from '../data/links'
+---
+
+<section id="install" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
+  <div class="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+    <div class="reveal min-w-0">
+      <p class="eyebrow">Get Inlark</p>
+      <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">Install it in a minute.</h2>
+      <p class="mt-6 text-lg leading-relaxed text-ink-2">
+        Free software for Linux, packaged for Nix, NixOS, Debian, Ubuntu and Fedora, or as a
+        portable AppImage.
+      </p>
+      <div class="mt-8 rounded-xl border border-dawn/20 bg-dawn/[0.04] p-5 text-[0.95rem] leading-relaxed text-ink-2">
+        <p>
+          <span class="font-semibold text-dawn">Inlark {version} is an early preview.</span> Try it
+          alongside your current client while it matures, and{' '}
+          <a
+            href={links.issues}
+            class="text-ink underline decoration-ink-3 underline-offset-4 hover:decoration-ink"
+          >
+            tell us what breaks
+          </a>
+          .
+        </p>
+      </div>
+      <p class="mt-6 text-sm text-ink-3">
+        Builds for macOS and Windows are on the{' '}
+        <a
+          href={links.releases}
+          class="text-ink-2 underline decoration-ink-3 underline-offset-4 hover:text-ink"
+        >
+          releases page
+        </a>{' '}
+        too. They aren’t signed yet, so your system will ask before opening them.
+      </p>
+    </div>
+    <div class="reveal min-w-0" style="--delay:.08s">
+      <Install client:visible version={version} releases={links.releases} />
+    </div>
+  </div>
+</section>

@@ -55,7 +55,7 @@ Sample messages use fictional content with real sender domains, so both demo mod
 
 ### Marketing site on Cloudflare Workers
 
-The Astro marketing app lives in `apps/marketing`. Run its placeholder page with `pnpm dev:marketing`; `pnpm --filter @inlark/marketing build` creates the static site in `apps/marketing/dist`.
+The Astro marketing app lives in `apps/marketing`. Run its landing page with `pnpm dev:marketing`; `pnpm --filter @inlark/marketing build` creates the static site in `apps/marketing/dist`.
 
 The marketing app is configured as a static Workers Assets project in `apps/marketing/wrangler.jsonc`. It does not need a server adapter. To test the built site locally with Wrangler, run `pnpm --filter @inlark/marketing preview:workers`. When ready to publish, run `pnpm --filter @inlark/marketing deploy` after authenticating Wrangler; this builds the site before uploading it.
 

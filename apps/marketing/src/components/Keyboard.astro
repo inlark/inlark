@@ -1,0 +1,17 @@
+---
+import { KeyboardDemo } from './KeyboardDemo'
+---
+
+<section id="keyboard" class="relative mx-auto max-w-6xl px-5 pt-28 pb-8 sm:px-8 sm:pt-40">
+  <div class="reveal max-w-2xl">
+    <p class="eyebrow">Keyboard first</p>
+    <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">Your hands never leave the keys.</h2>
+    <p class="mt-6 text-lg leading-relaxed text-ink-2">
+      Every everyday action is a single keystroke, from triage to reply. This inbox is live — try it
+      with your keyboard, or click the keys.
+    </p>
+  </div>
+  <div class="reveal mt-14" style="--delay:.1s">
+    <KeyboardDemo client:visible />
+  </div>
+</section>

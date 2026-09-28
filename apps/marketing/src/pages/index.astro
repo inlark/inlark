@@ -1,20 +1,29 @@
 ---
-import { Counter } from '../components/Counter'
-import '../styles/global.css'
+import Layout from '../layouts/Layout.astro'
+import Nav from '../components/Nav.astro'
+import Hero from '../components/Hero.astro'
+import Keyboard from '../components/Keyboard.astro'
+import Features from '../components/Features.astro'
+import Reliability from '../components/Reliability.astro'
+import Setup from '../components/Setup.astro'
+import Privacy from '../components/Privacy.astro'
+import InstallSection from '../components/InstallSection.astro'
+import Closing from '../components/Closing.astro'
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inlark</title>
-  </head>
-  <body class="min-h-screen bg-slate-950 text-slate-100">
-    <main class="mx-auto flex min-h-screen max-w-xl flex-col items-start justify-center gap-6 px-6">
-      <h1 class="text-4xl font-semibold tracking-tight">Hello world</h1>
-      <p class="text-slate-400">Inlark marketing site placeholder.</p>
-      <Counter client:load />
-    </main>
-  </body>
-</html>
+<Layout
+  title="Inlark — beautiful email for Linux"
+  description="A fast, keyboard-first email client for your own JMAP and IMAP accounts. Unified inbox, no hosted service, no telemetry. Free software for Linux."
+>
+  <Nav />
+  <main>
+    <Hero />
+    <Keyboard />
+    <Features />
+    <Reliability />
+    <Setup />
+    <Privacy />
+    <InstallSection />
+  </main>
+  <Closing />
+</Layout>

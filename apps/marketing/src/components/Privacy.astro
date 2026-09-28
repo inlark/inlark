@@ -1,0 +1,159 @@
+---
+import { LockKeyhole, ShieldCheck, UserRound, WifiOff } from '@inlark/ui/icons'
+import { Mark } from './Mark'
+
+const principles = [
+  {
+    icon: UserRound,
+    title: 'No account, no middleman',
+    text: 'There’s nothing to sign up for. Inlark talks to your JMAP or IMAP and SMTP server directly.',
+  },
+  {
+    icon: WifiOff,
+    title: 'No telemetry',
+    text: 'No analytics, no tracking, no usage reports. What happens in your inbox stays on your machine.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Encryption, verified',
+    text: 'Implicit TLS or required STARTTLS, always with certificate checks and never a plaintext fallback.',
+  },
+  {
+    icon: LockKeyhole,
+    title: 'Keys in your keyring',
+    text: 'Remembered passwords go to your desktop’s Secret Service keyring, or stay for this session only.',
+  },
+]
+---
+
+<section id="privacy" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
+  <div class="reveal mx-auto max-w-3xl text-center">
+    <p class="eyebrow">Private by default</p>
+    <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">
+      Between you and your server. No one else.
+    </h2>
+  </div>
+
+  <div class="reveal relative mx-auto mt-16 max-w-3xl" style="--delay:.08s" aria-hidden="true">
+    <div class="flex items-center gap-4 sm:gap-6">
+      <div class="node">
+        <span class="grid size-16 place-items-center rounded-[18px] bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_16px_50px_-10px_#484bd3,inset_0_1px_0_#ffffff40]">
+          <Mark size={30} />
+        </span>
+        <p class="mt-3 text-sm font-semibold">Inlark</p>
+        <p class="text-xs text-ink-3">on your desktop</p>
+      </div>
+
+      <div class="relative flex-1">
+        <p class="mb-3 text-center font-mono text-[0.68rem] tracking-wide text-leaf">
+          TLS · certificate verified
+        </p>
+        <div class="wire">
+          <span class="packet" style="--d:0s"></span>
+          <span class="packet reverse" style="--d:1.3s"></span>
+          <span class="packet" style="--d:2.2s"></span>
+        </div>
+        <p class="mt-3 text-center font-mono text-[0.68rem] tracking-wide text-ink-3">
+          <span class="line-through decoration-ink-3/60">inlark cloud</span> — there isn’t one
+        </p>
+      </div>
+
+      <div class="node">
+        <span class="grid size-16 place-items-center rounded-[18px] border border-line-strong bg-white/[0.04] shadow-[inset_0_1px_0_#ffffff14]">
+          <svg
+            viewBox="0 0 24 24"
+            class="size-7 text-ink-2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <rect x="3.5" y="4" width="17" height="7" rx="2"></rect>
+            <rect x="3.5" y="13" width="17" height="7" rx="2"></rect>
+            <path d="M7.5 7.5h.01M7.5 16.5h.01" stroke-width="2.2" stroke-linecap="round"></path>
+          </svg>
+        </span>
+        <p class="mt-3 text-sm font-semibold">Your server</p>
+        <p class="text-xs text-ink-3">mail.yourdomain.com</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-20 grid gap-px overflow-hidden rounded-[1.25rem] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+    {principles.map(({ icon: Icon, title, text }, i) => (
+      <div class="reveal bg-night-2 p-7" style={`--delay:${i * 0.06}s`}>
+        <Icon size={20} className="text-lavender" />
+        <h3 class="mt-5 font-semibold">{title}</h3>
+        <p class="mt-2 text-[0.95rem] leading-relaxed text-ink-2">{text}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style>
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 8.5rem;
+    flex-shrink: 0;
+  }
+  @media (max-width: 480px) {
+    .node {
+      width: 5.5rem;
+    }
+  }
+  .wire {
+    position: relative;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgb(170 166 236 / 0.15),
+      rgb(118 188 154 / 0.7),
+      rgb(170 166 236 / 0.15)
+    );
+    box-shadow: 0 0 14px rgb(118 188 154 / 0.35);
+  }
+  .packet {
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 28px;
+    height: 5px;
+    border-radius: 5px;
+    background: radial-gradient(closest-side, #fff, rgb(170 166 236 / 0.6), transparent);
+    animation: travel 3.2s cubic-bezier(0.45, 0, 0.55, 1) var(--d) infinite;
+    opacity: 0;
+  }
+  .packet.reverse {
+    animation-name: travel-back;
+  }
+  @keyframes travel {
+    0% {
+      left: 0;
+      opacity: 0;
+    }
+    15%,
+    85% {
+      opacity: 1;
+    }
+    100% {
+      left: calc(100% - 28px);
+      opacity: 0;
+    }
+  }
+  @keyframes travel-back {
+    0% {
+      left: calc(100% - 28px);
+      opacity: 0;
+    }
+    15%,
+    85% {
+      opacity: 1;
+    }
+    100% {
+      left: 0;
+      opacity: 0;
+    }
+  }
+</style>
