@@ -1,29 +1,77 @@
+<div align="center">
+
+<img src="apps/desktop/resources/icon.png" width="88" alt="" />
+
 # Inlark
 
-A focused email client for Linux, Windows, and macOS with JMAP and IMAP/SMTP accounts. Built with Electron, React, TypeScript, Tailwind CSS, Base UI, TanStack libraries, and Turborepo. Connects directly to your server; no hosted account or telemetry.
+**Beautiful email. For everyone.**
 
-This is an initial implementation, not a claim of production readiness. The working client includes account setup, a unified inbox, server search, conversation reading, organization and undo, folders, composition, attachments, local/server drafts, sending, themes, keyboard navigation, notifications, and a tray. See [validation and remaining acceptance work](docs/validation.md) before adopting it as your only mail client.
+A fast, keyboard-first desktop mail client for the accounts you already own.<br />
+JMAP and IMAP, Linux, Windows and macOS. No hosted service, no subscription, no telemetry.
 
-## Run
+[**Download**](https://github.com/inlark/inlark/releases/latest) · [Features](#why-inlark) · [Connect an account](#connect-an-account) · [Build from source](#build-from-source)
 
-Download the desktop app for Linux, Windows, or macOS from the [latest release](https://github.com/inlark/inlark/releases/latest). Releases include a Windows installer, macOS DMG and ZIP files for Intel and Apple Silicon, and Linux AppImage, Debian, and RPM packages. Windows and macOS builds are currently unsigned, so your system may ask you to approve them before opening.
+</div>
 
-For development on Windows, macOS, or a conventional Linux distribution, install Node 24 and pnpm 12.3.4, then run `pnpm install --frozen-lockfile` and `pnpm dev`.
+<br />
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/inbox-light.png" />
+  <img src=".github/assets/inbox-dark.png" alt="Inlark's unified inbox, showing conversations from several accounts in one list, each marked with its account colour." />
+</picture>
+
+## Why Inlark?
+
+If you run your own mail server, or just have a few accounts at small providers, your choices are usually an email client that looks like it was designed for Windows XP, one that wants a monthly fee, or one that routes your mail through someone else's cloud. Inlark is the fourth option: a calm, modern client that talks straight to your server and then gets out of the way.
+
+- **One inbox for every account.** Personal, work and the side project you swear you'll finish all land in one timeline, each marked with its account. Replies go out from the address the message was sent to, so you stop accidentally emailing your landlord from your work address.
+- **Your keyboard, first.** `J`/`K` to move, `E` to archive, `R` to reply, `/` to search, and `Ctrl K` for everything else. Every action works with a mouse, too.
+- **Undo for everything.** Archive, trash, move, star or mark as spam, then press `Z`. It works even if another client changed the mailbox in between.
+- **Search that goes all the way back.** Searches run on your server across every folder and every year, narrowed by sender, recipient, subject, date or attachment.
+- **Big mailboxes stay fast.** A quarter of a million conversations in the unified inbox still scroll smoothly, because only the few dozen on screen are ever drawn.
+- **Sending you can trust.** Drafts survive crashes. If a send's response gets lost on the way back, Inlark marks the message **unconfirmed** and doesn't retry it on its own, so nobody gets your message twice.
+- **Private by design.** Inlark connects directly to your mail server. There's no Inlark account, no sync service and no analytics.
+- **Dark and light, with equal care.** Both themes get the same attention to detail, and rich HTML mail keeps the look its sender designed.
+- **At home on your desktop.** Native notifications, a tray icon with your unread count, and Inlark can be your default `mailto:` handler.
+
+<table>
+  <tr>
+    <td width="50%"><img src=".github/assets/reader-dark.png" alt="A conversation open in Inlark's reader, with reply, reply all and forward below the message." /></td>
+    <td width="50%"><img src=".github/assets/palette-dark.png" alt="Inlark's command palette listing actions and folders, each with its keyboard shortcut." /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A focused reader, without the clutter</sub></td>
+    <td align="center"><sub><code>Ctrl K</code>: every action, folder and account in a few keystrokes</sub></td>
+  </tr>
+</table>
+
+> [!NOTE]
+> Inlark is an **early preview**. The everyday essentials work, but it's young. Keep your server's webmail bookmarked for now, just in case.
+
+## Install
+
+Grab the latest build from the [releases page](https://github.com/inlark/inlark/releases/latest):
+
+| Platform | Download                                                   |
+| -------- | ---------------------------------------------------------- |
+| Windows  | Installer (x64)                                            |
+| macOS    | DMG or ZIP, for both Apple Silicon and Intel               |
+| Linux    | AppImage, `.deb` or `.rpm` (x64), or [Nix](#nix-and-nixos) |
+
+The Windows and macOS builds aren't signed yet, so your system will ask you to confirm before the first launch. That's expected.
 
 ### Nix and NixOS
 
-To install the desktop app from this checkout on NixOS or another Linux system with Nix:
+Install from the flake:
 
 ```sh
-nix profile install path:.#inlark
-inlark
+nix profile install 'github:inlark/inlark/v0.1.0#inlark'
 ```
 
-The flake provides x86_64 and aarch64 Linux packages, including the application launcher, desktop entry, icon, and `mailto:` handler. To add it declaratively to a NixOS flake configuration, add Inlark as an input and enable its module:
+Or enable the NixOS module in your flake configuration:
 
 ```nix
 {
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.inlark.url = "github:inlark/inlark/v0.1.0";
 
   outputs = { nixpkgs, inlark, ... }: {
@@ -31,7 +79,6 @@ The flake provides x86_64 and aarch64 Linux packages, including the application 
       system = "x86_64-linux";
       modules = [
         inlark.nixosModules.default
-        ./configuration.nix
         { programs.inlark.enable = true; }
       ];
     };
@@ -39,87 +86,90 @@ The flake provides x86_64 and aarch64 Linux packages, including the application 
 }
 ```
 
-Replace `my-host` with your NixOS host name. The `v0.1.0` segment pins the installation to that release; omit it to follow the default branch. For a direct profile install from the release tag, run `nix profile install 'github:inlark/inlark/v0.1.0#inlark'`. For development on NixOS:
+The package includes the desktop entry, icon and `mailto:` handler, for x86_64 and aarch64 Linux. Leave out `/v0.1.0` to follow the default branch.
+
+## Connect an account
+
+Open **Settings → Accounts → Add account** and type your email address. Inlark looks up what your domain publishes and shows you the protocol, servers, ports and security it found **before** it asks for a password. **Set up manually** is always there if you prefer.
+
+- **JMAP is preferred** when your server offers it. Inlark finds it through DNS SRV or `/.well-known/jmap`.
+- **IMAP/SMTP** settings come from your domain's autoconfig file or DNS SRV records. Only if your domain publishes nothing does Inlark ask Thunderbird's public settings directory, and then it sends just the domain.
+- **Encryption is required.** Inlark uses implicit TLS or required STARTTLS, always with certificate verification and never a plaintext fallback. Your password is never tried against a server you didn't choose.
+- **Passwords go into your OS keyring** when one is available. Without a keyring, you decide whether to remember a login on this device. If you do, the password is stored unencrypted in an owner-only file.
+
+IMAP accounts build a local index in the background, newest Inbox mail first. Until it catches up, lists tell you that older mail may be missing, and search still runs on the server. If your server can't do an action safely, such as a move without `MOVE` or `UIDPLUS`, Inlark turns it off and tells you why rather than guessing.
+
+Gmail and Microsoft sign-in (OAuth) aren't supported yet.
+
+## Build from source
+
+You'll need Node 24 and pnpm 12.3.4.
 
 ```sh
-nix develop path:.
 pnpm install --frozen-lockfile
-pnpm dev
+pnpm dev          # the desktop app
+pnpm dev:web      # browser preview with sample mail, no real accounts
 ```
 
-The shell selects Nix's Electron executable and skips the incompatible downloaded binary.
+Add `?stress=1` to the browser preview's URL for five synthetic 50,000-message inboxes, or run `pnpm dev -- --demo` for a sample workspace in the desktop app. On NixOS, run `nix develop path:.` first. The shell provides a compatible Electron.
 
-For a browser preview with sample mail:
+<details>
+<summary><b>Checks, packaging and releases</b></summary>
 
 ```sh
-pnpm dev:web
+pnpm check             # formatting, types, tests and a production build
+pnpm test:stalwart     # real JMAP, IMAP and SMTP against a disposable Stalwart server (Podman or CONTAINER_RUNTIME=docker)
+nix build path:.       # Nix package in ./result/bin/inlark
+pnpm package:linux     # AppImage, .deb and .rpm in apps/desktop/release
+pnpm test:deb          # Debian packaging smoke test (Podman)
 ```
 
-Open the printed localhost URL. Append `?stress=1` for five synthetic 50,000-message inboxes. The browser preview cannot connect to real accounts, access native files, or send email. Demo storage is separate from real account storage. A native sample workspace is available with `pnpm dev -- --demo` (or run the packaged app with `--demo`).
+The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml` and the dependency hash in `nix/package.nix`. After changing dependencies, replace that hash with the one Nix reports.
 
-Sample messages use fictional content with real sender domains, so both demo modes can show sender pictures when **Load remote images** is enabled. The browser preview resolves pictures through its local development server; the native demo uses the same resolver as connected mail.
+Pushing a `v<version>` tag that matches `apps/desktop/package.json` runs the [release workflow](.github/workflows/release.yml), which builds every platform, checks the Nix flake and publishes a GitHub Release.
 
-### Marketing site on Cloudflare Workers
-
-The Astro marketing app lives in `apps/marketing`. Run its landing page with `pnpm dev:marketing`; `pnpm --filter @inlark/marketing build` creates the static site in `apps/marketing/dist`.
-
-The marketing app is configured as a static Workers Assets project in `apps/marketing/wrangler.jsonc`. It does not need a server adapter. To test the built site locally with Wrangler, run `pnpm --filter @inlark/marketing preview:workers`. When ready to publish, run `pnpm --filter @inlark/marketing deploy` after authenticating Wrangler; this builds the site before uploading it.
-
-For Cloudflare Workers Builds, connect this repository to a Worker named `inlark-marketing` and set the root directory to `apps/marketing`, build command to `pnpm build`, and deploy command to `pnpm exec wrangler deploy`. Set the build variable `PNPM_VERSION` to `12.3.4` to match the workspace lockfile. The Worker serves `apps/marketing/dist` as static assets.
-
-## Connect your account
-
-Open **Settings → Accounts → Add account** and enter your email address. Inlark looks up the settings your domain publishes and shows the protocol, servers, ports and security before asking for a password. It checks JMAP (DNS SRV, then `/.well-known/jmap`) first and prefers it; IMAP/SMTP comes from your domain's Thunderbird-style configuration file or DNS SRV records. Only when your domain publishes nothing does it ask Thunderbird's public settings directory, and then only the domain is sent. Discovery never carries credentials. **Set up manually** is always available.
-
-For JMAP, enter your server URL or session endpoint. Use the canonical origin advertised by your server: authenticated endpoints on a different origin are deliberately rejected so credentials are never sent to another host.
-
-For IMAP/SMTP, incoming and outgoing servers have their own host, port, username and password; the outgoing login defaults to the incoming one. Security is implicit TLS or required STARTTLS, always with certificate verification, never a plaintext fallback. Inlark signs in to both servers separately, without sending a message, and only saves the account when both succeed. If Sent, Drafts, Archive, Junk or Trash cannot be identified from the server's special-use flags, you choose or create them; **Folders…** and **Edit connection…** in the account menu change them later. An authentication failure is shown on the settings you chose; no other candidate is tried with your password.
-
-IMAP mail is read from a local metadata index built in the background, newest Inbox mail first. While it catches up, lists say that older mail may be missing, and searches still run on the server. Message bodies and attachments are fetched when opened. Actions a server cannot do safely (moving without MOVE or UIDPLUS, permanent deletion without UIDPLUS) are turned off with an explanation.
-
-When an OS keyring is available, remembered passwords use Electron's secure storage. Without a keyring, you can explicitly choose to remember a login on this device; its password is then stored unencrypted in the app's owner-only local data file. Leave **Remember this login** unchecked for session-only login. Set up GNOME Keyring or another Secret Service provider on Hyprland if you prefer encrypted storage. A locally stored password moves to secure storage on the next successful reconnect when a keyring becomes available.
-
-Mail organization and sending require a connection. Previously fetched pages and messages can be read from the bounded cache. Local drafts and staged attachments persist independently of the read cache. A send whose response was lost stays **unconfirmed** until reconciled; it is never automatically retried. For IMAP accounts the SMTP acceptance is recorded before the Sent copy is filed, so a failed copy shows as “Sent · Sent copy pending” and only the copy is retried. A partially accepted message lists the refused recipients and offers a new draft addressed only to them.
-
-## Build and verify
-
-```sh
-pnpm check              # Formatting, TypeScript, deterministic tests, production build
-pnpm test:stalwart      # disposable Stalwart 0.16.23 over JMAP, IMAP and SMTP; requires Podman (or CONTAINER_RUNTIME=docker)
-nix build path:.        # Nix package; ./result/bin/inlark
-pnpm package:linux      # AppImage + .deb + .rpm in apps/desktop/release
-pnpm test:deb           # isolated Debian packaging smoke; requires Podman
-```
-
-The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml`, and the dependency-store hash. It runs typechecking and deterministic tests offline during the build. After changing dependencies, update the hash in `nix/package.nix` using the mismatch reported by Nix.
-
-The Linux packaging script selects a Nix-compatible `fpm` on NixOS. Packages currently contain reserved `.localhost`/`.invalid` development metadata. Replace that metadata before public distribution.
-
-Pushing a `v<version>` tag matching `apps/desktop/package.json` runs the [desktop release workflow](.github/workflows/release.yml). It builds an x64 Windows installer, Intel and Apple Silicon macOS DMG/ZIP files, and x64 Linux AppImage, Debian, and RPM packages. It also checks that the Nix flake builds and installs before publishing the GitHub Release. The macOS and Windows builds are unsigned; they may require the user to approve them through the operating system's security prompts until signing and macOS notarization are configured.
-
-To check native preload/IPC and SQLite-worker startup in the Nix package without opening a window:
+To smoke-test the Nix package without opening a window:
 
 ```sh
 INLARK_DATA_DIR="$(mktemp -d)" ./result/bin/inlark --smoke-test --ozone-platform=wayland
 ```
 
-Only use `INLARK_DATA_DIR` for a separate test profile. Normal application storage lives in Electron's `userData` directory, typically `~/.config/Inlark`. [Troubleshooting](docs/troubleshooting.md) explains recovery and diagnostics.
+Normal app data lives in Electron's `userData` directory, usually `~/.config/Inlark`.
 
-## Workspace
+</details>
 
-| Location                    | Responsibility                                                                                                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/desktop/src/main`     | Authenticated network access, credentials, drafts/submission journal, discovery, IMAP index worker, files, notifications, and native lifecycle |
-| `apps/desktop/src/preload`  | Fixed, validated `DesktopMailAPI` bridge                                                                                                       |
-| `apps/desktop/src/renderer` | React application, typed routes, query cache, virtual list, reader, composer, preferences                                                      |
-| `packages/core`             | Platform-independent domain types, validation, search, identity selection, provider contract, merge logic                                      |
-| `packages/jmap`             | JMAP provider; injectable fetch and no Electron/DOM/filesystem dependency                                                                      |
-| `packages/imap`             | IMAP/SMTP provider (ImapFlow, Nodemailer, MailParser); injected index and attachment access                                                    |
-| `packages/ui`               | Customized Base UI components and shared Tailwind theme                                                                                        |
-| `tests`                     | Domain, protocol, storage/submission, network-boundary, and real-server tests                                                                  |
+<details>
+<summary><b>How the repository is organised</b></summary>
 
-Read [architecture](docs/architecture.md) for extension points. Mobile, OAuth sign-in (Gmail, Microsoft), sending aliases, full offline downloads, offline change queues, AI, scheduling, snooze, rules, calendar, and a full address book are outside this version.
+| Location                    | What lives there                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `apps/desktop/src/main`     | Network access, credentials, drafts and the send journal, discovery, IMAP indexing, native lifecycle |
+| `apps/desktop/src/preload`  | The small, validated bridge between the app and the system                                           |
+| `apps/desktop/src/renderer` | The React app: lists, reader, composer, preferences                                                  |
+| `apps/marketing`            | The Astro landing page, deployed as static Cloudflare Workers assets                                 |
+| `packages/core`             | Platform-independent types, validation, search and merge logic                                       |
+| `packages/jmap`             | The JMAP provider                                                                                    |
+| `packages/imap`             | The IMAP/SMTP provider                                                                               |
+| `packages/ui`               | Shared components and the Tailwind theme                                                             |
+| `tests`                     | Domain, protocol, storage and real-server tests                                                      |
+
+Built with Electron, React, TypeScript, Tailwind CSS, Base UI, TanStack and Turborepo.
+
+</details>
+
+## What's not here (yet)
+
+Inlark tries to make everyday email excellent before adding more features. AI, snooze, scheduled sending, rules, calendars, a full address book and mobile apps are all deliberately out of scope for now. If you need your email client to also be your calendar, your CRM and your life coach, this isn't that client. Yet.
+
+## Credits
+
+Inlark stands on the shoulders of two products that showed how good software can feel:
+
+- **[Linear](https://linear.app)**, for its restraint, clear hierarchy and obsessive attention to detail, the bar for Inlark's visual design.
+- **[Superhuman](https://superhuman.com)**, for proving email can be fast, focused and driven from the keyboard, the bar for Inlark's workflows.
+
+Inlark isn't affiliated with either. We just admire their work.
 
 ## License
 
-Copyright (C) 2026 Paul Koeck. Inlark is licensed under the [GNU Affero General Public License version 3](LICENSE) (`AGPL-3.0-only`). The bundled Inter font retains its [SIL Open Font License](packages/ui/src/fonts/OFL.txt).
+Copyright © 2026 Paul Koeck. Inlark is free software under the [GNU Affero General Public License v3](LICENSE) (`AGPL-3.0-only`). The bundled Inter font is under the [SIL Open Font License](packages/ui/src/fonts/OFL.txt).
