@@ -9,6 +9,7 @@ export const links = {
   readme: repo + '#readme',
   issues: repo + '/issues',
   download: '/download',
+  imprint: '/imprint',
 }
 
 export const version = '0.1.0'

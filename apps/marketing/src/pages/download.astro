@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro'
 import Nav from '../components/Nav.astro'
 import Stars from '../components/Stars.astro'
+import Footer from '../components/Footer.astro'
 import { DownloadPage } from '../components/download/Download'
 import { fetchLatestRelease, unconfirmedRelease } from '../data/release'
 
@@ -34,14 +35,7 @@ const release = import.meta.env.PROD
     <div class="glow" aria-hidden="true"></div>
     <DownloadPage client:load initial={release} />
   </main>
-  <footer class="border-t border-line">
-    <div class="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-10 text-sm text-ink-3 sm:flex-row sm:items-center sm:px-8">
-      <span>© 2026 Paul Koeck · AGPL-3.0</span>
-      <span class="sm:ml-auto">
-        This site sets no cookies, loads nothing from other servers and counts no visitors.
-      </span>
-    </div>
-  </footer>
+  <Footer />
 </Layout>
 
 <style>
