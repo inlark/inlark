@@ -1,6 +1,7 @@
 ---
 import { LockKeyhole, ShieldCheck, UserRound, WifiOff } from '@inlark/ui/icons'
 import { Mark } from './Mark'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 
 const principles = [
   {
@@ -40,7 +41,9 @@ const principles = [
         <span class="grid size-16 place-items-center rounded-[18px] scheme-dark bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_16px_50px_-10px_#484bd3,inset_0_1px_0_#ffffff40]">
           <Mark size={30} />
         </span>
-        <p class="mt-3 text-sm font-semibold">Inlark</p>
+        <p class="mt-3">
+          <Wordmark height={15} decorative />
+        </p>
         <p class="text-xs text-ink-3">on your desktop</p>
       </div>
 

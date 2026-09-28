@@ -15,6 +15,7 @@ import {
   Trash2,
 } from '@inlark/ui/icons'
 import { Mark } from './Mark'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 import { AccountMark, MailRow } from './mail/MailRow'
 import { accounts, inbox } from '../data/mail'
 
@@ -35,9 +36,9 @@ const unreadByAccount: Record<string, number> = { personal: 2, studio: 3, projec
 <div class="app" data-theme={theme} aria-hidden="true">
   <div class="app-shell h-full">
     <aside class="app-sidebar @max-[860px]:hidden">
-      <div class="flex h-[52px] items-center gap-2.5 px-2.5">
-        <Mark size={17} />
-        <span class="font-semibold text-(--text-strong)">Inlark</span>
+      <div class="flex h-[52px] items-center gap-1.5 px-2.5">
+        <Mark size={20} />
+        <Wordmark height={15} className="text-(--text-strong)" decorative />
         <span class="ml-auto flex items-center gap-3 text-(--muted)">
           <Search size={15} />
           <SquarePen size={15} />

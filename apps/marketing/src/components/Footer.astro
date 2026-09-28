@@ -1,5 +1,6 @@
 ---
 import { Mark } from './Mark'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 import { links } from '../data/links'
 
 const footer = [
@@ -13,9 +14,9 @@ const footer = [
 
 <footer class="border-t border-line">
   <div class="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-10 text-sm text-ink-3 sm:flex-row sm:items-center sm:px-8">
-    <div class="flex items-center gap-2.5">
-      <Mark size={16} />
-      <span class="font-semibold text-ink-2">Inlark</span>
+    <div class="flex items-center gap-1.5">
+      <Mark size={18} />
+      <Wordmark height={14} className="text-ink-2" />
       <span class="ml-2">© 2026 Paul Koeck · AGPL-3.0</span>
     </div>
     <nav class="flex flex-wrap gap-x-6 gap-y-2 sm:ml-auto" aria-label="Project">

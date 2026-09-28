@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 import appIcon from '../../../resources/icon.svg?no-inline'
 import {
   Plus,
@@ -560,7 +561,9 @@ export function SettingsPanel({
                 <div className="about-hero">
                   <img className="about-mark" src={appIcon} alt="" width={52} height={52} />
                   <div>
-                    <h3>Inlark</h3>
+                    <h3>
+                      <Wordmark height={24} />
+                    </h3>
                     <p>A desktop email client for JMAP and IMAP servers.</p>
                   </div>
                   <span className="about-version">Version {bootstrap.version}</span>

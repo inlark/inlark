@@ -2,7 +2,12 @@
 
 <img src="apps/desktop/resources/icon.png" width="88" alt="" />
 
-# Inlark
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/wordmark-light.svg" />
+    <img src=".github/assets/wordmark-dark.svg" width="144" alt="Inlark" />
+  </picture>
+</h1>
 
 **Beautiful email. For everyone.**
 
@@ -172,4 +177,4 @@ Inlark isn't affiliated with either. We just admire their work.
 
 ## License
 
-Copyright © 2026 Paul Koeck. Inlark is free software under the [GNU Affero General Public License v3](LICENSE) (`AGPL-3.0-only`). The bundled Inter font is under the [SIL Open Font License](packages/ui/src/fonts/OFL.txt).
+Copyright © 2026 Paul Koeck. Inlark is free software under the [GNU Affero General Public License v3](LICENSE) (`AGPL-3.0-only`). The bundled Inter font is under the [SIL Open Font License](packages/ui/src/fonts/OFL.txt); the outlined Hanken Grotesk wordmark is also under the [SIL Open Font License](packages/ui/src/fonts/HankenGrotesk-OFL.txt).

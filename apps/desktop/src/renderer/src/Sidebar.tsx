@@ -19,6 +19,7 @@ import {
   WifiOff,
 } from '@inlark/ui/icons'
 import { Button, Dropdown, IconButton, MenuItem, Spinner } from '@inlark/ui'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 import type { Account, Mailbox, View } from '@inlark/core'
 import appIcon from '../../../resources/icon-mark.svg?no-inline'
 import { AccountMark } from './AccountMark'
@@ -110,8 +111,14 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <img className="brand-mark" src={appIcon} alt="" width={24} height={24} />
-        {!collapsed && <strong>Inlark</strong>}
+        <img
+          className="brand-mark"
+          src={appIcon}
+          alt={collapsed ? 'Inlark' : ''}
+          width={24}
+          height={24}
+        />
+        {!collapsed && <Wordmark className="brand-wordmark" />}
       </div>
       <div className="sidebar-tools">
         <IconButton label="Search and commands" shortcut="Ctrl K" onClick={onSearch}>

@@ -30,7 +30,7 @@
   height: 56px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   padding: 0 8px;
   flex-shrink: 0;
 }
@@ -40,18 +40,15 @@
   display: block;
   flex-shrink: 0;
 }
-.sidebar-brand strong {
+.brand-wordmark {
   color: #fff;
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: -0.045em;
-  font-weight: 650;
-  white-space: nowrap;
+  height: 16px;
+  width: auto;
 }
 :root[data-theme='light'] .brand-mark {
   filter: brightness(0);
 }
-:root[data-theme='light'] .sidebar-brand strong {
+:root[data-theme='light'] .brand-wordmark {
   color: #000;
 }
 .sidebar-tools {
@@ -2444,11 +2441,11 @@ fieldset.compose-format:disabled {
     width: 204px;
   }
   .sidebar-brand {
-    gap: 7px;
+    gap: 6px;
     padding: 0 5px;
   }
-  .sidebar-brand strong {
-    font-size: 14px;
+  .brand-wordmark {
+    height: 15px;
   }
 }
 /* Container queries also respond when the navigation rail is collapsed. */
@@ -2665,8 +2662,8 @@ fieldset.compose-format:disabled {
     gap: 6px;
     padding: 0 3px;
   }
-  .sidebar-brand strong {
-    font-size: 13px;
+  .brand-wordmark {
+    height: 14px;
   }
   .brand-mark {
     width: 24px;
