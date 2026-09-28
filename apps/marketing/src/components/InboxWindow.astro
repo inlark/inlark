@@ -19,12 +19,13 @@ import { AccountMark, MailRow } from './mail/MailRow'
 import { accounts, inbox } from '../data/mail'
 
 interface Props {
+  /** Pins a theme; otherwise the window follows the page. */
   theme?: 'dark' | 'light'
   /** Plays the arrival of a new message a moment after the page loads. */
   animate?: boolean
 }
 
-const { theme = 'dark', animate = false } = Astro.props
+const { theme, animate = false } = Astro.props
 const [arriving, ...rest] = inbox
 const today = rest.filter((c) => c.time !== 'Yesterday')
 const yesterday = rest.filter((c) => c.time === 'Yesterday')

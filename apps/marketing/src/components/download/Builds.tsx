@@ -48,7 +48,7 @@ export function Builds({
                     'grid size-8 shrink-0 place-items-center rounded-lg transition-colors ' +
                     (active
                       ? 'bg-lavender/15 text-lavender'
-                      : 'text-ink-3 group-hover:bg-white/[0.06] group-hover:text-ink')
+                      : 'text-ink-3 group-hover:bg-ink/[0.06] group-hover:text-ink')
                   }
                 >
                   {build.file ? <DownloadIcon size={16} /> : <ChevronRight size={16} />}
@@ -57,7 +57,7 @@ export function Builds({
             )
             const className =
               'group flex w-full items-center gap-3 rounded-[0.8rem] px-3 py-2.5 text-left transition-colors ' +
-              (active ? 'bg-white/[0.05] ring-1 ring-white/[0.07]' : 'hover:bg-white/[0.035]')
+              (active ? 'bg-ink/[0.05] ring-1 ring-ink/[0.07]' : 'hover:bg-ink/[0.035]')
             return (
               <li key={build.id}>
                 {build.file ? (

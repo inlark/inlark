@@ -1,6 +1,6 @@
 import { useId } from 'react'
 
-/** The Relay II mark with the lit faces of the app icon. */
+/** The Relay II mark with the lit faces of the app icon, inked instead on light surfaces. */
 export function Mark({ size = 20, className }: { size?: number; className?: string }) {
   const id = useId()
   return (
@@ -21,9 +21,9 @@ export function Mark({ size = 20, className }: { size?: number; className?: stri
           y2="80"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#eeefff" />
-          <stop offset=".47" stopColor="#c4c8ff" />
-          <stop offset="1" stopColor="#8d91ed" />
+          <stop style={{ stopColor: 'var(--mark-rear-1)' }} />
+          <stop offset=".47" style={{ stopColor: 'var(--mark-rear-2)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--mark-rear-3)' }} />
         </linearGradient>
         <linearGradient
           id={id + 'front'}
@@ -33,9 +33,9 @@ export function Mark({ size = 20, className }: { size?: number; className?: stri
           y2="80"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#ffffff" />
-          <stop offset=".45" stopColor="#f2f3ff" />
-          <stop offset="1" stopColor="#b9c0fb" />
+          <stop style={{ stopColor: 'var(--mark-front-1)' }} />
+          <stop offset=".45" style={{ stopColor: 'var(--mark-front-2)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--mark-front-3)' }} />
         </linearGradient>
       </defs>
       <path d="M8 20h21l21 28-21 28H8l23-28Z" fill={`url(#${id}rear)`} />

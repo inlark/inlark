@@ -36,7 +36,7 @@ const items = [
     <div class="ml-auto flex items-center gap-2">
       <a
         href={links.repo}
-        class="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm text-ink-2 transition-colors hover:bg-white/5 hover:text-ink sm:flex"
+        class="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm text-ink-2 transition-colors hover:bg-ink/5 hover:text-ink sm:flex"
       >
         <GitHubIcon className="size-4" /> Source
       </a>
@@ -54,15 +54,23 @@ const items = [
     background: color-mix(in srgb, var(--color-night) 55%, transparent);
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
-    border-bottom: 1px solid transparent;
+  }
+  /* The scrolled look fades in as a layer: a scroll-driven colour animation ignores light mode. */
+  .nav::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-bottom: 1px solid var(--color-line);
+    background: color-mix(in srgb, var(--color-night) 55%, transparent);
+    opacity: 0;
     animation: nav-line linear both;
     animation-timeline: scroll();
     animation-range: 0 120px;
   }
   @keyframes nav-line {
     to {
-      border-bottom-color: var(--color-line);
-      background: color-mix(in srgb, var(--color-night) 80%, transparent);
+      opacity: 1;
     }
   }
 </style>

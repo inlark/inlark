@@ -50,7 +50,7 @@ export function AppTile({ size = 64, className = '' }: { size?: number; classNam
   return (
     <span
       className={
-        'grid shrink-0 place-items-center bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_16px_50px_-10px_#484bd3,inset_0_1px_0_#ffffff40] ' +
+        'grid shrink-0 place-items-center scheme-dark bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_16px_50px_-10px_#484bd3,inset_0_1px_0_#ffffff40] ' +
         className
       }
       style={{ width: size, height: size, borderRadius: size * 0.29 }}

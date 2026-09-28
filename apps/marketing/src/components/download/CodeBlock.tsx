@@ -62,7 +62,7 @@ export function CodeBlock({
       onClick={() => copy(text)}
       aria-label={copied ? 'Copied' : 'Copy to clipboard'}
       className={
-        'grid size-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-white/[0.06] hover:text-ink ' +
+        'grid size-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-ink/[0.06] hover:text-ink ' +
         (title ? '-mr-1.5 shrink-0' : 'absolute top-2 right-2')
       }
     >
@@ -90,16 +90,18 @@ export function CodeBlock({
   return (
     <div
       className={
-        'relative flex flex-col overflow-hidden rounded-xl border bg-black/40 ' +
-        (title ? 'border-line-strong shadow-[0_20px_40px_-20px_#000] ' : 'border-line ') +
+        'relative flex flex-col overflow-hidden rounded-xl border bg-black/40 light:bg-white ' +
+        (title
+          ? 'border-line-strong shadow-[0_20px_40px_-20px_#000] light:shadow-[0_20px_40px_-20px_rgb(22_24_36/0.2)] '
+          : 'border-line ') +
         className
       }
     >
       {title && (
-        <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line bg-white/[0.025] pl-3 pr-1.5">
-          <span className="size-2 rounded-full bg-white/15" />
-          <span className="size-2 rounded-full bg-white/15" />
-          <span className="size-2 rounded-full bg-white/15" />
+        <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line bg-ink/[0.025] pl-3 pr-1.5">
+          <span className="size-2 rounded-full bg-ink/15" />
+          <span className="size-2 rounded-full bg-ink/15" />
+          <span className="size-2 rounded-full bg-ink/15" />
           <span className="ml-2 flex-1 truncate font-mono text-[0.68rem] text-ink-3">{title}</span>
           {copyButton}
         </div>

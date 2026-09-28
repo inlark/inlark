@@ -14,7 +14,7 @@ const Name = ({ children }: { children: ReactNode }) => (
   <span className="font-medium text-ink">{children}</span>
 )
 const Path = ({ children }: { children: ReactNode }) => (
-  <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[0.85em] break-all text-ink">
+  <code className="rounded bg-ink/[0.06] px-1 py-0.5 font-mono text-[0.85em] break-all text-ink">
     {children}
   </code>
 )
@@ -203,12 +203,12 @@ export function Steps({ download, version }: { download: Download; version: stri
             className="card step row-span-2 grid grid-rows-subgrid gap-0 p-2"
             style={{ '--i': i } as CSSProperties}
           >
-            <div className="visual relative min-h-48 overflow-hidden rounded-[0.9rem] border border-line bg-black/25 p-3">
+            <div className="visual relative min-h-48 overflow-hidden rounded-[0.9rem] border border-line bg-black/25 p-3 light:bg-ink/[0.03]">
               {step.visual}
             </div>
             <div className="px-4 pt-5 pb-5">
               <p className="flex items-center gap-3 font-medium text-ink">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[0.7rem] text-ink-2">
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-ink/[0.06] font-mono text-[0.7rem] text-ink-2">
                   {i + 1}
                 </span>
                 {step.title}
@@ -279,12 +279,8 @@ function DragVisual() {
 
 function GatekeeperVisual() {
   return (
-    <div
-      className="app flex h-full items-center justify-center"
-      data-theme="dark"
-      aria-hidden="true"
-    >
-      <div className="w-full max-w-[17rem] rounded-[10px] border border-(--border-strong) bg-(--surface) p-3.5 shadow-[0_20px_40px_-20px_#000]">
+    <div className="app flex h-full items-center justify-center" aria-hidden="true">
+      <div className="w-full max-w-[17rem] rounded-[10px] border border-(--border-strong) bg-(--surface) p-3.5 shadow-[0_20px_40px_-20px_var(--shadow-deep)]">
         <p className="text-[10.5px] font-semibold tracking-wide text-(--muted) uppercase">
           Privacy & Security
         </p>
@@ -293,7 +289,7 @@ function GatekeeperVisual() {
             “Inlark” was blocked to protect your Mac.
           </p>
           <div className="mt-3 flex justify-end">
-            <span className="pulse-ring rounded-[6px] bg-white/90 px-2.5 py-1 text-[11px] font-medium text-[#1d1d1f]">
+            <span className="pulse-ring rounded-[6px] bg-white/90 px-2.5 py-1 text-[11px] font-medium text-[#1d1d1f] light:bg-[#e3e3e8]">
               Open Anyway
             </span>
           </div>
@@ -305,12 +301,8 @@ function GatekeeperVisual() {
 
 function DownloadsVisual({ file }: { file: string }) {
   return (
-    <div
-      className="app flex h-full items-center justify-center"
-      data-theme="dark"
-      aria-hidden="true"
-    >
-      <div className="w-full max-w-[17rem] overflow-hidden rounded-[10px] border border-(--border-strong) bg-(--surface) shadow-[0_20px_40px_-20px_#000]">
+    <div className="app flex h-full items-center justify-center" aria-hidden="true">
+      <div className="w-full max-w-[17rem] overflow-hidden rounded-[10px] border border-(--border-strong) bg-(--surface) shadow-[0_20px_40px_-20px_var(--shadow-deep)]">
         <p className="border-b border-(--border) px-3 py-2 text-[11px] font-medium text-(--secondary)">
           Downloads
         </p>
@@ -335,7 +327,7 @@ function DownloadsVisual({ file }: { file: string }) {
 function SmartScreenVisual() {
   return (
     <div className="flex h-full items-center justify-center font-app" aria-hidden="true">
-      <div className="w-full max-w-[17rem] rounded-[4px] bg-[#1b4b82] px-3.5 pt-3 pb-3 text-white shadow-[0_20px_40px_-20px_#000]">
+      <div className="w-full max-w-[17rem] rounded-[4px] bg-[#1b4b82] px-3.5 pt-3 pb-3 text-white shadow-[0_20px_40px_-20px_#000] light:shadow-[0_20px_40px_-20px_rgb(22_24_36/0.3)]">
         <p className="text-[13px] leading-tight font-light">Windows protected your PC</p>
         <p className="mt-2 text-[9.5px] leading-snug text-white/75">
           Microsoft Defender SmartScreen prevented an unrecognized app from starting.
@@ -354,12 +346,8 @@ function SmartScreenVisual() {
 
 function LauncherVisual() {
   return (
-    <div
-      className="app flex h-full items-center justify-center"
-      data-theme="dark"
-      aria-hidden="true"
-    >
-      <div className="w-full max-w-[17rem] overflow-hidden rounded-[10px] border border-(--border-strong) bg-(--surface) shadow-[0_20px_40px_-20px_#000]">
+    <div className="app flex h-full items-center justify-center" aria-hidden="true">
+      <div className="w-full max-w-[17rem] overflow-hidden rounded-[10px] border border-(--border-strong) bg-(--surface) shadow-[0_20px_40px_-20px_var(--shadow-deep)]">
         <div className="flex items-center gap-2 border-b border-(--border) px-3 py-2.5 text-[12px] text-(--text-strong)">
           <Search size={13} className="text-(--muted)" />
           inl
@@ -381,14 +369,10 @@ function LauncherVisual() {
 
 function ConnectVisual() {
   return (
-    <div
-      className="app flex h-full items-center justify-center"
-      data-theme="dark"
-      aria-hidden="true"
-    >
-      <div className="w-full max-w-[17rem] rounded-[10px] border border-(--border-strong) bg-(--bg) p-3.5 shadow-[0_20px_40px_-20px_#000]">
+    <div className="app flex h-full items-center justify-center" aria-hidden="true">
+      <div className="w-full max-w-[17rem] rounded-[10px] border border-(--border-strong) bg-(--bg) p-3.5 shadow-[0_20px_40px_-20px_var(--shadow-deep)]">
         <p className="text-[12.5px] font-semibold text-(--text-strong)">Connect an account</p>
-        <div className="mt-2.5 rounded-[6px] border border-(--accent-solid) bg-white/[0.03] px-2.5 py-1.5 text-[11.5px] text-(--text-strong)">
+        <div className="mt-2.5 rounded-[6px] border border-(--accent-solid) bg-(--surface) px-2.5 py-1.5 text-[11.5px] text-(--text-strong)">
           you@yourdomain.com
         </div>
         <div className="found-row mt-2.5 flex items-center gap-2 rounded-[6px] bg-(--surface) px-2.5 py-2">

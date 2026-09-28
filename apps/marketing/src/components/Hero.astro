@@ -12,7 +12,7 @@ import { links, version } from '../data/links'
   <div class="relative z-10 mx-auto max-w-4xl px-5 text-center">
     <a
       href={links.releases}
-      class="rise group inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-white/[0.03] py-1.5 pr-3 pl-2 text-[0.8rem] text-ink-2 transition-colors hover:border-white/20 hover:text-ink"
+      class="rise group inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-ink/[0.03] py-1.5 pr-3 pl-2 text-[0.8rem] text-ink-2 transition-colors hover:border-ink/20 hover:text-ink"
     >
       <span class="rounded-full bg-dawn/15 px-2 py-0.5 font-mono text-[0.68rem] text-dawn">
         v{version}
@@ -116,13 +116,13 @@ import { links, version } from '../data/links'
     padding: 1px;
     background: linear-gradient(
       180deg,
-      rgb(255 255 255 / 0.2),
-      rgb(255 255 255 / 0.06) 22%,
-      rgb(255 255 255 / 0.03)
+      light-dark(rgb(20 20 30 / 0.14), rgb(255 255 255 / 0.2)),
+      light-dark(rgb(20 20 30 / 0.07), rgb(255 255 255 / 0.06)) 22%,
+      light-dark(rgb(20 20 30 / 0.05), rgb(255 255 255 / 0.03))
     );
     box-shadow:
-      0 0 0 1px rgb(0 0 0 / 0.55),
-      0 50px 140px -30px rgb(0 0 0 / 0.95),
+      0 0 0 1px light-dark(rgb(20 20 30 / 0.03), rgb(0 0 0 / 0.55)),
+      0 50px 140px -30px light-dark(rgb(22 24 36 / 0.3), rgb(0 0 0 / 0.95)),
       0 -30px 140px -60px rgb(242 184 139 / 0.45);
     transform-origin: 50% 0;
     animation: window-in 1.7s var(--ease-out-expo) 0.3s both;

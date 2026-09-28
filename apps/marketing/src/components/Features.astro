@@ -40,7 +40,7 @@ const scrollRows = [...inbox, ...inbox]
           account. Replies go out from the address the message was sent to.
         </p>
       </div>
-      <div class="app relative mt-8 flex-1 px-6 pb-6 sm:px-10" data-theme="dark">
+      <div class="app relative mt-8 flex-1 px-6 pb-6 sm:px-10">
         <div class="mb-3 flex flex-wrap gap-1.5">
           <span class="flex items-center gap-1.5 rounded-full bg-(--selected) px-2.5 py-1 text-[11.5px] text-(--text-strong)">
             <Inbox size={13} /> All accounts
@@ -56,7 +56,7 @@ const scrollRows = [...inbox, ...inbox]
             <MailRow conversation={c} />
           ))}
         </div>
-        <div class="absolute right-10 bottom-3 hidden items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] shadow-[0_18px_50px_#000a] sm:flex">
+        <div class="absolute right-10 bottom-3 hidden items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] shadow-[0_18px_50px_var(--shadow)] sm:flex">
           <span class="text-(--muted)">From</span>
           <AccountMark account={accountById.studio} size={14} />
           <span class="text-(--text-strong)">{accountById.studio.email}</span>
@@ -76,8 +76,8 @@ const scrollRows = [...inbox, ...inbox]
           Every action, folder and account is a few letters away, with its shortcut beside it.
         </p>
       </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
-        <div class="overflow-hidden rounded-[12px] border border-(--border-strong) bg-(--raised) shadow-[0_24px_60px_#0009]">
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
+        <div class="overflow-hidden rounded-[12px] border border-(--border-strong) bg-(--raised) shadow-[0_24px_60px_var(--shadow)]">
           <div class="flex items-center gap-2.5 border-b border-(--border) px-3.5 py-3 text-[13px]">
             <Search size={14} className="text-(--muted)" />
             <span class="text-(--text-strong)">
@@ -114,7 +114,7 @@ const scrollRows = [...inbox, ...inbox]
           recipient, subject, date or attachment.
         </p>
       </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
         <div class="flex items-center gap-2.5 rounded-[9px] border border-(--accent-solid) bg-(--bg) px-3 py-2.5 text-[13px] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-solid)_22%,transparent)]">
           <Search size={14} className="text-(--muted)" />
           <span class="text-(--text-strong)">invoice</span>
@@ -137,7 +137,6 @@ const scrollRows = [...inbox, ...inbox]
     <article class="card reveal relative flex flex-col" style="--delay:.08s">
       <div
         class="scroller app pointer-events-none absolute inset-0 opacity-[0.14]"
-        data-theme="dark"
         aria-hidden="true"
       >
         <div class="scroller-track @container">
@@ -166,14 +165,14 @@ const scrollRows = [...inbox, ...inbox]
           between.
         </p>
       </div>
-      <div class="app relative mt-8 h-48 flex-1 px-6 sm:px-8" data-theme="dark">
+      <div class="app relative mt-8 h-48 flex-1 px-6 sm:px-8">
         {[
           ['Archived 3 conversations', 1],
           ['Moved to Receipts', 0.45],
           ['Marked as spam', 0.18],
         ].map(([text, opacity], i) => (
           <div
-            class="toast-stack absolute inset-x-6 flex items-center gap-3 rounded-[10px] border border-(--border-strong) bg-(--raised) py-2.5 pr-2.5 pl-4 text-[12.5px] text-(--text-strong) shadow-[0_18px_50px_#000a] sm:inset-x-8"
+            class="toast-stack absolute inset-x-6 flex items-center gap-3 rounded-[10px] border border-(--border-strong) bg-(--raised) py-2.5 pr-2.5 pl-4 text-[12.5px] text-(--text-strong) shadow-[0_18px_50px_var(--shadow)] sm:inset-x-8"
             style={`top:${i * 54}px;opacity:${opacity};transform:scale(${1 - i * 0.04});z-index:${3 - i}`}
           >
             {text}
@@ -195,10 +194,10 @@ const scrollRows = [...inbox, ...inbox]
             your desktop. Rich HTML mail keeps the look its sender designed.
           </p>
           <div class="mt-6 inline-flex rounded-lg border border-line-strong p-1 text-sm text-ink-2">
-            <span class="flex items-center gap-1.5 rounded-md bg-white/[0.07] px-3 py-1 text-ink">
+            <span class="flex items-center gap-1.5 rounded-md bg-ink/[0.07] px-3 py-1 text-ink light:bg-transparent light:text-ink-2">
               <Moon size={14} /> Dark
             </span>
-            <span class="flex items-center gap-1.5 px-3 py-1">
+            <span class="flex items-center gap-1.5 rounded-md px-3 py-1 light:bg-ink/[0.07] light:text-ink">
               <Sun size={14} /> Light
             </span>
             <span class="px-3 py-1">System</span>
@@ -257,16 +256,16 @@ const scrollRows = [...inbox, ...inbox]
           <span class="font-mono text-[0.88em] text-ink">mailto:</span> link opens a new message.
         </p>
       </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8" data-theme="dark">
-        <div class="flex items-center justify-end gap-3 rounded-t-[10px] bg-black/50 px-3 py-1.5 text-[11px] text-(--secondary)">
+      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
+        <div class="flex items-center justify-end gap-3 rounded-t-[10px] bg-black/50 px-3 py-1.5 text-[11px] text-(--secondary) light:bg-black/[0.04]">
           <span class="flex items-center gap-1.5">
             <Mark size={12} /> 9
           </span>
           <span>Mon 28 Sep</span>
           <span class="text-(--text-strong)">09:41</span>
         </div>
-        <div class="notification mt-3 flex gap-3 rounded-[14px] border border-(--border-strong) bg-(--raised) p-3.5 shadow-[0_24px_60px_#000b]">
-          <span class="grid size-8 shrink-0 place-items-center rounded-[9px] bg-linear-to-br from-[#6268ef] to-[#292397]">
+        <div class="notification mt-3 flex gap-3 rounded-[14px] border border-(--border-strong) bg-(--raised) p-3.5 shadow-[0_24px_60px_var(--shadow)]">
+          <span class="grid size-8 shrink-0 place-items-center rounded-[9px] scheme-dark bg-linear-to-br from-[#6268ef] to-[#292397]">
             <Mark size={16} />
           </span>
           <div class="min-w-0 text-[12px] leading-snug">
@@ -313,7 +312,11 @@ const scrollRows = [...inbox, ...inbox]
   .scale-number {
     font-weight: 330;
     letter-spacing: -0.035em;
-    background: linear-gradient(180deg, #fff 30%, #aaa6ec);
+    background: linear-gradient(
+      180deg,
+      light-dark(var(--color-ink), #fff) 30%,
+      var(--color-lavender)
+    );
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;

@@ -218,7 +218,7 @@ export function KeyboardDemo() {
   return (
     <div ref={root} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12">
       <div className="demo-frame @container">
-        <div className="app h-full" data-theme="dark">
+        <div className="app h-full">
           <div
             ref={listRef}
             tabIndex={0}
@@ -273,7 +273,7 @@ export function KeyboardDemo() {
                     type="button"
                     onClick={() => run(item.command)}
                     className={
-                      'shortcut group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[0.95rem] text-ink-2 transition-colors hover:bg-white/[0.04] hover:text-ink' +
+                      'shortcut group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[0.95rem] text-ink-2 transition-colors hover:bg-ink/[0.04] hover:text-ink' +
                       (pressed === item.command ? ' is-pressed' : '')
                     }
                   >
@@ -443,7 +443,7 @@ function Toast({
       {toast && hidden !== toast.id && (
         <div
           key={toast.id}
-          className="demo-toast pointer-events-auto flex items-center gap-3 rounded-[9px] border border-(--border-strong) bg-(--raised) py-2 pr-2 pl-3.5 text-[12px] text-(--text-strong) shadow-[0_18px_50px_#0008]"
+          className="demo-toast pointer-events-auto flex items-center gap-3 rounded-[9px] border border-(--border-strong) bg-(--raised) py-2 pr-2 pl-3.5 text-[12px] text-(--text-strong) shadow-[0_18px_50px_var(--shadow)]"
         >
           {toast.text}
           {toast.undoable && canUndo && (

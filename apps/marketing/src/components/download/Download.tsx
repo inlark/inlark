@@ -175,7 +175,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
             {download && (
               <div className="rise mx-auto mt-10 max-w-xl" style={delay(0.24)}>
                 <div className="card flex items-center gap-4 p-3 pr-3 text-left sm:p-4">
-                  <span className="grid size-12 shrink-0 place-items-center rounded-xl border border-line bg-white/[0.035] text-ink-2">
+                  <span className="grid size-12 shrink-0 place-items-center rounded-xl border border-line bg-ink/[0.035] text-ink-2">
                     <BuildIcon build={download.build} size={22} />
                   </span>
                   <div className="min-w-0 flex-1">

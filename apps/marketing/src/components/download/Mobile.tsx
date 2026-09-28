@@ -186,7 +186,7 @@ export function Mobile() {
             <button
               type="button"
               onClick={closeCalendar}
-              className="-mt-1 -mr-1 grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-white/[0.06] hover:text-ink"
+              className="-mt-1 -mr-1 grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-ink/[0.06] hover:text-ink"
               aria-label="Close"
             >
               <X size={17} />
@@ -200,7 +200,7 @@ export function Mobile() {
                   target={option.external ? '_blank' : undefined}
                   rel={option.external ? 'noreferrer' : undefined}
                   onClick={() => window.setTimeout(closeCalendar, 300)}
-                  className="flex items-center gap-3 rounded-xl bg-white/[0.035] px-4 py-3.5 text-left transition-colors active:bg-white/[0.07]"
+                  className="flex items-center gap-3 rounded-xl bg-ink/[0.035] px-4 py-3.5 text-left transition-colors active:bg-ink/[0.07]"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-[0.95rem] text-ink">{option.label}</span>

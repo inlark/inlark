@@ -38,8 +38,8 @@ const points = [
 
     <div class="reveal relative" style="--delay:.1s" aria-hidden="true">
       <div class="status-glow"></div>
-      <div class="app relative" data-theme="dark">
-        <div class="overflow-hidden rounded-[16px] border border-(--border-strong) bg-(--bg) shadow-[0_40px_100px_-30px_#000]">
+      <div class="app relative">
+        <div class="overflow-hidden rounded-[16px] border border-(--border-strong) bg-(--bg) shadow-[0_40px_100px_-30px_var(--shadow-deep)]">
           <header class="flex items-center gap-2.5 border-b border-(--border) px-5 py-4">
             <Send size={15} className="text-(--muted)" />
             <span class="text-[14px] font-semibold text-(--text-strong)">Send status</span>
@@ -64,11 +64,11 @@ const points = [
 
           <div class="status-item border-b border-(--border) px-5 py-4" style="--i:1">
             <div class="flex items-center gap-3">
-              <span class="grid size-6 place-items-center rounded-full bg-[#d4b36e]/15 text-(--star)">
+              <span class="grid size-6 place-items-center rounded-full bg-(--star)/15 text-(--star)">
                 <AlertCircle size={13} strokeWidth={2} />
               </span>
               <span class="text-[13px] font-medium text-(--text-strong)">Quarterly numbers</span>
-              <span class="ml-auto rounded-[5px] bg-[#d4b36e]/12 px-1.5 py-px text-[10.5px] text-(--star)">
+              <span class="ml-auto rounded-[5px] bg-(--star)/12 px-1.5 py-px text-[10.5px] text-(--star)">
                 Delivery unconfirmed
               </span>
             </div>
@@ -107,7 +107,7 @@ const points = [
           </div>
         </div>
 
-        <div class="draft-chip absolute -bottom-5 -left-4 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] text-(--secondary) shadow-[0_18px_50px_#000c] sm:-left-8">
+        <div class="draft-chip absolute -bottom-5 -left-4 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] text-(--secondary) shadow-[0_18px_50px_var(--shadow)] sm:-left-8">
           <span class="size-1.5 rounded-full bg-(--green)"></span> Saved on this device
         </div>
       </div>

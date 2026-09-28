@@ -15,15 +15,15 @@ const found = [
   <div class="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
     <div class="reveal relative order-2 lg:order-1" aria-hidden="true">
       <div class="setup-glow"></div>
-      <div class="app relative" data-theme="dark">
-        <div class="mx-auto max-w-md rounded-[16px] border border-(--border-strong) bg-(--bg) p-6 shadow-[0_40px_100px_-30px_#000] sm:p-7">
+      <div class="app relative">
+        <div class="mx-auto max-w-md rounded-[16px] border border-(--border-strong) bg-(--bg) p-6 shadow-[0_40px_100px_-30px_var(--shadow-deep)] sm:p-7">
           <p class="text-[16px] font-semibold text-(--text-strong)">Connect an account</p>
           <p class="mt-1 text-[12px] text-(--muted)">
             Inlark connects straight to your mail server.
           </p>
 
           <label class="mt-5 block text-[12px] text-(--secondary)">Email address</label>
-          <div class="mt-1.5 rounded-[6px] border border-(--border-strong) bg-white/[0.03] px-3 py-2 text-[13px] text-(--text-strong)">
+          <div class="mt-1.5 rounded-[6px] border border-(--border-strong) bg-(--surface) px-3 py-2 text-[13px] text-(--text-strong)">
             <span class="typed">sam@fernstudio.design</span>
           </div>
 
@@ -51,7 +51,7 @@ const found = [
           </div>
 
           <label class="mt-4 block text-[12px] text-(--secondary)">Password</label>
-          <div class="mt-1.5 rounded-[6px] border border-(--accent-solid) bg-white/[0.03] px-3 py-2 text-[13px] tracking-[0.2em] text-(--text-strong)">
+          <div class="mt-1.5 rounded-[6px] border border-(--accent-solid) bg-(--surface) px-3 py-2 text-[13px] tracking-[0.2em] text-(--text-strong)">
             ••••••••••••
           </div>
           <p class="mt-3 flex items-center gap-2 text-[12px] text-(--secondary)">
@@ -98,7 +98,7 @@ const found = [
       </ul>
       <div class="mt-9 flex flex-wrap gap-2 font-mono text-[0.72rem] text-ink-2">
         {['JMAP', 'IMAP', 'SMTP', 'TLS', 'STARTTLS', 'Self-hosted'].map((p) => (
-          <span class="rounded-md border border-line-strong bg-white/[0.02] px-2.5 py-1">{p}</span>
+          <span class="rounded-md border border-line-strong bg-ink/[0.02] px-2.5 py-1">{p}</span>
         ))}
       </div>
     </div>
