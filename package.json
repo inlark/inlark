@@ -1,0 +1,29 @@
+{
+  "name": "inlark",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "dev": "pnpm --filter @inlark/desktop dev",
+    "dev:web": "pnpm --filter @inlark/desktop dev:web",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "test": "vitest run",
+    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "package:linux": "bash scripts/package-linux.sh",
+    "test:integration": "vitest run --no-file-parallelism tests/stalwart.integration.test.ts tests/stalwart-imap.integration.test.ts",
+    "test:stalwart": "node scripts/stalwart-test.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:deb": "bash scripts/test-deb.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/smtp-server": "^3.5.13",
+    "prettier": "^3.9.8",
+    "smtp-server": "^3.19.13",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

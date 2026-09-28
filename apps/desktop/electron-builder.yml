@@ -1,0 +1,50 @@
+appId: app.inlark.desktop
+productName: Inlark
+directories:
+  output: release
+files:
+  - out/**
+  - resources/**
+  - '!node_modules/**'
+  - package.json
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+  category: Network
+  executableName: inlark
+  syncDesktopName: true
+  artifactName: 'Inlark-${version}-${arch}.${ext}'
+  icon: resources/icon.png
+  desktop:
+    entry:
+      MimeType: x-scheme-handler/mailto;
+      StartupWMClass: inlark
+protocols:
+  - name: Email
+    schemes: [mailto]
+mac:
+  icon: resources/icon.png
+  artifactName: 'Inlark-${version}-${arch}.${ext}'
+win:
+  icon: resources/icon.png
+  artifactName: 'Inlark-${version}-${arch}-setup.${ext}'
+deb:
+  packageName: inlark
+  depends:
+    [
+      'libgtk-3-0 | libgtk-3-0t64',
+      'libasound2 | libasound2t64',
+      libgbm1,
+      libdrm2,
+      libxkbcommon0,
+      libnotify4,
+      libnss3,
+      libxss1,
+      libxtst6,
+      xdg-utils,
+      libsecret-1-0,
+    ]
+rpm:
+  packageName: inlark

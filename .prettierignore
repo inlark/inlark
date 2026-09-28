@@ -1,0 +1,8 @@
+node_modules
+.pnpm-store
+.turbo
+**/out
+**/release
+result
+pnpm-lock.yaml
+flake.lock

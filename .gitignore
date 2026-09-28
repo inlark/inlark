@@ -1,0 +1,14 @@
+node_modules/
+.pnpm-store/
+.turbo/
+out/
+dist/
+release/
+coverage/
+test-results/
+.env
+.env.*
+!.env.example
+*.log
+.test-data/
+result

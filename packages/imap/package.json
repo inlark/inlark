@@ -1,0 +1,23 @@
+{
+  "name": "@inlark/imap",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@inlark/core": "workspace:*",
+    "imapflow": "^2.0.6",
+    "mailparser": "^3.9.28",
+    "nodemailer": "^10.0.10"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.6",
+    "@types/nodemailer": "^8.0.2"
+  }
+}
