@@ -51,9 +51,15 @@ pnpm dev:web
 
 Open the printed localhost URL. Append `?stress=1` for five synthetic 50,000-message inboxes. The browser preview cannot connect to real accounts, access native files, or send email. Demo storage is separate from real account storage. A native sample workspace is available with `pnpm dev -- --demo` (or run the packaged app with `--demo`).
 
+Sample messages use fictional content with real sender domains, so both demo modes can show sender pictures when **Load remote images** is enabled. The browser preview resolves pictures through its local development server; the native demo uses the same resolver as connected mail.
+
+### Marketing site on Cloudflare Workers
+
 The Astro marketing app lives in `apps/marketing`. Run its placeholder page with `pnpm dev:marketing`; `pnpm --filter @inlark/marketing build` creates the static site in `apps/marketing/dist`.
 
-Sample messages use fictional content with real sender domains, so both demo modes can show sender pictures when **Load remote images** is enabled. The browser preview resolves pictures through its local development server; the native demo uses the same resolver as connected mail.
+The marketing app is configured as a static Workers Assets project in `apps/marketing/wrangler.jsonc`. It does not need a server adapter. To test the built site locally with Wrangler, run `pnpm --filter @inlark/marketing preview:workers`. When ready to publish, run `pnpm --filter @inlark/marketing deploy` after authenticating Wrangler; this builds the site before uploading it.
+
+For Cloudflare Workers Builds, connect this repository to a Worker named `inlark-marketing` and set the root directory to `apps/marketing`, build command to `pnpm build`, and deploy command to `pnpm exec wrangler deploy`. Set the build variable `PNPM_VERSION` to `12.3.4` to match the workspace lockfile. The Worker serves `apps/marketing/dist` as static assets.
 
 ## Connect your account
 

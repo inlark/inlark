@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "inlark-marketing",
+  "compatibility_date": "2026-09-28",
+  "send_metrics": false,
+  "dependencies_instrumentation": {
+    "enabled": false,
+  },
+  "assets": {
+    "directory": "./dist",
+  },
+}

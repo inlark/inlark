@@ -4,7 +4,7 @@ stdenv.mkDerivation (finalAttrs: {
   version = "0.1.0";
   src = lib.cleanSourceWith {
     src = ../.;
-    filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" ".astro" "out" "dist" "release" ".git" ".test-data" "result" "test-results" ]);
+    filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" ".astro" ".wrangler" "out" "dist" "release" ".git" ".test-data" "result" "test-results" ]);
   };
   nativeBuildInputs = [ nodejs_24 pnpm_12 pnpmConfigHook makeWrapper copyDesktopItems ];
   pnpmDeps = fetchPnpmDeps {
@@ -12,7 +12,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm = pnpm_12;
     fetcherVersion = 4;
     postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
-    hash = "sha256-QO1RrYZOBlmnxB3go3LZ7/sHcLfs/CaRVdHt6q6MTfc=";
+    hash = "sha256-BXkCcww8dLxjRpHWcMsZBRZKinPyHRDf/4DuQaeFOKU=";
   };
   postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
