@@ -18,6 +18,7 @@ import { imapProviders } from './imap-accounts'
 import { openWorkerIndex } from './imap-index/open'
 import { discover } from './discovery-transport'
 import { SenderAvatarResolver } from './sender-avatar'
+import { UpdateManager } from './updates'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 protocol.registerSchemesAsPrivileged([
@@ -40,6 +41,7 @@ let window: BrowserWindow | null = null,
 let unreadCount = 0,
   rendererReady = false
 let service: MailService
+const updates = new UpdateManager((status) => send({ type: 'update', status }))
 const pendingEvents: AppEvent[] = []
 const demo = process.argv.includes('--demo')
 const demoAvatars = demo ? new SenderAvatarResolver() : null
@@ -216,6 +218,7 @@ else {
           for (const event of pendingEvents.splice(0)) window?.webContents.send('mail:event', event)
         },
         bootstrap: service.bootstrap,
+        updateStatus: updates.getStatus,
         discover: service.discover,
         testConnection: service.testConnection,
         connect: service.connect,
@@ -290,6 +293,7 @@ else {
         tray = null
       }
       powerMonitor.on('resume', () => void service.refresh())
+      if (!demo && !smoke) updates.start()
       app.on('activate', show)
       mailtoFromArgs(process.argv)
       // The packaged desktop entry lets the user choose Inlark as their mailto handler.

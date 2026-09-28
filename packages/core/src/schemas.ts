@@ -174,6 +174,7 @@ export const settingsSchema = z.object({
 })
 export const ipcSchemas = {
   bootstrap: z.tuple([]),
+  updateStatus: z.tuple([]),
   ready: z.tuple([]),
   discover: z.tuple([z.string().trim().toLowerCase().pipe(z.email().max(320))]),
   testConnection: z.tuple([accountSchema]),

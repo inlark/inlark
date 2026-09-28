@@ -57,6 +57,8 @@ If you run your own mail server, or just have a few accounts at small providers,
 
 Grab the latest build from the [releases page](https://github.com/inlark/inlark/releases/latest):
 
+Packaged builds check for updates in the background. When an update downloads successfully, Inlark installs it after you quit, so it never interrupts your work. If the automatic update fails, Inlark links to the [download page](https://inlark.com/download) for a manual install.
+
 | Platform | Download                                                   |
 | -------- | ---------------------------------------------------------- |
 | Windows  | Installer (x64)                                            |
@@ -64,6 +66,7 @@ Grab the latest build from the [releases page](https://github.com/inlark/inlark/
 | Linux    | AppImage, `.deb` or `.rpm` (x64), or [Nix](#nix-and-nixos) |
 
 The Windows and macOS builds aren't signed yet, so your system will ask you to confirm before the first launch. That's expected.
+Automatic updates on macOS require code signing; until signed builds are available, use the download link shown in Inlark when a new release is available.
 
 ### Nix and NixOS
 

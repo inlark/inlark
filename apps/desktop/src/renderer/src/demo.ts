@@ -506,6 +506,7 @@ const copyOf = (source: Draft, patch: Partial<Draft>): Draft => ({
   ...patch,
 })
 export const demoAPI: DesktopMailAPI = {
+  updateStatus: async () => ({ phase: 'idle' }),
   bootstrap: async () => ({
     accounts: demoAccounts,
     settings,

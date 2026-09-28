@@ -1,5 +1,9 @@
 appId: app.inlark.desktop
 productName: Inlark
+publish:
+  provider: github
+  owner: inlark
+  repo: inlark
 directories:
   output: release
 files:
