@@ -1,10 +1,16 @@
 # Inlark
 
-A focused, Linux-first email client for JMAP and IMAP/SMTP accounts. Built with Electron, React, TypeScript, Tailwind CSS, Base UI, TanStack libraries, and Turborepo. Connects directly to your server; no hosted account or telemetry.
+A focused email client for Linux, Windows, and macOS with JMAP and IMAP/SMTP accounts. Built with Electron, React, TypeScript, Tailwind CSS, Base UI, TanStack libraries, and Turborepo. Connects directly to your server; no hosted account or telemetry.
 
 This is an initial implementation, not a claim of production readiness. The working client includes account setup, a unified inbox, server search, conversation reading, organization and undo, folders, composition, attachments, local/server drafts, sending, themes, keyboard navigation, notifications, and a tray. See [validation and remaining acceptance work](docs/validation.md) before adopting it as your only mail client.
 
 ## Run
+
+Download the desktop app for Linux, Windows, or macOS from the [latest release](https://github.com/inlark/inlark/releases/latest). Releases include a Windows installer, macOS DMG and ZIP files for Intel and Apple Silicon, and Linux AppImage, Debian, and RPM packages. Windows and macOS builds are currently unsigned, so your system may ask you to approve them before opening.
+
+For development on Windows, macOS, or a conventional Linux distribution, install Node 24 and pnpm 12.3.4, then run `pnpm install --frozen-lockfile` and `pnpm dev`.
+
+### Nix and NixOS
 
 To install the desktop app from this checkout on NixOS or another Linux system with Nix:
 
@@ -41,7 +47,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The shell selects Nix's Electron executable and skips the incompatible downloaded binary. On a conventional Linux distribution, install Node 24 and pnpm 12.3.4, then run `pnpm install --frozen-lockfile` and `pnpm dev`.
+The shell selects Nix's Electron executable and skips the incompatible downloaded binary.
 
 For a browser preview with sample mail:
 
@@ -89,9 +95,9 @@ The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml`, and the dependency-st
 
 The Linux packaging script selects a Nix-compatible `fpm` on NixOS. Packages currently contain reserved `.localhost`/`.invalid` development metadata. Replace that metadata before public distribution.
 
-Pushing a `v<version>` tag matching `apps/desktop/package.json` runs the [desktop release workflow](.github/workflows/release.yml). It builds x64 Windows installer, Intel and Apple Silicon macOS DMG/ZIP files, and x64 Linux AppImage, Debian, and RPM packages. It also checks that the Nix flake builds and installs before publishing the GitHub Release. The macOS and Windows builds are unsigned; they may require the user to approve them through the operating system's security prompts until signing and macOS notarization are configured.
+Pushing a `v<version>` tag matching `apps/desktop/package.json` runs the [desktop release workflow](.github/workflows/release.yml). It builds an x64 Windows installer, Intel and Apple Silicon macOS DMG/ZIP files, and x64 Linux AppImage, Debian, and RPM packages. It also checks that the Nix flake builds and installs before publishing the GitHub Release. The macOS and Windows builds are unsigned; they may require the user to approve them through the operating system's security prompts until signing and macOS notarization are configured.
 
-To check native preload/IPC and SQLite-worker startup without opening a window:
+To check native preload/IPC and SQLite-worker startup in the Nix package without opening a window:
 
 ```sh
 INLARK_DATA_DIR="$(mktemp -d)" ./result/bin/inlark --smoke-test --ozone-platform=wayland

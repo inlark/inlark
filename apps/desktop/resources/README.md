@@ -9,7 +9,7 @@ The sidebar uses `icon-mark.svg`, the same silhouette with no tile or shadows. T
 are white in dark mode and black in light mode; the light theme recolours the SVG image with CSS.
 A colour-inheriting version is in `design/brand/relay-ii/mark.svg`.
 
-The desktop window and Linux package use `icon.png`. The tray uses `tray.png`
+The desktop window and packaged app use `icon.png`. The tray uses `tray.png`
 and `tray-unread.png`, with matching `@2x` assets for high-density displays.
 These are generated from the same SVG; the unread variant adds a pale badge with an indigo outline.
 The badge is positioned relative to the SVG viewBox.

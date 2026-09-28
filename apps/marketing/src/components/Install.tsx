@@ -11,16 +11,30 @@ interface Method {
 
 const methods = (version: string): Method[] => [
   {
+    id: 'windows',
+    label: 'Windows',
+    note: 'Download the Windows installer from the latest release, then open it.',
+    code: `Inlark-${version}-x64-setup.exe`,
+    shell: false,
+  },
+  {
+    id: 'macos',
+    label: 'macOS',
+    note: 'Download the DMG for your Mac from the latest release, then open it.',
+    code: `Intel: Inlark-${version}-x64.dmg\nApple Silicon: Inlark-${version}-arm64.dmg`,
+    shell: false,
+  },
+  {
     id: 'nix',
     label: 'Nix',
-    note: 'Installs the launcher, desktop entry, icon and mailto: handler into your profile.',
+    note: 'On Linux, installs the launcher, desktop entry, icon and mailto: handler into your profile.',
     code: `nix profile install 'github:inlark/inlark/v${version}#inlark'`,
     shell: true,
   },
   {
     id: 'nixos',
     label: 'NixOS',
-    note: 'Add Inlark as a flake input, then enable its module in your system configuration.',
+    note: 'On NixOS, add Inlark as a flake input, then enable its module in your system configuration.',
     code: `# flake.nix
 inputs.inlark.url = "github:inlark/inlark/v${version}";
 

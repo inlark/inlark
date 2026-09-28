@@ -45,7 +45,7 @@ stdenv.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
   meta = {
-    description = "Keyboard-friendly JMAP and IMAP email client for Linux";
+    description = "Keyboard-friendly JMAP and IMAP email client";
     license = lib.licenses.agpl3Only;
     mainProgram = "inlark";
     platforms = lib.platforms.linux;

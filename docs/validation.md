@@ -52,6 +52,7 @@ The remaining acceptance work needs realistic live-account and desktop condition
 - Broad rendering checks for newsletters, malformed HTML, inline images, quoted content, and large attachments; actual screen-reader and contrast auditing in both themes, plus reduced-motion operation.
 - Failure injection for interrupted uploads and filesystem exhaustion, and draft conflict/recovery exercises across two independently running clients.
 - Normal installed `.deb` and AppImage sessions on a conventional Linux desktop, including its Chromium sandbox and tray integration. ARM64 is declared in the Nix flake but has not been built here.
+- Native Windows and macOS installation, startup, account connections, notifications, tray behavior, and `mailto:` registration on those desktops.
 
 Current deliberate limits: authenticated JMAP endpoints must share the configured origin; IMAP accounts use password or app-password login and one sending address, and read mail from a local index that fills in over time; files over 100 MB cannot be attached/downloaded; server body values are capped at 5 MB; only previously fetched mail is available offline; and all-matching operations are limited to 250,000 conversations. Remote-image fetching blocks private-network resources and redirects. Search excludes junk/trash unless that folder is selected. Folder deletion does not implicitly delete contained messages; a server can refuse deletion of a populated folder.
 
