@@ -1,6 +1,7 @@
 node_modules
 .pnpm-store
 .turbo
+.astro
 **/out
 **/release
 result

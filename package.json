@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @inlark/desktop dev",
     "dev:web": "pnpm --filter @inlark/desktop dev:web",
+    "dev:marketing": "pnpm --filter @inlark/marketing dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "vitest run",
@@ -21,6 +22,7 @@
     "@types/node": "^24.0.0",
     "@types/smtp-server": "^3.5.13",
     "prettier": "^3.9.8",
+    "prettier-plugin-astro": "^1.1.0",
     "smtp-server": "^3.19.13",
     "turbo": "^2.5.0",
     "typescript": "^5.9.0",

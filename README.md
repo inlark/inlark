@@ -51,6 +51,8 @@ pnpm dev:web
 
 Open the printed localhost URL. Append `?stress=1` for five synthetic 50,000-message inboxes. The browser preview cannot connect to real accounts, access native files, or send email. Demo storage is separate from real account storage. A native sample workspace is available with `pnpm dev -- --demo` (or run the packaged app with `--demo`).
 
+The Astro marketing app lives in `apps/marketing`. Run its placeholder page with `pnpm dev:marketing`; `pnpm --filter @inlark/marketing build` creates the static site in `apps/marketing/dist`.
+
 Sample messages use fictional content with real sender domains, so both demo modes can show sender pictures when **Load remote images** is enabled. The browser preview resolves pictures through its local development server; the native demo uses the same resolver as connected mail.
 
 ## Connect your account
