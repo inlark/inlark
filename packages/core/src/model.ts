@@ -439,6 +439,12 @@ export type AppEvent =
   | { type: 'open'; accountId: string; threadId: string }
   | { type: 'progress'; completed: number; total: number }
   | { type: 'submissions'; submissions: SubmissionSummary[] }
+  | { type: 'update'; status: UpdateStatus }
+export type UpdateStatus =
+  | { phase: 'idle' }
+  | { phase: 'downloading'; version: string; percent: number }
+  | { phase: 'ready'; version: string }
+  | { phase: 'manual'; version: string }
 export interface SendResult {
   status: 'sent' | 'partial' | 'uncertain'
   message: string
@@ -467,6 +473,7 @@ export interface Bootstrap {
 }
 export interface DesktopMailAPI {
   bootstrap(): Promise<Bootstrap>
+  updateStatus(): Promise<UpdateStatus>
   ready(): Promise<void>
   discover(email: string): Promise<DiscoveryResult>
   /** Checks a login without saving it. Nothing is sent to any recipient. */

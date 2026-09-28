@@ -4,7 +4,7 @@ stdenv.mkDerivation (finalAttrs: {
   version = "0.1.0";
   src = lib.cleanSourceWith {
     src = ../.;
-    filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" "out" "release" ".git" ".test-data" "result" "test-results" ]);
+    filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" ".astro" ".wrangler" "out" "dist" "release" ".git" ".test-data" "result" "test-results" ]);
   };
   nativeBuildInputs = [ nodejs_24 pnpm_12 pnpmConfigHook makeWrapper copyDesktopItems ];
   pnpmDeps = fetchPnpmDeps {
@@ -12,7 +12,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm = pnpm_12;
     fetcherVersion = 4;
     postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
-    hash = "sha256-Y9UxkC2iCNqaNUB9l+BaaMQu8NJ3Pw1iTK/bTYDUR9g=";
+    hash = "sha256-E9aHE/vWKOG4O5BzkvqmmkHF/emZ6yDfhlA8+OGd4Ek=";
   };
   postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
@@ -45,7 +45,7 @@ stdenv.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
   meta = {
-    description = "Keyboard-friendly JMAP and IMAP email client for Linux";
+    description = "Keyboard-friendly JMAP and IMAP email client";
     license = lib.licenses.agpl3Only;
     mainProgram = "inlark";
     platforms = lib.platforms.linux;

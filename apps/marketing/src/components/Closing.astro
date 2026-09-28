@@ -1,0 +1,63 @@
+---
+import { Download } from '@inlark/ui/icons'
+import { Mark } from './Mark'
+import { GitHubIcon } from './GitHubIcon'
+import { links } from '../data/links'
+import Footer from './Footer.astro'
+---
+
+<section class="closing relative isolate mt-32 overflow-hidden pt-32 pb-40 text-center sm:mt-44 sm:pt-40 sm:pb-52">
+  <div class="dawn" aria-hidden="true"></div>
+  <div class="reveal relative mx-auto max-w-3xl px-5">
+    <span class="mx-auto grid size-16 place-items-center rounded-[20px] scheme-dark bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_20px_60px_-10px_#484bd3,inset_0_1px_0_#ffffff40]">
+      <Mark size={30} />
+    </span>
+    <h2 class="display mt-10 text-[clamp(3rem,8vw,6.2rem)]">
+      Good morning,
+      <br /> <em class="font-[360]">inbox.</em>
+    </h2>
+    <p class="mx-auto mt-6 max-w-lg text-lg leading-relaxed text-ink-2">
+      Calm, fast, dependable email for Linux, Windows, and macOS. Free and open source, from the
+      first line to the last.
+    </p>
+    <div class="mt-10 flex flex-wrap justify-center gap-3">
+      <a href={links.download} class="btn btn-primary">
+        <Download size={17} /> Download Inlark
+      </a>
+      <a href={links.repo} class="btn btn-ghost">
+        <GitHubIcon className="size-4" /> Star on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<Footer />
+
+<style>
+  .dawn {
+    position: absolute;
+    left: 50%;
+    bottom: -62%;
+    z-index: -1;
+    width: min(1500px, 200vw);
+    aspect-ratio: 1.6;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      rgb(255 214 184 / 0.55),
+      rgb(242 184 139 / 0.38) 18%,
+      rgb(214 150 190 / 0.24) 38%,
+      rgb(120 112 236 / 0.14) 60%,
+      transparent 80%
+    );
+    filter: blur(10px);
+  }
+  .closing::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, var(--color-night), transparent 40%);
+  }
+</style>

@@ -5,6 +5,7 @@ storeDir: .pnpm-store
 allowBuilds:
   electron: true
   esbuild: true
+  workerd: true
   electron-winstaller: false
 minimumReleaseAgeExclude:
   - electron@44.4.5

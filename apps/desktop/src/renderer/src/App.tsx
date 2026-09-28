@@ -61,6 +61,7 @@ import {
   type MutationTarget,
   type QueryPage,
   type SubmissionSummary,
+  type UpdateStatus,
   type View,
 } from '@inlark/core'
 import { api, isDemo } from './api'
@@ -95,6 +96,7 @@ import { HintIconButton } from './HintIconButton'
 import { targetAccounts, targetLimit } from './account-limits'
 import { SubmissionList } from './SendingStatus'
 import { IndexingMeter } from './IndexingMeter'
+import { UpdateNotice } from './UpdateNotice'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
@@ -149,6 +151,7 @@ export function App() {
   const [toast, setToastState] = useState<Toast & { id: number }>(),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ phase: 'idle' })
   const [folderDialog, setFolderDialog] = useState<FolderDialogState>()
   const [moveTargets, setMoveTargets] = useState<MutationTarget[]>(),
     [confirmAction, setConfirmAction] = useState<MailAction>()
@@ -789,8 +792,15 @@ export function App() {
           .then(() =>
             queryClient.setQueryData<SubmissionSummary[]>(['submissions'], event.submissions),
           )
+      if (event.type === 'update') setUpdateStatus(event.status)
     })
-    if (boot.data) void api.ready().catch((e) => fail(e))
+    if (boot.data) {
+      void api
+        .updateStatus()
+        .then(setUpdateStatus)
+        .catch(() => {})
+      void api.ready().catch((e) => fail(e))
+    }
     return unsubscribe
   }, [accounts, queryId, !!boot.data])
   useEffect(() => {
@@ -1327,6 +1337,7 @@ export function App() {
         }
       />
       <main className="main-content">
+        <UpdateNotice status={updateStatus} />
         {!boot.data ? (
           <EmptyState
             icon={Mail}

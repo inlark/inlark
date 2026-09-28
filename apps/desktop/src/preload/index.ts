@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { DesktopMailAPI, AppEvent } from '@inlark/core'
 const methods = [
   'bootstrap',
+  'updateStatus',
   'ready',
   'discover',
   'testConnection',

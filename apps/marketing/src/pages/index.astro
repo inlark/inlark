@@ -1,0 +1,27 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Nav from '../components/Nav.astro'
+import Hero from '../components/Hero.astro'
+import Keyboard from '../components/Keyboard.astro'
+import Features from '../components/Features.astro'
+import Reliability from '../components/Reliability.astro'
+import Setup from '../components/Setup.astro'
+import Privacy from '../components/Privacy.astro'
+import Closing from '../components/Closing.astro'
+---
+
+<Layout
+  title="Inlark — beautiful email for your desktop"
+  description="A fast, keyboard-first email client for Linux, Windows, and macOS. Your JMAP and IMAP accounts in one inbox, with no hosted service or telemetry."
+>
+  <Nav />
+  <main>
+    <Hero />
+    <Keyboard />
+    <Features />
+    <Reliability />
+    <Setup />
+    <Privacy />
+  </main>
+  <Closing />
+</Layout>

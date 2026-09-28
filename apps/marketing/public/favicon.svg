@@ -1,8 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="760" viewBox="0 0 800 760">
-<defs><linearGradient id="backdrop" x2="0" y2="1"><stop stop-color="#dfe3ff"/><stop offset="1" stop-color="#fff"/></linearGradient><radialGradient id="aura"><stop stop-color="#bdc3ff" stop-opacity=".35"/><stop offset="1" stop-color="#d8dcff" stop-opacity="0"/></radialGradient></defs>
-<rect width="800" height="760" fill="url(#backdrop)"/>
-<ellipse cx="400" cy="480" rx="355" ry="235" fill="url(#aura)"/>
-<svg x="112" y="70" width="576" height="576" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
     <path id="tile" d="M154 32h204c78 0 114 36 114 114v204c0 78-36 114-114 114H154c-78 0-114-36-114-114V146C40 68 76 32 154 32Z"/>
     <path id="rear" d="M8 20h21l21 28-21 28H8l23-28Z"/>
@@ -82,4 +78,4 @@
       <use href="#rear"/><use href="#front"/>
     </g>
   </g>
-</svg></svg>
+</svg>

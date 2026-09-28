@@ -1,0 +1,127 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Nav from '../components/Nav.astro'
+import Stars from '../components/Stars.astro'
+import Footer from '../components/Footer.astro'
+
+const details = [
+  { label: 'Phone', value: '+43 670 6081524', href: 'tel:+436706081524' },
+  { label: 'Email', value: 'legal@inlark.com', href: 'mailto:legal@inlark.com' },
+  {
+    label: 'Corporate purpose',
+    value: 'Services in automated data processing and information technology',
+  },
+  { label: 'Membership', value: 'Member of the Austrian Federal Economic Chamber (WKO)' },
+  {
+    label: 'Professional law',
+    prefix: 'Trade Regulation Act: ',
+    value: 'www.ris.bka.gv.at',
+    href: 'https://www.ris.bka.gv.at',
+  },
+  { label: 'Supervisory authority', value: 'Bezirkshauptmannschaft (BH) Feldkirch' },
+  { label: 'State of grant', value: 'Austria' },
+]
+
+const sections = [
+  {
+    title: 'Accountability for content',
+    text: 'The contents of our pages have been created with the utmost care. However, we cannot guarantee the contents’ accuracy, completeness or topicality. According to statutory provisions, we are furthermore responsible for our own content on these web pages. In this matter, please note that we are not obliged to monitor the transmitted or saved information of third parties, or investigate circumstances pointing to illegal activity. Our obligations to remove or block the use of information under generally applicable laws remain unaffected by this as per §§ 8 to 10 of the Telemedia Act (TMG).',
+  },
+  {
+    title: 'Accountability for links',
+    text: 'Responsibility for the content of external links (to web pages of third parties) lies solely with the operators of the linked pages. No violations were evident to us at the time of linking. Should any legal infringement become known to us, we will remove the respective link immediately.',
+  },
+  {
+    title: 'Copyright',
+    text: 'Our web pages and their contents are subject to the Austrian copyright law. Unless expressly permitted by law, every form of utilizing, reproducing or processing works subject to copyright protection on our web pages requires the prior consent of the respective owner of the rights. Individual reproductions of a work are only allowed for private use. The materials from these pages are copyrighted and any unauthorized use may violate copyright laws.',
+  },
+]
+---
+
+<Layout
+  title="Imprint — Inlark"
+  description="Legal information about the operator of inlark.com, as required by Austrian law."
+>
+  <Nav page="imprint" />
+  <main class="relative isolate overflow-hidden px-5 pt-36 pb-32 sm:px-8 sm:pt-44 sm:pb-40">
+    <Stars count={32} class="h-[480px]" />
+    <div class="glow" aria-hidden="true"></div>
+
+    <div class="mx-auto max-w-3xl">
+      <header class="rise">
+        <p class="eyebrow">Legal</p>
+        <h1 class="display mt-5 text-[clamp(3rem,7vw,4.8rem)]">Imprint</h1>
+        <p class="mt-6 max-w-xl text-[0.95rem] leading-relaxed text-ink-3">
+          Obligation to provide information according to §5 E-Commerce Law, §63 Trade Regulation
+          Act, §14 Corporate Code, and disclosure obligation according to §25 Media Law.
+        </p>
+      </header>
+
+      <section class="card rise mt-14" style="--delay:.08s" aria-labelledby="operator">
+        <div class="p-7 sm:p-10">
+          <h2 id="operator" class="eyebrow">
+            Operator
+          </h2>
+          <address class="mt-4 text-lg leading-relaxed text-ink-2 not-italic">
+            <span class="font-semibold text-ink">Paul Köck</span>
+            <br />
+            Wolf-Huber-Straße 31
+            <br />
+            6800 Feldkirch, Austria
+          </address>
+        </div>
+        <dl class="divide-y divide-line border-t border-line text-[0.95rem]">
+          {details.map((d) => (
+            <div class="grid gap-1 px-7 py-4 sm:grid-cols-[13rem_1fr] sm:gap-6 sm:px-10">
+              <dt class="text-ink-3">{d.label}</dt>
+              <dd class="text-ink-2">
+                {d.prefix}
+                {d.href ? (
+                  <a
+                    href={d.href}
+                    class="text-ink underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-lavender"
+                  >
+                    {d.value}
+                  </a>
+                ) : (
+                  d.value
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <div class="rise mt-20 grid gap-12" style="--delay:.16s">
+        {sections.map((s) => (
+          <section>
+            <h2 class="text-lg font-semibold tracking-[-0.01em] text-ink">{s.title}</h2>
+            <p class="mt-3 leading-[1.75] text-ink-2">{s.text}</p>
+          </section>
+        ))}
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  /* A faint dawn above the page, quieter than the product pages. */
+  .glow {
+    position: absolute;
+    left: 50%;
+    top: -520px;
+    z-index: -1;
+    width: min(1300px, 190vw);
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      rgb(242 184 139 / 0.16) 0%,
+      rgb(224 158 190 / 0.1) 26%,
+      rgb(140 128 240 / 0.08) 48%,
+      transparent 72%
+    );
+    filter: blur(24px);
+  }
+</style>

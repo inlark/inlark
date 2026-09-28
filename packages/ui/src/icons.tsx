@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { HugeiconsIcon, type HugeiconsIconProps, type IconSvgElement } from '@hugeicons/react'
 import {
   AlertCircle as AlertCircleGlyph,
+  AppleIcon as AppleGlyph,
   Archive as ArchiveGlyph,
   ArrowDown as ArrowDownGlyph,
   ArrowLeft as ArrowLeftGlyph,
@@ -9,6 +10,7 @@ import {
   ArrowUpRight as ArrowUpRightGlyph,
   Bold as BoldGlyph,
   Calendar as CalendarGlyph,
+  CalendarAdd02Icon as CalendarAddGlyph,
   Check as CheckGlyph,
   ChevronDown as ChevronDownGlyph,
   ChevronLeft as ChevronLeftGlyph,
@@ -34,6 +36,7 @@ import {
   Info as InfoGlyph,
   Italic as ItalicGlyph,
   Keyboard as KeyboardGlyph,
+  LaptopIcon as LaptopGlyph,
   Link2 as Link2Glyph,
   List as ListGlyph,
   LoaderCircle as LoaderCircleGlyph,
@@ -57,6 +60,7 @@ import {
   Search as SearchGlyph,
   Send as SendGlyph,
   Settings as SettingsGlyph,
+  Share08Icon as ShareGlyph,
   SettingsIcon as SettingsIconGlyph,
   ShieldCheck as ShieldCheckGlyph,
   ShieldX as ShieldXGlyph,
@@ -65,10 +69,12 @@ import {
   SquarePenIcon as SquarePenGlyph,
   Star as StarGlyph,
   Sun as SunGlyph,
+  TerminalIcon as TerminalGlyph,
   Trash2 as Trash2Glyph,
   Undo2 as Undo2Glyph,
   UserRound as UserRoundGlyph,
   WifiOff as WifiOffGlyph,
+  WindowsNewIcon as WindowsGlyph,
   X as XGlyph,
 } from '@hugeicons/core-free-icons'
 
@@ -79,6 +85,7 @@ const icon =
   (props) => <HugeiconsIcon icon={glyph} color="currentColor" {...props} />
 
 export const AlertCircle = icon(AlertCircleGlyph)
+export const Apple = icon(AppleGlyph)
 export const Archive = icon(ArchiveGlyph)
 export const ArrowDown = icon(ArrowDownGlyph)
 export const ArrowLeft = icon(ArrowLeftGlyph)
@@ -86,6 +93,7 @@ export const ArrowUp = icon(ArrowUpGlyph)
 export const ArrowUpRight = icon(ArrowUpRightGlyph)
 export const Bold = icon(BoldGlyph)
 export const Calendar = icon(CalendarGlyph)
+export const CalendarAdd = icon(CalendarAddGlyph)
 export const Check = icon(CheckGlyph)
 export const ChevronDown = icon(ChevronDownGlyph)
 export const ChevronLeft = icon(ChevronLeftGlyph)
@@ -111,6 +119,7 @@ export const Inbox = icon(InboxGlyph)
 export const Info = icon(InfoGlyph)
 export const Italic = icon(ItalicGlyph)
 export const Keyboard = icon(KeyboardGlyph)
+export const Laptop = icon(LaptopGlyph)
 export const Link2 = icon(Link2Glyph)
 export const List = icon(ListGlyph)
 export const LoaderCircle = icon(LoaderCircleGlyph)
@@ -134,6 +143,7 @@ export const Rows3 = icon(Rows3Glyph)
 export const Search = icon(SearchGlyph)
 export const Send = icon(SendGlyph)
 export const Settings = icon(SettingsGlyph)
+export const Share = icon(ShareGlyph)
 export const SettingsIcon = icon(SettingsIconGlyph)
 export const ShieldCheck = icon(ShieldCheckGlyph)
 export const ShieldX = icon(ShieldXGlyph)
@@ -142,8 +152,10 @@ export const SlidersHorizontal = icon(SlidersHorizontalGlyph)
 export const SquarePen = icon(SquarePenGlyph)
 export const Star = icon(StarGlyph)
 export const Sun = icon(SunGlyph)
+export const Terminal = icon(TerminalGlyph)
 export const Trash2 = icon(Trash2Glyph)
 export const Undo2 = icon(Undo2Glyph)
 export const UserRound = icon(UserRoundGlyph)
 export const WifiOff = icon(WifiOffGlyph)
+export const Windows = icon(WindowsGlyph)
 export const X = icon(XGlyph)

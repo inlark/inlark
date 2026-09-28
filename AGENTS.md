@@ -4,7 +4,7 @@
 
 Build an exceptional email client that makes everyday email feel fast, clear, and effortless. Inlark should become a dependable personal daily driver, with the visual quality and thoughtful interactions of the best modern productivity apps.
 
-Linux users deserve a beautiful email client with excellent usability and reliable account connections. This project exists because existing options too often combine dated interfaces, awkward workflows, or connection problems, while appealing alternatives are unavailable on Linux or expensive.
+People on Linux, Windows, and macOS deserve a beautiful email client with excellent usability and reliable account connections. This project exists because existing options too often combine dated interfaces, awkward workflows, connection problems, or high costs.
 
 ## Design direction
 
@@ -27,7 +27,7 @@ Good design includes behavior: predictable navigation, useful feedback, accessib
 
 ## Scope
 
-Build the desktop experience first, with Linux as the priority. A future mobile app should feel like part of the same product, but mobile is outside the initial release.
+Build the desktop experience first, with Linux, Windows, and macOS equally supported. A future mobile app should feel like part of the same product, but mobile is outside the initial release.
 
 The first version should be a complete, straightforward email client: conversations, folders, search, attachments, drafts, replies, forwarding, and everyday organization. Most initial accounts are self-hosted.
 

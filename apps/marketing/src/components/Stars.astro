@@ -1,0 +1,48 @@
+---
+interface Props {
+  count?: number
+  class?: string
+}
+
+const { count = 64, class: className = 'h-[680px]' } = Astro.props
+
+// A fixed seed keeps the sky identical between builds.
+let seed = 11
+const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+const stars = Array.from({ length: count }, () => ({
+  x: random() * 100,
+  y: Math.pow(random(), 1.4) * 100,
+  size: random() < 0.12 ? 2 : 1,
+  opacity: 0.12 + random() * 0.5,
+  delay: random() * 6,
+  duration: 3 + random() * 5,
+}))
+---
+
+<div
+  class:list={['pointer-events-none absolute inset-x-0 top-0 -z-10', className]}
+  aria-hidden="true"
+>
+  {stars.map((s) => (
+    <span
+      class="star"
+      style={`left:${s.x}%;top:${s.y}%;width:${s.size}px;height:${s.size}px;--o:${s.opacity.toFixed(2)};animation-delay:${s.delay.toFixed(1)}s;animation-duration:${s.duration.toFixed(1)}s`}
+    />
+  ))}
+</div>
+
+<style>
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    opacity: var(--o);
+    animation: twinkle ease-in-out infinite;
+  }
+  /* The stars have set by daylight. */
+  @media (prefers-color-scheme: light) {
+    .star {
+      display: none;
+    }
+  }
+</style>

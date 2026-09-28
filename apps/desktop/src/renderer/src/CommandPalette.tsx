@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, CornerDownLeft, Inbox, Search } from '@inlark/ui/icons'
 import { Modal } from '@inlark/ui'
+import { Wordmark } from '@inlark/ui/components/wordmark'
 import type { Account } from '@inlark/core'
 import { AccountMark } from './AccountMark'
 
@@ -215,7 +216,7 @@ export function CommandPalette({
           </kbd>{' '}
           Run
         </span>
-        <span className="command-footer-brand">Inlark</span>
+        <Wordmark className="command-footer-brand" height={12} />
       </div>
     </Modal>
   )

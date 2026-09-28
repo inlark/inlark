@@ -6,10 +6,14 @@ raised faces, and soft shadows. The SVG has a 512 × 512 viewBox and a transpare
 All artwork, lighting, and shadows remain vector SVG elements; there are no embedded raster images.
 
 The sidebar uses `icon-mark.svg`, the same silhouette with no tile or shadows. The icon and wordmark
-are white in dark mode and black in light mode; the light theme recolours the SVG image with CSS.
-A colour-inheriting version is in `design/brand/relay-ii/mark.svg`.
+are white in dark mode and black in light mode; the light theme recolours the icon image with CSS.
+The selected **02 Soft** wordmark is outlined Hanken Grotesk with optical spacing. Desktop and
+marketing surfaces share `packages/ui/src/components/wordmark.tsx`, which inherits its text colour.
+The source artwork is in `design/wordmarks/svg/02-soft-wordmark-dark.svg`; matching standalone
+dark/light exports for the README are in `.github/assets/wordmark-*.svg`. The wordmark requires no
+font download. Its OFL license is in `packages/ui/src/fonts/HankenGrotesk-OFL.txt`.
 
-The desktop window and Linux package use `icon.png`. The tray uses `tray.png`
+The desktop window and packaged app use `icon.png`. The tray uses `tray.png`
 and `tray-unread.png`, with matching `@2x` assets for high-density displays.
 These are generated from the same SVG; the unread variant adds a pale badge with an indigo outline.
 The badge is positioned relative to the SVG viewBox.

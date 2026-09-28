@@ -1,0 +1,151 @@
+---
+import {
+  Archive,
+  ChevronDown,
+  FileText,
+  Inbox,
+  RefreshCw,
+  Search,
+  Send,
+  Settings,
+  ShieldX,
+  SlidersHorizontal,
+  SquarePen,
+  Star,
+  Trash2,
+} from '@inlark/ui/icons'
+import { Mark } from './Mark'
+import { Wordmark } from '@inlark/ui/components/wordmark'
+import { AccountMark, MailRow } from './mail/MailRow'
+import { accounts, inbox } from '../data/mail'
+
+interface Props {
+  /** Pins a theme; otherwise the window follows the page. */
+  theme?: 'dark' | 'light'
+  /** Plays the arrival of a new message a moment after the page loads. */
+  animate?: boolean
+}
+
+const { theme, animate = false } = Astro.props
+const [arriving, ...rest] = inbox
+const today = rest.filter((c) => c.time !== 'Yesterday')
+const yesterday = rest.filter((c) => c.time === 'Yesterday')
+const unreadByAccount: Record<string, number> = { personal: 2, studio: 3, projects: 1 }
+---
+
+<div class="app" data-theme={theme} aria-hidden="true">
+  <div class="app-shell h-full">
+    <aside class="app-sidebar @max-[860px]:hidden">
+      <div class="flex h-[52px] items-center gap-1.5 px-2.5">
+        <Mark size={20} />
+        <Wordmark height={15} className="text-(--text-strong)" decorative />
+        <span class="ml-auto flex items-center gap-3 text-(--muted)">
+          <Search size={15} />
+          <SquarePen size={15} />
+        </span>
+      </div>
+      <nav class="flex flex-col gap-0.5">
+        <span class="nav-item active">
+          <Inbox size={16} /> Inbox <span class="count">9</span>
+        </span>
+        <span class="nav-item">
+          <Star size={16} /> Starred
+        </span>
+        <span class="nav-item">
+          <Send size={16} /> Sent
+        </span>
+        <span class="nav-item">
+          <FileText size={16} /> Drafts <span class="count">1</span>
+        </span>
+      </nav>
+      <nav class="mt-3 flex flex-col gap-0.5">
+        <span class="nav-item">
+          <Archive size={16} /> Archive
+        </span>
+        <span class="nav-item">
+          <ShieldX size={16} /> Spam
+        </span>
+        <span class="nav-item">
+          <Trash2 size={16} /> Trash
+        </span>
+      </nav>
+      <div class="mt-5 mb-1.5 flex items-center gap-1 px-2.5 text-[11px] text-(--muted)">
+        Accounts <ChevronDown size={11} />
+      </div>
+      <nav class="flex flex-col gap-0.5">
+        {accounts.map((a) => (
+          <span class="nav-item">
+            <AccountMark account={a} size={16} />
+            {a.name}
+            {unreadByAccount[a.id] && <span class="count">{unreadByAccount[a.id]}</span>}
+          </span>
+        ))}
+      </nav>
+      <div class="mt-auto pb-1.5">
+        <span class="nav-item">
+          <Settings size={16} /> Settings
+        </span>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <header class="flex items-start justify-between px-6 pt-4">
+        <div>
+          <div class="flex items-center gap-1.5 text-[11px] text-(--muted)">
+            Mail <span class="text-(--faint)">/</span> All accounts <ChevronDown size={11} />
+          </div>
+          <div class="mt-1.5 flex items-center gap-2.5">
+            <h3 class="text-[19px] font-semibold tracking-[-0.01em] text-(--text-strong)">Inbox</h3>
+            <span class="rounded-[5px] border border-(--border-strong) px-1.5 py-px text-[10.5px] text-(--muted)">
+              9 unread
+            </span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 pt-3 text-(--muted)">
+          <RefreshCw size={15} />
+          <Search size={15} />
+          <SlidersHorizontal size={15} />
+        </div>
+      </header>
+      <div class="mt-3 flex items-end gap-6 border-b border-(--border) px-6 text-[12px]">
+        <span class="border-b-2 border-(--accent-solid) pb-2.5 font-medium text-(--text-strong)">
+          All messages
+        </span>
+        <span class="pb-2.5 text-(--muted)">Unread</span>
+        <span class="ml-auto flex items-center gap-1.5 pb-2.5 text-(--muted)">
+          <SlidersHorizontal size={13} /> Filter
+        </span>
+      </div>
+      <div class="flex-1 overflow-hidden">
+        <div class="px-4 pt-3 pb-1.5 text-[11px] font-medium text-(--faint)">Today</div>
+        <div class:list={[animate && 'app-arrive']}>
+          <MailRow conversation={arriving} focused />
+        </div>
+        {today.map((c) => (
+          <MailRow conversation={c} />
+        ))}
+        <div class="px-4 pt-4 pb-1.5 text-[11px] font-medium text-(--faint)">Yesterday</div>
+        {yesterday.map((c) => (
+          <MailRow conversation={c} />
+        ))}
+      </div>
+      <footer class="flex h-9 items-center justify-between border-t border-(--border) px-4 text-[11px] text-(--muted)">
+        <span class="flex items-center gap-2">
+          <span class="size-1.5 rounded-full bg-(--green)"></span> All accounts connected
+        </span>
+        <span class="flex items-center gap-4 @max-[640px]:hidden">
+          <span class="flex items-center gap-1.5">
+            <span class="app-kbd">J</span>
+            <span class="app-kbd">K</span> Navigate
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="app-kbd">E</span> Archive
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="app-kbd">?</span> Shortcuts
+          </span>
+        </span>
+      </footer>
+    </main>
+  </div>
+</div>
