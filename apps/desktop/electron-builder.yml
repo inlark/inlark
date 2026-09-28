@@ -1,4 +1,4 @@
-appId: app.inlark.desktop
+appId: app.inlark.com
 productName: Inlark
 publish:
   provider: github
