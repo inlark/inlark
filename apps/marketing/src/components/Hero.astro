@@ -1,31 +1,13 @@
 ---
 import { ArrowUpRight, Download } from '@inlark/ui/icons'
 import InboxWindow from './InboxWindow.astro'
+import Stars from './Stars.astro'
 import { GitHubIcon } from './GitHubIcon'
 import { links, version } from '../data/links'
-
-// A fixed seed keeps the sky identical between builds.
-let seed = 11
-const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
-const stars = Array.from({ length: 64 }, () => ({
-  x: random() * 100,
-  y: Math.pow(random(), 1.4) * 100,
-  size: random() < 0.12 ? 2 : 1,
-  opacity: 0.12 + random() * 0.5,
-  delay: random() * 6,
-  duration: 3 + random() * 5,
-}))
 ---
 
 <section id="top" class="relative isolate overflow-hidden pt-32 sm:pt-44">
-  <div class="absolute inset-x-0 top-0 -z-10 h-[680px]" aria-hidden="true">
-    {stars.map((s) => (
-      <span
-        class="star"
-        style={`left:${s.x}%;top:${s.y}%;width:${s.size}px;height:${s.size}px;--o:${s.opacity.toFixed(2)};animation-delay:${s.delay.toFixed(1)}s;animation-duration:${s.duration.toFixed(1)}s`}
-      />
-    ))}
-  </div>
+  <Stars />
 
   <div class="relative z-10 mx-auto max-w-4xl px-5 text-center">
     <a
@@ -56,7 +38,7 @@ const stars = Array.from({ length: 64 }, () => ({
     </p>
 
     <div class="rise mt-10 flex flex-wrap justify-center gap-3" style="--delay:.24s">
-      <a href="#install" class="btn btn-primary">
+      <a href={links.download} class="btn btn-primary">
         <Download size={17} /> Download Inlark
       </a>
       <a href={links.repo} class="btn btn-ghost">
@@ -83,23 +65,6 @@ const stars = Array.from({ length: 64 }, () => ({
 </section>
 
 <style>
-  .star {
-    position: absolute;
-    border-radius: 50%;
-    background: #fff;
-    opacity: var(--o);
-    animation: twinkle ease-in-out infinite;
-  }
-
-  .dawn-text {
-    font-style: italic;
-    font-weight: 360;
-    background: linear-gradient(95deg, #d8d5ff 5%, #f0c8d6 55%, var(--color-dawn) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
   .stage {
     --window-height: clamp(420px, 52vw, 640px);
   }

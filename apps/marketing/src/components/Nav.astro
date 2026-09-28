@@ -3,18 +3,23 @@ import { Mark } from './Mark'
 import { GitHubIcon } from './GitHubIcon'
 import { links } from '../data/links'
 
+interface Props {
+  /** Hides the download button on the page it leads to. */
+  page?: 'home' | 'download'
+}
+
+const { page = 'home' } = Astro.props
 const items = [
-  { href: '#keyboard', label: 'Keyboard' },
-  { href: '#features', label: 'Features' },
-  { href: '#privacy', label: 'Privacy' },
-  { href: '#install', label: 'Install' },
+  { href: '/#keyboard', label: 'Keyboard' },
+  { href: '/#features', label: 'Features' },
+  { href: '/#privacy', label: 'Privacy' },
 ]
 ---
 
 <header class="nav fixed inset-x-0 top-0 z-50">
   <div class="mx-auto flex h-16 max-w-6xl items-center gap-8 px-5 sm:px-8">
     <a
-      href="#top"
+      href={page === 'home' ? '#top' : '/'}
       class="flex items-center gap-2.5 font-semibold tracking-[-0.01em]"
       aria-label="Inlark home"
     >
@@ -35,9 +40,11 @@ const items = [
       >
         <GitHubIcon className="size-4" /> Source
       </a>
-      <a href="#install" class="btn btn-primary h-9 rounded-lg px-3.5 text-sm">
-        Download
-      </a>
+      {page !== 'download' && (
+        <a href={links.download} class="btn btn-primary h-9 rounded-lg px-3.5 text-sm">
+          Download
+        </a>
+      )}
     </div>
   </div>
 </header>

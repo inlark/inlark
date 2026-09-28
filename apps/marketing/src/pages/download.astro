@@ -1,0 +1,82 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Nav from '../components/Nav.astro'
+import Stars from '../components/Stars.astro'
+import { DownloadPage } from '../components/download/Download'
+import { fetchLatestRelease, unconfirmedRelease } from '../data/release'
+
+// The build bakes in the release that was current then. The page asks the Worker for the latest
+// one as it loads, so it stays current between deploys.
+const release = import.meta.env.PROD
+  ? ((await fetchLatestRelease(import.meta.env.GITHUB_TOKEN).catch(() => null)) ??
+    unconfirmedRelease)
+  : unconfirmedRelease
+---
+
+<Layout
+  title="Download Inlark — email for Linux, Windows, and macOS"
+  description="Download Inlark, a fast, keyboard-first email client for Linux, Windows, and macOS. Free and open source."
+>
+  <Fragment slot="head">
+    <script is:inline>
+      // Decides between the phone and desktop layouts before the first paint.
+      document.documentElement.classList.add(
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+          (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+          ? 'is-mobile'
+          : 'is-desktop',
+      )
+    </script>
+  </Fragment>
+  <Nav page="download" />
+  <main class="relative isolate min-h-[100svh] overflow-hidden pb-32">
+    <Stars count={48} class="h-[560px]" />
+    <div class="glow" aria-hidden="true"></div>
+    <DownloadPage client:load initial={release} />
+  </main>
+  <footer class="border-t border-line">
+    <div class="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-10 text-sm text-ink-3 sm:flex-row sm:items-center sm:px-8">
+      <span>© 2026 Paul Koeck · AGPL-3.0</span>
+      <span class="sm:ml-auto">
+        This site sets no cookies, loads nothing from other servers and counts no visitors.
+      </span>
+    </div>
+  </footer>
+</Layout>
+
+<style>
+  /* Dawn light rising behind the app icon. */
+  .glow {
+    position: absolute;
+    left: 50%;
+    top: -420px;
+    z-index: -1;
+    width: min(1400px, 190vw);
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      rgb(242 184 139 / 0.3) 0%,
+      rgb(224 158 190 / 0.18) 26%,
+      rgb(140 128 240 / 0.12) 48%,
+      transparent 72%
+    );
+    filter: blur(24px);
+    animation: glow-in 2.4s var(--ease-out-expo) both;
+  }
+  @keyframes glow-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 12%) scale(0.9);
+    }
+  }
+
+  :global(html:not(.is-mobile)) :global(.mobile-view),
+  :global(html.is-mobile) :global(.desktop-view) {
+    display: none;
+  }
+  /* Until the page knows the platform, the hero keeps its space but shows nothing to swap out. */
+  :global(html.is-desktop) :global(.pending) {
+    visibility: hidden;
+  }
+</style>
