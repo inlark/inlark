@@ -12,6 +12,9 @@ interface Props {
 }
 
 const { title, description } = Astro.props
+// Link previews need absolute URLs.
+const card = new URL('/social-card.png', Astro.site)
+const url = new URL(Astro.url.pathname, Astro.site)
 ---
 
 <!doctype html>
@@ -29,6 +32,17 @@ const { title, description } = Astro.props
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:url" content={url} />
+    <meta property="og:site_name" content="Inlark" />
+    <meta property="og:image" content={card} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Inlark: beautiful email, for everyone. The unified inbox rising over a dawn horizon."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
     <slot name="head" />
   </head>
   <body class="grain bg-night font-sans text-ink antialiased">
