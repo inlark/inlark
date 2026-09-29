@@ -10,6 +10,7 @@
     "preview": "astro preview",
     "preview:workers": "astro build && wrangler dev",
     "deploy": "astro build && wrangler deploy",
+    "social-card": "astro build && node scripts/social-card.mjs",
     "typecheck": "astro check"
   },
   "dependencies": {

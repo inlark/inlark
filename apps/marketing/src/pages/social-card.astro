@@ -1,0 +1,170 @@
+---
+/* The source of public/social-card.png, the preview image link unfurls show. It is a page so the
+   card uses the site's own fonts, mark, and inbox. After changing it, run `pnpm social-card`. */
+import '@fontsource-variable/newsreader/opsz.css'
+import '@fontsource-variable/newsreader/opsz-italic.css'
+import '@fontsource-variable/hanken-grotesk'
+import '@fontsource-variable/inter'
+import '../styles/global.css'
+import { Mark } from '../components/Mark'
+import { Wordmark } from '@inlark/ui/components/wordmark'
+import InboxWindow from '../components/InboxWindow.astro'
+
+// A fixed seed keeps the sky identical between renders.
+let seed = 7
+const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+const stars = Array.from({ length: 70 }, () => ({
+  x: random() * 100,
+  y: Math.pow(random(), 1.3) * 62,
+  size: random() < 0.14 ? 2 : 1,
+  opacity: 0.1 + random() * 0.45,
+}))
+---
+
+<!doctype html>
+<html lang="en" style="color-scheme: dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex" />
+    <title>Inlark social card</title>
+  </head>
+  <body>
+    <div class="card">
+      {stars.map((s) => (
+        <span
+          class="star"
+          style={`left:${s.x}%;top:${s.y}%;width:${s.size}px;height:${s.size}px;opacity:${s.opacity.toFixed(2)}`}
+        />
+      ))}
+
+      <div class="brand">
+        <Mark size={34} />
+        <Wordmark height={25} decorative />
+      </div>
+      <h1 class="display">
+        <em class="dawn-text pr-[0.06em]">Beautiful</em> email.
+        <br />
+        For everyone.
+      </h1>
+
+      <div class="sun"></div>
+      <div class="horizon"></div>
+      <div class="window @container">
+        <InboxWindow theme="dark" />
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  body {
+    margin: 0;
+    background: #09090a;
+  }
+
+  .card {
+    position: relative;
+    isolation: isolate;
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: #09090a;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    text-align: center;
+  }
+
+  .star {
+    position: absolute;
+    z-index: -1;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding-top: 50px;
+  }
+
+  h1 {
+    margin-top: 26px;
+    font-size: 80px;
+    line-height: 1;
+  }
+
+  .sun {
+    position: absolute;
+    left: 50%;
+    top: -60px;
+    z-index: -1;
+    width: 1500px;
+    aspect-ratio: 16 / 9;
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      rgb(242 184 139 / 0.46) 0%,
+      rgb(224 158 190 / 0.28) 24%,
+      rgb(140 128 240 / 0.13) 46%,
+      transparent 70%
+    );
+    filter: blur(24px);
+    transform: translateX(-50%);
+  }
+
+  .horizon {
+    --r: 1200px;
+    position: absolute;
+    left: 50%;
+    top: 372px;
+    z-index: -1;
+    width: calc(var(--r) * 2);
+    height: calc(var(--r) * 2);
+    margin-left: calc(var(--r) * -1);
+    border-radius: 50%;
+    background: #09090a;
+    box-shadow:
+      0 -1px 0 rgb(255 220 196 / 0.55),
+      0 -2px 12px rgb(242 184 139 / 0.35),
+      0 -40px 120px -20px rgb(200 150 220 / 0.3),
+      inset 0 40px 80px -40px rgb(255 232 214 / 0.08);
+  }
+
+  /* The window rises out of the bottom edge, as it does in the hero. */
+  .window {
+    position: absolute;
+    left: 50%;
+    top: 318px;
+    width: 1000px;
+    height: 600px;
+    margin-left: -500px;
+    border-radius: 16px;
+    text-align: left;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.2),
+      rgb(255 255 255 / 0.06) 22%,
+      rgb(255 255 255 / 0.03)
+    );
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.55),
+      0 50px 140px -30px rgb(0 0 0 / 0.95),
+      0 -30px 140px -60px rgb(242 184 139 / 0.45);
+  }
+  .window::before {
+    content: '';
+    position: absolute;
+    inset: 0 12% auto;
+    height: 1px;
+    z-index: 3;
+    background: linear-gradient(90deg, transparent, rgb(255 226 206 / 0.7), transparent);
+  }
+  .window :global(.app),
+  .window :global(.app-shell) {
+    height: 100%;
+    border-radius: 15px;
+    overflow: hidden;
+  }
+</style>
