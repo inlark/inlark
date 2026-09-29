@@ -22,6 +22,7 @@ const workerRoutes = {
 }
 
 export default defineConfig({
+  site: 'https://inlark.com',
   integrations: [react()],
   vite: {
     plugins: [tailwindcss(), workerRoutes],
