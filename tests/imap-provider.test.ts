@@ -143,6 +143,32 @@ describe('IMAP TLS policy', () => {
 })
 
 describe('IMAP indexing and reading', () => {
+  it('bounds an empty preview on opening while preserving the full HTML body', async () => {
+    const html = ' '.repeat(4096) + '<p>Full message content</p>'
+    server.deliver('INBOX', { messageId: 'html@x', subject: 'HTML', date: at(1), html })
+    const p = await connected()
+    // Exercise the large-message, per-part path without allocating a large attachment.
+    const port = server.commandPorts[0]
+    const fetch = port.fetch.bind(port)
+    vi.spyOn(port, 'fetch').mockImplementation(async (...args) =>
+      (await fetch(...args)).map((m) => ({
+        ...m,
+        ...(args[1].size ? { size: 10_000_001 } : {}),
+      })),
+    )
+    await sync(p)
+    const [thread] = (await p.query(account, { view: 'inbox' })).items
+    expect(thread.messages[0].preview).toBe('')
+
+    const [message] = await p.conversation(account, thread.id)
+    expect(message.text).toBe('')
+    expect(message.html).toBe(html)
+    expect(message.preview).toBe('')
+
+    const [reopened] = await p.messages(account, [message.id], true)
+    expect(reopened.html).toBe(message.html)
+    expect(reopened.preview).toBe('')
+  })
   it('indexes recent Inbox mail first and reports incomplete results until history is indexed', async () => {
     for (let i = 0; i < 12; i++)
       server.deliver('INBOX', {

@@ -108,11 +108,34 @@ export function parseBlobId(value: string): { messageId: string; part: string } 
   return { messageId: value.slice(0, slash), part: value.slice(slash + 1) }
 }
 
+const previewInputLimit = 4096
+
+/** Skip non-visible blocks in a forward scan, including an unterminated final block. */
+function withoutHiddenBlocks(value: string): string {
+  const opening = /<(style|script|head)(?=[\s/>])/gi
+  const visible: string[] = []
+  let start = 0
+  let match: RegExpExecArray | null
+  while ((match = opening.exec(value))) {
+    visible.push(value.slice(start, match.index), ' ')
+    const closing = new RegExp('</' + match[1] + '>', 'gi')
+    closing.lastIndex = opening.lastIndex
+    // Do not retry the suffix for every unmatched opener, or show truncated CSS/JS.
+    if (!closing.exec(value)) return visible.join('')
+    start = closing.lastIndex
+    opening.lastIndex = start
+  }
+  visible.push(value.slice(start))
+  return visible.join('')
+}
+
 export function previewText(value: string, html = false): string {
+  // Opening a message supplies the full body. Bound work here for every caller,
+  // before any HTML processing, entity decoding, or line splitting.
+  value = value.slice(0, previewInputLimit)
   const text = html
-    ? value
-        .replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
+    ? withoutHiddenBlocks(value)
+        .replace(/<[^<>]*>/g, ' ')
         .replace(/&nbsp;/gi, ' ')
         .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
