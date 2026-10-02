@@ -296,7 +296,7 @@ function message(accountIndex: number, index: number, bodies = true): Message {
           ]
         : [],
     ...(type === 'newsletter'
-      ? { unsubscribe: { url: 'https://example.com/unsubscribe', oneClick: false } }
+      ? { unsubscribe: { url: 'https://example.com/unsubscribe', oneClick: true } }
       : {}),
   }
 }
@@ -982,7 +982,10 @@ export const demoAPI: DesktopMailAPI = {
       return null
     }
   },
-  unsubscribe: async () => ({ kind: 'done' }),
+  unsubscribe: async () => {
+    await pause(1200)
+    return { kind: 'done' }
+  },
   openExternal: async (url) => {
     if (/^https?:/.test(url)) window.open(url, '_blank', 'noopener,noreferrer')
   },

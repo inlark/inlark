@@ -42,6 +42,7 @@ import {
   LoaderCircle as LoaderCircleGlyph,
   LockKeyhole as LockKeyholeGlyph,
   Mail as MailGlyph,
+  MailMinus01Icon as MailMinusGlyph,
   MailOpen as MailOpenGlyph,
   Minus as MinusGlyph,
   Monitor as MonitorGlyph,
@@ -125,6 +126,7 @@ export const List = icon(ListGlyph)
 export const LoaderCircle = icon(LoaderCircleGlyph)
 export const LockKeyhole = icon(LockKeyholeGlyph)
 export const Mail = icon(MailGlyph)
+export const MailMinus = icon(MailMinusGlyph)
 export const MailOpen = icon(MailOpenGlyph)
 export const Minus = icon(MinusGlyph)
 export const Monitor = icon(MonitorGlyph)
