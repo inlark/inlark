@@ -83,11 +83,14 @@ export class JsonStore {
           await file.close()
         }
         await rename(temporary, target)
-        const dir = await open(this.directory, 'r')
-        try {
-          await dir.sync()
-        } finally {
-          await dir.close()
+        // Windows cannot fsync directory handles; the file itself is already synced above.
+        if (process.platform !== 'win32') {
+          const dir = await open(this.directory, 'r')
+          try {
+            await dir.sync()
+          } finally {
+            await dir.close()
+          }
         }
       } catch (error) {
         await rm(temporary, { force: true })
