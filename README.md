@@ -65,22 +65,19 @@ Packaged builds check for updates in the background. When an update downloads su
 | macOS    | DMG or ZIP, for both Apple Silicon and Intel               |
 | Linux    | AppImage, `.deb` or `.rpm` (x64), or [Nix](#nix-and-nixos) |
 
-The Windows and macOS builds aren't signed yet, so your system will ask you to confirm before the first launch. That's expected.
-Automatic updates on macOS require code signing; until signed builds are available, use the download link shown in Inlark when a new release is available.
-
 ### Nix and NixOS
 
 Install from the flake:
 
 ```sh
-nix profile install 'github:inlark/inlark/v0.1.0#inlark'
+nix profile install 'github:inlark/inlark#inlark'
 ```
 
 Or enable the NixOS module in your flake configuration:
 
 ```nix
 {
-  inputs.inlark.url = "github:inlark/inlark/v0.1.0";
+  inputs.inlark.url = "github:inlark/inlark";
 
   outputs = { nixpkgs, inlark, ... }: {
     nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
@@ -94,7 +91,9 @@ Or enable the NixOS module in your flake configuration:
 }
 ```
 
-The package includes the desktop entry, icon and `mailto:` handler, for x86_64 and aarch64 Linux. Leave out `/v0.1.0` to follow the default branch.
+The package includes the desktop entry, icon and `mailto:` handler, for x86_64 and aarch64 Linux. These examples follow the latest code on the default branch.
+
+To update a profile installation, run `nix profile upgrade inlark`. For NixOS, run `nix flake update inlark` from your system configuration directory, then `sudo nixos-rebuild switch --flake .#my-host` (replace `my-host` with your host name). Nix keeps the installed revision until you update it; removing the release tag does not enable automatic updates.
 
 ## Connect an account
 
@@ -133,8 +132,6 @@ pnpm test:deb          # Debian packaging smoke test (Podman)
 ```
 
 The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml` and the dependency hash in `nix/package.nix`. After changing dependencies, replace that hash with the one Nix reports.
-
-Pushing a `v<version>` tag runs the [release workflow](.github/workflows/release.yml), which builds every platform, checks the Nix flake and publishes a GitHub Release. The tag is the source of truth: CI sets the desktop package version from it before building, so no manual `package.json` version update is needed.
 
 To smoke-test the Nix package without opening a window:
 

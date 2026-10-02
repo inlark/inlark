@@ -25,7 +25,7 @@ const connect: Step = {
   visual: <ConnectVisual />,
 }
 
-function steps({ build, file }: Download, version: string): Step[] {
+function steps({ build, file }: Download): Step[] {
   switch (build.id) {
     case 'mac-arm64':
     case 'mac-x64':
@@ -133,10 +133,10 @@ function steps({ build, file }: Download, version: string): Step[] {
       return [
         {
           title: 'Install from the flake',
-          body: 'Adds the launcher, desktop entry, icon and mailto: handler to your profile. Needs flakes enabled.',
+          body: 'Installs the latest code from the default branch, with a launcher, desktop entry, icon and mailto: handler. Needs flakes enabled.',
           visual: (
             <CodeBlock
-              code={`nix profile install 'github:inlark/inlark/v${version}#inlark'`}
+              code="nix profile install 'github:inlark/inlark#inlark'"
               title="Terminal"
               className="h-full"
             />
@@ -146,7 +146,8 @@ function steps({ build, file }: Download, version: string): Step[] {
           title: 'Open Inlark',
           body: (
             <>
-              Find it in your app menu, or run <Path>inlark</Path>.
+              Find it in your app menu, or run <Path>inlark</Path>. To get updates, run{' '}
+              <Path>nix profile upgrade inlark</Path>.
             </>
           ),
           visual: <LauncherVisual />,
@@ -157,10 +158,12 @@ function steps({ build, file }: Download, version: string): Step[] {
       return [
         {
           title: 'Add the flake',
-          body: 'Add Inlark as an input, then enable its module in your system configuration.',
+          body: 'Follow the latest code from the default branch by adding Inlark as an input, then enable its module in your system configuration.',
           visual: (
             <CodeBlock
-              code={`# flake.nix\ninputs.inlark.url = "github:inlark/inlark/v${version}";\n\n# modules of your nixosSystem\ninlark.nixosModules.default\n{ programs.inlark.enable = true; }`}
+              code={
+                '# flake.nix\ninputs.inlark.url = "github:inlark/inlark";\n\n# modules of your nixosSystem\ninlark.nixosModules.default\n{ programs.inlark.enable = true; }'
+              }
               shell={false}
               title="Configuration"
               className="h-full"
@@ -169,7 +172,13 @@ function steps({ build, file }: Download, version: string): Step[] {
         },
         {
           title: 'Switch to it',
-          body: 'Rebuild your system and Inlark appears in your app menu.',
+          body: (
+            <>
+              Rebuild your system and Inlark appears in your app menu. For updates, run{' '}
+              <Path>nix flake update inlark</Path> in your system configuration directory, then
+              rebuild.
+            </>
+          ),
           visual: (
             <CodeBlock code="sudo nixos-rebuild switch" title="Terminal" className="h-full" />
           ),
@@ -179,8 +188,8 @@ function steps({ build, file }: Download, version: string): Step[] {
   }
 }
 
-export function Steps({ download, version }: { download: Download; version: string }) {
-  const list = steps(download, version)
+export function Steps({ download }: { download: Download }) {
+  const list = steps(download)
   const os = download.build.os
   return (
     <div>
