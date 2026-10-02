@@ -670,20 +670,6 @@
     }
   }
 
-  /* Draws the eye to the one button that matters in a system dialog. */
-  .pulse-ring {
-    animation: ring 2.6s ease-in-out infinite;
-  }
-  @keyframes ring {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 rgb(170 166 236 / 0);
-    }
-    50% {
-      box-shadow: 0 0 0 4px rgb(170 166 236 / 0.35);
-    }
-  }
-
   .found-row {
     animation: rise-in 0.8s var(--ease-out-expo) 0.8s both;
   }

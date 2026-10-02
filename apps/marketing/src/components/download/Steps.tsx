@@ -10,9 +10,6 @@ interface Step {
   visual: ReactNode
 }
 
-const Name = ({ children }: { children: ReactNode }) => (
-  <span className="font-medium text-ink">{children}</span>
-)
 const Path = ({ children }: { children: ReactNode }) => (
   <code className="rounded bg-ink/[0.06] px-1 py-0.5 font-mono text-[0.85em] break-all text-ink">
     {children}
@@ -41,14 +38,9 @@ function steps({ build, file }: Download): Step[] {
           visual: <DragVisual />,
         },
         {
-          title: 'Allow it to open',
-          body: (
-            <>
-              Inlark isn’t notarized by Apple yet, so macOS stops it the first time. Go to{' '}
-              <Name>System Settings → Privacy & Security</Name> and choose <Name>Open Anyway</Name>.
-            </>
-          ),
-          visual: <GatekeeperVisual />,
+          title: 'Open Inlark',
+          body: 'Find it in Launchpad or with Spotlight. The first time, macOS asks you to confirm opening an app from the internet.',
+          visual: <LauncherVisual />,
         },
         connect,
       ]
@@ -65,14 +57,9 @@ function steps({ build, file }: Download): Step[] {
           visual: <DownloadsVisual file={file!} />,
         },
         {
-          title: 'Get past SmartScreen',
-          body: (
-            <>
-              The installer isn’t code-signed yet, so Windows may hold it back. Choose{' '}
-              <Name>More info</Name>, then <Name>Run anyway</Name>.
-            </>
-          ),
-          visual: <SmartScreenVisual />,
+          title: 'Open Inlark',
+          body: 'It starts as soon as setup finishes. After that, find it in the Start menu or search for Inlark.',
+          visual: <LauncherVisual />,
         },
         connect,
       ]
@@ -227,17 +214,6 @@ export function Steps({ download }: { download: Download }) {
           </li>
         ))}
       </ol>
-      {(download.build.id === 'mac-arm64' || download.build.id === 'mac-x64') && (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-line px-5 py-4 text-sm text-ink-2 lg:flex-row lg:items-center lg:gap-6">
-          <p className="shrink-0">
-            macOS says Inlark <span className="text-ink">is damaged</span>? Clear the download flag:
-          </p>
-          <CodeBlock
-            code="xattr -dr com.apple.quarantine /Applications/Inlark.app"
-            className="min-w-0 flex-1"
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -286,28 +262,6 @@ function DragVisual() {
   )
 }
 
-function GatekeeperVisual() {
-  return (
-    <div className="app flex h-full items-center justify-center" aria-hidden="true">
-      <div className="w-full max-w-[17rem] rounded-[10px] border border-(--border-strong) bg-(--surface) p-3.5 shadow-[0_20px_40px_-20px_var(--shadow-deep)]">
-        <p className="text-[10.5px] font-semibold tracking-wide text-(--muted) uppercase">
-          Privacy & Security
-        </p>
-        <div className="mt-3 rounded-[8px] bg-(--raised) p-3">
-          <p className="text-[11.5px] leading-snug text-(--text)">
-            “Inlark” was blocked to protect your Mac.
-          </p>
-          <div className="mt-3 flex justify-end">
-            <span className="pulse-ring rounded-[6px] bg-white/90 px-2.5 py-1 text-[11px] font-medium text-[#1d1d1f] light:bg-[#e3e3e8]">
-              Open Anyway
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function DownloadsVisual({ file }: { file: string }) {
   return (
     <div className="app flex h-full items-center justify-center" aria-hidden="true">
@@ -327,26 +281,6 @@ function DownloadsVisual({ file }: { file: string }) {
             <span className="size-[22px] rounded-[6px] bg-(--raised)" />
             <span className="h-1.5 w-24 rounded-full bg-(--hover)" />
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SmartScreenVisual() {
-  return (
-    <div className="flex h-full items-center justify-center font-app" aria-hidden="true">
-      <div className="w-full max-w-[17rem] rounded-[4px] bg-[#1b4b82] px-3.5 pt-3 pb-3 text-white shadow-[0_20px_40px_-20px_#000] light:shadow-[0_20px_40px_-20px_rgb(22_24_36/0.3)]">
-        <p className="text-[13px] leading-tight font-light">Windows protected your PC</p>
-        <p className="mt-2 text-[9.5px] leading-snug text-white/75">
-          Microsoft Defender SmartScreen prevented an unrecognized app from starting.
-        </p>
-        <p className="mt-1.5 text-[9.5px] text-white/60">Publisher: Unknown publisher</p>
-        <div className="mt-3 flex justify-end gap-1.5">
-          <span className="pulse-ring rounded-[2px] border border-white/70 px-2.5 py-1 text-[10px]">
-            Run anyway
-          </span>
-          <span className="rounded-[2px] bg-white/15 px-2.5 py-1 text-[10px]">Don’t run</span>
         </div>
       </div>
     </div>
