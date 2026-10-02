@@ -62,7 +62,7 @@ jobs:
         run: |
           for name in MAC_CSC_LINK MAC_CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
             if [ -z "${!name}" ]; then
-              echo "::error::Missing macOS release credential: $name. See docs/releasing.md."
+              echo "::error::Missing macOS release credential: $name."
               exit 1
             fi
           done
@@ -95,7 +95,7 @@ jobs:
         run: |
           for name in CERTUM_OTP_URI CERTUM_USERNAME CERTUM_CERTIFICATE_SHA1; do
             if [ -z "${!name}" ]; then
-              echo "::error::Missing Windows release credential: $name. See docs/releasing.md."
+              echo "::error::Missing Windows release credential: $name."
               exit 1
             fi
           done
