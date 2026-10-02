@@ -274,7 +274,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
             id="install"
             className="mx-auto max-w-6xl -scroll-mt-20 px-5 pt-28 sm:-scroll-mt-24 sm:px-8 sm:pt-36"
           >
-            <Steps key={download.build.id} download={download} version={release.version} />
+            <Steps key={download.build.id} download={download} />
           </section>
         )}
 
