@@ -32,6 +32,7 @@ const shortcutSections: [string, [string, string][]][] = [
       ['Delete selected drafts', '#'],
       ['Mark as spam', '!'],
       ['Move to folder', 'V'],
+      ['Unsubscribe from mailing list', 'Ctrl U'],
       ['Star or unstar', 'S'],
       ['Mark unread / read', 'U ⇧I'],
       ['Undo last action', 'Z'],

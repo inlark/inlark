@@ -1023,15 +1023,24 @@ svg.starred {
 .collapsed-message .message-heading {
   opacity: 0.7;
 }
-.unsubscribe-link {
-  display: flex;
+/* Leaving a mailing list is a conversation action, so it sits with the others in the toolbar. */
+.unsubscribe-button {
+  min-height: 29px;
+  height: 29px;
+  padding: 0 10px 0 8px;
   gap: 6px;
-  align-items: center;
-  background: none;
-  border: 0;
-  font-size: 11px;
+}
+.unsubscribe-button svg {
+  flex-shrink: 0;
+}
+.unsubscribe-button:disabled {
+  opacity: 1;
+}
+.unsubscribe-pending {
   color: var(--muted);
-  padding: 0 0 16px;
+}
+.unsubscribe-done {
+  color: var(--green);
 }
 .attachment-list {
   display: flex;
@@ -2709,6 +2718,13 @@ fieldset.compose-format:disabled {
   }
   .selection-bar .toolbar-divider {
     margin: 0 2px;
+  }
+  .unsubscribe-button {
+    width: 29px;
+    padding: 5px;
+  }
+  .unsubscribe-button span {
+    display: none;
   }
 }
 @media (max-width: 700px) {

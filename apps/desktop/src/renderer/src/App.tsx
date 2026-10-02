@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Star,
   MailOpen,
+  MailMinus,
   FolderInput,
   ShieldX,
   Reply,
@@ -73,7 +74,7 @@ import {
   suspendPersistence,
   resumePersistence,
 } from './cache'
-import { Reader } from './Reader'
+import { Reader, type UnsubscribeState } from './Reader'
 import { MoveDialog } from './MoveDialog'
 import { CommandPalette, type Command } from './CommandPalette'
 import { Sidebar, views } from './Sidebar'
@@ -163,6 +164,7 @@ export function App() {
   const selectionAnchor = useRef<string | undefined>(undefined)
   const [draftSelected, setDraftSelected] = useState(new Set<string>()),
     draftAnchor = useRef<string | undefined>(undefined)
+  const [unsubscribes, setUnsubscribes] = useState(new Map<string, 'pending' | 'done'>())
   // Keep successful deletions hidden for this session; delayed server results can still be stale.
   const [discarding, setDiscarding] = useState(new Set<string>()),
     pendingDiscard = useRef<{ toastId: number; items: DraftItem[] } | undefined>(undefined)
@@ -861,6 +863,38 @@ export function App() {
     requestAnimationFrame(() => searchInput.current?.select())
   }
   const latest = thread.data?.at(-1)
+  // The newest mailing-list message carries the sender's current unsubscribe address.
+  const listMessage = thread.data && [...thread.data].reverse().find((m) => m.unsubscribe)
+  const listKey = listMessage && scopeKey(listMessage.accountId, listMessage.id)
+  const unsubscribeState: UnsubscribeState | undefined = listKey
+    ? unsubscribes.get(listKey) || 'available'
+    : undefined
+  const unsubscribe = async () => {
+    if (!listMessage || !listKey || unsubscribes.has(listKey)) return
+    const mark = (state?: 'pending' | 'done') =>
+      setUnsubscribes((current) => {
+        const next = new Map(current)
+        if (state) next.set(listKey, state)
+        else next.delete(listKey)
+        return next
+      })
+    const sender = listMessage.from[0]?.name || listMessage.from[0]?.email || 'this mailing list'
+    mark('pending')
+    try {
+      const result = await api.unsubscribe(listMessage.accountId, listMessage.id)
+      if (result.kind === 'done') {
+        mark('done')
+        notify('Unsubscribed from ' + sender)
+        return
+      }
+      mark()
+      if (result.kind === 'mailto' && result.url) onMailto(result.url)
+      else notify('Finish unsubscribing in your browser', 'info')
+    } catch (error) {
+      mark()
+      fail(error)
+    }
+  }
   const toggleStar = () =>
     void act(
       (
@@ -982,6 +1016,10 @@ export function App() {
     },
     { ...on, enabled: !blocked && !!route.thread },
   )
+  useHotkey('Mod+U', () => void unsubscribe(), {
+    ...on,
+    enabled: !blocked && unsubscribeState === 'available',
+  })
   useHotkeySequence(['G', 'I'], () => go({ view: 'inbox' }), on)
   useHotkeySequence(['G', 'S'], () => go({ view: 'starred' }), on)
   useHotkeySequence(['G', 'T'], () => go({ view: 'sent' }), on)
@@ -1102,6 +1140,21 @@ export function App() {
                 icon: Forward,
                 key: 'F',
                 run: () => void compose(latest, 'forward'),
+              },
+            ]
+          : []),
+        ...(unsubscribeState && unsubscribeState !== 'done'
+          ? [
+              {
+                id: 'unsubscribe',
+                label: 'Unsubscribe from mailing list',
+                icon: MailMinus,
+                key: 'Ctrl U',
+                keywords: 'newsletter opt out stop',
+                run: () => void unsubscribe(),
+                ...(unsubscribeState === 'pending'
+                  ? { disabled: true, description: 'Unsubscribing…' }
+                  : {}),
               },
             ]
           : []),
@@ -1388,6 +1441,8 @@ export function App() {
               onReply={(message, kind) => void compose(message, kind)}
               notify={notify}
               onMailto={onMailto}
+              unsubscribe={unsubscribeState}
+              onUnsubscribe={() => void unsubscribe()}
             />
           ) : (
             <EmptyState

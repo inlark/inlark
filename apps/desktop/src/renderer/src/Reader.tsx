@@ -12,7 +12,6 @@ import {
   ReplyAll,
   Forward,
   Download,
-  ExternalLink,
   ImageOff,
   ChevronRight,
   ShieldX,
@@ -26,8 +25,11 @@ import {
   Inbox,
   Paperclip,
   ShieldCheck,
+  Check,
+  MailMinus,
 } from '@inlark/ui/icons'
-import { Button, IconButton, Dropdown, MenuItem } from '@inlark/ui'
+import { Tooltip } from '@base-ui/react/tooltip'
+import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
 import {
   friendlyError,
   type Account,
@@ -509,8 +511,56 @@ interface ReaderProps {
   onReply: (message: Message, kind: 'reply' | 'replyAll' | 'forward') => void
   notify: (message: string) => void
   onMailto: (url: string) => void
+  /** Set when the conversation comes from a mailing list that can be left. */
+  unsubscribe?: UnsubscribeState
+  onUnsubscribe: () => void
   /** Messages are list summaries while the full conversation loads. */
   loading?: boolean
+}
+export type UnsubscribeState = 'available' | 'pending' | 'done'
+const unsubscribeLabels = {
+  available: 'Unsubscribe',
+  pending: 'Unsubscribing…',
+  done: 'Unsubscribed',
+} satisfies Record<UnsubscribeState, string>
+function UnsubscribeButton({ state, onClick }: { state: UnsubscribeState; onClick: () => void }) {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        render={
+          <Button
+            variant="ghost"
+            className={'unsubscribe-button unsubscribe-' + state}
+            aria-label={
+              state === 'available'
+                ? 'Unsubscribe from this mailing list'
+                : unsubscribeLabels[state]
+            }
+            aria-busy={state === 'pending'}
+            disabled={state !== 'available'}
+            onClick={onClick}
+          />
+        }
+      >
+        {state === 'pending' ? (
+          <Spinner size={15} />
+        ) : state === 'done' ? (
+          <Check size={15} />
+        ) : (
+          <MailMinus size={15} />
+        )}
+        <span>{unsubscribeLabels[state]}</span>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={7}>
+          <Tooltip.Popup className="tooltip">
+            Unsubscribe from this mailing list
+            <kbd>Ctrl U</kbd>
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  )
 }
 const attachmentIcon = (type: string, name: string) =>
   type.startsWith('image/')
@@ -541,6 +591,8 @@ export function Reader({
   onReply,
   notify,
   onMailto,
+  unsubscribe,
+  onUnsubscribe,
   loading = false,
 }: ReaderProps) {
   const last = messages[messages.length - 1]
@@ -663,6 +715,12 @@ export function Reader({
           </MenuItem>
           {moveLimit && <p className="menu-note">{moveLimit}</p>}
         </Dropdown>
+        {unsubscribe && (
+          <>
+            <span className="toolbar-divider" />
+            <UnsubscribeButton state={unsubscribe} onClick={onUnsubscribe} />
+          </>
+        )}
         <div className="reader-navigation">
           <span role="status">{busy ? 'Updating…' : position}</span>
           <IconButton
@@ -787,27 +845,6 @@ export function Reader({
                   )}
                   {open && (
                     <div className="message-content">
-                      {message.unsubscribe && (
-                        <button
-                          className="unsubscribe-link"
-                          onClick={async () => {
-                            try {
-                              const result = await api.unsubscribe(account.id, message.id)
-                              if (result.kind === 'mailto' && result.url) onMailto(result.url)
-                              else
-                                notify(
-                                  result.kind === 'done'
-                                    ? 'Unsubscribe request sent.'
-                                    : 'Unsubscribe page opened.',
-                                )
-                            } catch (error) {
-                              notify(friendlyError(error))
-                            }
-                          }}
-                        >
-                          Unsubscribe from this mailing list <ExternalLink size={11} />
-                        </button>
-                      )}
                       <EmailBody
                         message={message}
                         remoteImages={settings.remoteImages}
