@@ -798,7 +798,7 @@ svg.starred {
 .footer-shortcuts:hover {
   color: var(--text);
 }
-.footer-shortcuts span {
+.footer-shortcuts > span:not(.shortcut-keys) {
   margin-right: 9px;
 }
 .list-footer kbd {
@@ -2693,7 +2693,7 @@ fieldset.compose-format:disabled {
   .density-compact .row-subject {
     font-size: 12px;
   }
-  .footer-shortcuts kbd:not(:last-of-type) {
+  .footer-shortcuts > .shortcut-keys:not(.footer-help-keys) {
     display: none;
   }
   .reader-toolbar {
@@ -3102,9 +3102,64 @@ fieldset.compose-format:disabled {
   color: var(--muted);
 }
 
-/* ——— Shortcut sheet ——— */
+/* ——— Shortcut editor ——— */
 .shortcut-modal {
-  width: min(720px, calc(100vw - 40px));
+  width: min(760px, calc(100vw - 40px));
+}
+.shortcut-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.shortcut-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* In the dialog the search stays in reach while the list scrolls. */
+.shortcut-modal .shortcut-toolbar {
+  position: sticky;
+  top: -23px;
+  z-index: 2;
+  margin: -10px 0 -6px;
+  padding: 10px 0;
+  background: var(--surface);
+}
+.shortcut-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: var(--field);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms;
+}
+.shortcut-search:focus-within {
+  border-color: var(--accent-solid);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.shortcut-search input {
+  height: 100%;
+  padding: 0;
+  font-size: 12px;
+  background: none;
+  border: 0;
+}
+.shortcut-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.shortcut-toolbar > .button {
+  flex-shrink: 0;
+  color: var(--secondary);
+}
+.shortcut-error {
+  margin: 0;
 }
 .shortcut-sections {
   columns: 2 280px;
@@ -3115,24 +3170,241 @@ fieldset.compose-format:disabled {
   margin-bottom: 22px;
 }
 .shortcut-sections h3 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   font-size: 11px;
   font-weight: 500;
   color: var(--muted);
+}
+.shortcut-item {
+  break-inside: avoid;
+  border-bottom: 1px solid var(--border);
 }
 .shortcut-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 30px;
+  gap: 12px;
+  min-height: 34px;
   font-size: 12px;
   color: var(--secondary);
-  border-bottom: 1px solid var(--border);
+}
+.shortcut-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 0;
+}
+.shortcut-label small {
+  font-size: 10px;
+  color: var(--faint);
+}
+.shortcut-bindings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 0;
 }
 .shortcut-keys {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.shortcut-then {
+  margin: 0 1px;
+  font-size: 10px;
+  color: var(--faint);
+}
+.shortcut-binding {
+  position: relative;
+  display: inline-flex;
+}
+.shortcut-binding-keys {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  transition: background 120ms;
+}
+.shortcut-binding-keys:hover,
+.shortcut-binding-keys:focus-visible {
+  background: var(--hover);
+}
+.shortcut-binding-keys:focus-visible {
+  outline-offset: 0;
+}
+.shortcut-binding-keys kbd {
+  transition:
+    color 120ms,
+    border-color 120ms;
+}
+.shortcut-binding-keys:hover kbd,
+.shortcut-binding-keys:focus-visible kbd {
+  color: var(--text);
+  border-color: var(--muted);
+}
+/* Sits on the corner of its keys, so removing one never shifts the others. */
+.shortcut-remove {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity 120ms,
+    transform 120ms,
+    color 120ms;
+}
+.shortcut-binding:hover .shortcut-remove,
+.shortcut-binding:focus-within .shortcut-remove {
+  opacity: 1;
+  transform: none;
+}
+.shortcut-remove:hover {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+}
+.shortcut-bindings > .button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 4px;
+  color: var(--muted);
+}
+.shortcut-add {
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.shortcut-item:hover .shortcut-add,
+.shortcut-item:focus-within .shortcut-add {
+  opacity: 1;
+}
+.shortcut-bindings > .shortcut-reset {
+  color: var(--accent);
+}
+.shortcut-empty {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--faint);
+  background: none;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  transition:
+    color 120ms,
+    border-color 120ms;
+}
+.shortcut-empty:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.shortcut-recorder {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin: 0 2px;
+  padding: 0 9px;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-solid);
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px var(--accent-tint);
+  animation: shortcut-listen 1.6s ease-in-out infinite;
+}
+.shortcut-recorder:focus-visible {
+  outline: none;
+}
+.shortcut-recorder kbd {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.shortcut-recorder .shortcut-then {
+  color: inherit;
+}
+/* Counts down the moment left to add a second key. */
+.shortcut-recorder-timer {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--accent-solid);
+  transform-origin: left;
+  animation: shortcut-timer linear forwards;
+}
+@keyframes shortcut-listen {
+  50% {
+    border-color: color-mix(in srgb, var(--accent-solid) 45%, transparent);
+  }
+}
+@keyframes shortcut-timer {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-recorder {
+    animation: none;
+  }
+}
+.shortcut-notice {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.shortcut-notice kbd {
+  height: 16px;
+  min-width: 16px;
+  font-size: 9px;
+}
+.shortcut-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  color: var(--secondary);
+  background: color-mix(in srgb, var(--star) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--star) 22%, transparent);
+  border-radius: 7px;
+}
+.shortcut-conflict p {
+  flex: 1 1 180px;
+  margin: 0;
+}
+.shortcut-conflict strong {
+  font-weight: 500;
+  color: var(--text-strong);
+}
+.shortcut-conflict-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.shortcut-no-results {
+  margin: 0;
+  padding: 28px 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted);
 }
 
 /* ——— Settings ——— */

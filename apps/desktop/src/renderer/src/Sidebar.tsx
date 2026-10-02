@@ -23,13 +23,14 @@ import { Wordmark } from '@inlark/ui/components/wordmark'
 import type { Account, Mailbox, View } from '@inlark/core'
 import appIcon from '../../../resources/icon-mark.svg?no-inline'
 import { AccountMark } from './AccountMark'
+import { ShortcutHint, useShortcutText, type ShortcutId } from './shortcuts'
 
-export const views: { id: View; title: string; icon: typeof Inbox; key?: string }[] = [
-  { id: 'inbox', title: 'Inbox', icon: Inbox, key: 'G I' },
-  { id: 'starred', title: 'Starred', icon: Star, key: 'G S' },
-  { id: 'sent', title: 'Sent', icon: Send, key: 'G T' },
-  { id: 'drafts', title: 'Drafts', icon: FileText, key: 'G D' },
-  { id: 'archive', title: 'Archive', icon: Archive, key: 'G A' },
+export const views: { id: View; title: string; icon: typeof Inbox; shortcut?: ShortcutId }[] = [
+  { id: 'inbox', title: 'Inbox', icon: Inbox, shortcut: 'goInbox' },
+  { id: 'starred', title: 'Starred', icon: Star, shortcut: 'goStarred' },
+  { id: 'sent', title: 'Sent', icon: Send, shortcut: 'goSent' },
+  { id: 'drafts', title: 'Drafts', icon: FileText, shortcut: 'goDrafts' },
+  { id: 'archive', title: 'Archive', icon: Archive, shortcut: 'goArchive' },
   { id: 'junk', title: 'Spam', icon: ShieldX },
   { id: 'trash', title: 'Trash', icon: Trash2 },
 ]
@@ -80,6 +81,7 @@ export function Sidebar({
     folder?: Mailbox,
   ) => void
 }) {
+  const keys = useShortcutText()
   const go = onNavigate
   // Transient connecting states already show a spinner on the account row.
   const unavailable = accounts.filter((a) => a.status !== 'connected' && a.status !== 'connecting')
@@ -121,10 +123,15 @@ export function Sidebar({
         {!collapsed && <Wordmark className="brand-wordmark" />}
       </div>
       <div className="sidebar-tools">
-        <IconButton label="Search and commands" shortcut="Ctrl K" onClick={onSearch}>
+        <IconButton label="Search and commands" shortcut={keys('commandMenu')} onClick={onSearch}>
           <Search size={14} />
         </IconButton>
-        <IconButton className="sidebar-compose" label="Compose" shortcut="C" onClick={onCompose}>
+        <IconButton
+          className="sidebar-compose"
+          label="Compose"
+          shortcut={keys('compose')}
+          onClick={onCompose}
+        >
           <SquarePen size={16} />
         </IconButton>
       </div>
@@ -145,7 +152,7 @@ export function Sidebar({
                 title={
                   v.title +
                   (v.id === 'inbox' ? ' · ' + unreadCount + ' unread' : '') +
-                  (v.key ? ' · ' + v.key : '')
+                  (v.shortcut && keys(v.shortcut) ? ' · ' + keys(v.shortcut) : '')
                 }
                 aria-current={
                   view === v.id && !route.account && !route.folder && !route.q ? 'page' : undefined
@@ -352,13 +359,17 @@ export function Sidebar({
         )}
         <div className="sidebar-footer">
           {collapsed && (
-            <IconButton label="Expand sidebar" shortcut="[" onClick={onToggleCollapsed}>
+            <IconButton
+              label="Expand sidebar"
+              shortcut={keys('toggleSidebar')}
+              onClick={onToggleCollapsed}
+            >
               <PanelLeftOpen size={15} />
             </IconButton>
           )}
           <button
             className="nav-item"
-            title="Settings · Ctrl ,"
+            title={'Settings' + (keys('settings') ? ' · ' + keys('settings') : '')}
             aria-label="Settings"
             onClick={() => onSettings('general')}
           >
@@ -366,12 +377,16 @@ export function Sidebar({
             {!collapsed && (
               <>
                 <span>Settings</span>
-                <kbd>Ctrl ,</kbd>
+                <ShortcutHint id="settings" />
               </>
             )}
           </button>
           {!collapsed && (
-            <IconButton label="Collapse sidebar" shortcut="[" onClick={onToggleCollapsed}>
+            <IconButton
+              label="Collapse sidebar"
+              shortcut={keys('toggleSidebar')}
+              onClick={onToggleCollapsed}
+            >
               <PanelLeftClose size={15} />
             </IconButton>
           )}

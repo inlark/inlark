@@ -1,63 +1,7 @@
 import { Fragment, useState } from 'react'
 import { Button, DatePicker, Modal, Switch } from '@inlark/ui'
 import type { MailAction, Mailbox, MailQuery } from '@inlark/core'
-
-const shortcutSections: [string, [string, string][]][] = [
-  [
-    'Navigate',
-    [
-      ['Next / previous conversation', 'J K'],
-      ['Open conversation', 'Enter'],
-      ['Back to list', 'Esc'],
-      ['Search mail', '/'],
-      ['Command menu', 'Ctrl K'],
-      ['Toggle sidebar', '['],
-    ],
-  ],
-  [
-    'Go to',
-    [
-      ['Inbox', 'G I'],
-      ['Starred', 'G S'],
-      ['Sent', 'G T'],
-      ['Drafts', 'G D'],
-      ['Archive', 'G A'],
-    ],
-  ],
-  [
-    'Organize',
-    [
-      ['Archive', 'E'],
-      ['Move to trash', '#'],
-      ['Delete selected drafts', '#'],
-      ['Mark as spam', '!'],
-      ['Move to folder', 'V'],
-      ['Unsubscribe from mailing list', 'Ctrl U'],
-      ['Star or unstar', 'S'],
-      ['Mark unread / read', 'U ⇧I'],
-      ['Undo last action', 'Z'],
-    ],
-  ],
-  [
-    'Select',
-    [
-      ['Select conversation', 'X'],
-      ['Select a range', '⇧X'],
-      ['Select all loaded', 'Ctrl A'],
-      ['Clear selection', 'Esc'],
-    ],
-  ],
-  [
-    'Write',
-    [
-      ['Compose', 'C'],
-      ['Reply', 'R'],
-      ['Reply all', 'A'],
-      ['Forward', 'F'],
-      ['Send message', 'Ctrl ↵'],
-    ],
-  ],
-]
+import { ShortcutEditor } from './ShortcutEditor'
 
 export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
@@ -67,26 +11,10 @@ export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () =
         if (!value) onClose()
       }}
       title="Keyboard shortcuts"
-      description="Shortcuts are paused while you type in a field."
+      description="Click any keys to change them, or + to add another. Shortcuts are paused while you type in a field."
       className="shortcut-modal"
     >
-      <div className="shortcut-sections">
-        {shortcutSections.map(([section, items]) => (
-          <section key={section}>
-            <h3>{section}</h3>
-            {items.map(([label, keys]) => (
-              <div className="shortcut-row" key={label}>
-                <span>{label}</span>
-                <span className="shortcut-keys">
-                  {keys.split(' ').map((key) => (
-                    <kbd key={key}>{key}</kbd>
-                  ))}
-                </span>
-              </div>
-            ))}
-          </section>
-        ))}
-      </div>
+      <ShortcutEditor />
     </Modal>
   )
 }

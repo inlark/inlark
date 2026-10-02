@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { useHotkey, useHotkeySequence } from '@tanstack/react-hotkeys'
 import {
   Inbox,
   Search,
@@ -90,7 +89,7 @@ import {
 } from './AppDialogs'
 import { messageText } from './message-text'
 import { selectConversation } from './selection'
-import { useCharacterKey } from './character-key'
+import { ShortcutHint, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { emptyListState } from './empty-states'
 import { AccountMark } from './AccountMark'
 import { HintIconButton } from './HintIconButton'
@@ -176,6 +175,8 @@ export function App() {
   }
   const notify = (text: string, tone?: Toast['tone']) => setToast({ text, tone })
   const fail = (error: unknown) => notify(friendlyError(error), 'error')
+  const shortcuts = useShortcuts()
+  const keys = useShortcutText()
   const explain = ({ account, reason }: { account: { name: string }; reason: string }) =>
     notify((accounts.length > 1 ? account.name + ' · ' : '') + reason, 'info')
   const account = accounts.find((a) => a.id === route.account),
@@ -906,125 +907,90 @@ export function App() {
         : 'star',
     )
   const hasTarget = !!route.thread || !!selected.size || !!focused
-  const on = { conflictBehavior: 'replace', enabled: !blocked } as const
-  useHotkey('Mod+K', () => setPaletteOpen((p) => !p), {
-    conflictBehavior: 'replace',
-    enabled: !composer,
-    ignoreInputs: false,
-  })
-  useHotkey('Mod+,', () => openSettings(), { ...on, ignoreInputs: false })
-  useHotkey('[', () => setCollapsed((c) => !c), on)
-  useHotkey('C', () => void compose(), on)
-  useHotkey('/', focusSearch, on)
-  useHotkey('J', () => step(1), on)
-  useHotkey('K', () => step(-1), on)
-  useHotkey('ArrowDown', () => step(1), on)
-  useHotkey('ArrowUp', () => step(-1), on)
-  useHotkey(
-    'Enter',
-    () => {
-      const c = conversations.find((c) => c.key === focused) || conversations[0]
-      if (c && !route.thread) open(c)
-    },
-    on,
-  )
-  useHotkey(
-    'O',
-    () => {
-      const c = conversations.find((c) => c.key === focused) || conversations[0]
-      if (c && !route.thread) open(c)
-    },
-    on,
-  )
-  useHotkey(
-    'Escape',
-    () => {
-      if (route.thread) back()
-      else if (draftSelected.size) setDraftSelected(new Set())
-      else if (selected.size || allMatching) {
-        setSelected(new Set())
-        setAllMatching(false)
-      } else if (searchOpen || route.q) {
-        setSearch('')
-        setSearchOpen(false)
-        if (route.q) go({ q: undefined }, false)
-      }
-    },
-    on,
-  )
-  useHotkey(
-    'X',
-    () => {
-      if (focused) toggle(focused)
-    },
-    { ...on, enabled: !blocked && !route.thread },
-  )
-  useHotkey(
-    'Shift+X',
-    () => {
-      if (focused) toggle(focused, true)
-    },
-    { ...on, enabled: !blocked && !route.thread },
-  )
-  useHotkey(
-    'Mod+A',
-    () => {
-      if (view === 'drafts')
-        return setDraftSelected(new Set(draftItems.filter(deletable).map((item) => item.key)))
-      setSelected(new Set(conversations.map((c) => c.key)))
-      setAllMatching(false)
-    },
-    { ...on, enabled: !blocked && !route.thread },
-  )
+  const openFocused = () => {
+    const c = conversations.find((c) => c.key === focused) || conversations[0]
+    if (c && !route.thread) open(c)
+  }
   // In Drafts, the trash keys delete the selected drafts rather than moving conversations.
   const trashKey = () => (view === 'drafts' ? discardDrafts(draftSelected) : void act('trash'))
   const canTrash = !blocked && (view === 'drafts' ? !!draftSelected.size : hasTarget)
-  useHotkey('E', () => void act('archive'), { ...on, enabled: !blocked && hasTarget })
-  useHotkey('Backspace', trashKey, { ...on, enabled: canTrash })
-  useHotkey('Delete', trashKey, { ...on, enabled: canTrash })
-  useCharacterKey('#', trashKey, canTrash)
-  useCharacterKey('!', () => void act('spam'), !blocked && hasTarget)
-  useCharacterKey('?', () => setHelp(true), !blocked)
-  useHotkey('U', () => void act('unread'), { ...on, enabled: !blocked && hasTarget })
-  useHotkey('Shift+U', () => void act('unread'), { ...on, enabled: !blocked && hasTarget })
-  useHotkey('Shift+I', () => void act('read'), { ...on, enabled: !blocked && hasTarget })
-  useHotkey('S', toggleStar, { ...on, enabled: !blocked && hasTarget })
-  useHotkey('V', () => openMove(targets()), {
-    ...on,
-    enabled: !blocked && hasTarget && !allMatching,
-  })
-  useHotkey('Z', () => void undo(), { ...on, enabled: !blocked && canUndo })
-  useHotkey('Mod+Z', () => void undo(), { ...on, enabled: !blocked && canUndo })
-  useHotkey(
-    'R',
-    () => {
-      if (latest) void compose(latest)
+  const canAct = !blocked && hasTarget
+  const inList = !blocked && !route.thread
+  const inThread = !blocked && !!route.thread && !!latest
+  useShortcutHandlers(
+    shortcuts.bindings,
+    {
+      commandMenu: {
+        run: () => setPaletteOpen((p) => !p),
+        enabled: !composer,
+        ignoreInputs: false,
+      },
+      settings: { run: () => openSettings(), ignoreInputs: false },
+      toggleSidebar: { run: () => setCollapsed((c) => !c) },
+      compose: { run: () => void compose() },
+      search: { run: focusSearch },
+      next: { run: () => step(1) },
+      previous: { run: () => step(-1) },
+      open: { run: openFocused },
+      back: {
+        run: () => {
+          if (route.thread) back()
+          else if (draftSelected.size) setDraftSelected(new Set())
+          else if (selected.size || allMatching) {
+            setSelected(new Set())
+            setAllMatching(false)
+          } else if (searchOpen || route.q) {
+            setSearch('')
+            setSearchOpen(false)
+            if (route.q) go({ q: undefined }, false)
+          }
+        },
+      },
+      select: {
+        run: () => {
+          if (focused) toggle(focused)
+        },
+        enabled: inList,
+      },
+      selectRange: {
+        run: () => {
+          if (focused) toggle(focused, true)
+        },
+        enabled: inList,
+      },
+      selectAll: {
+        run: () => {
+          if (view === 'drafts')
+            return setDraftSelected(new Set(draftItems.filter(deletable).map((item) => item.key)))
+          setSelected(new Set(conversations.map((c) => c.key)))
+          setAllMatching(false)
+        },
+        enabled: inList,
+      },
+      archive: { run: () => void act('archive'), enabled: canAct },
+      trash: { run: trashKey, enabled: canTrash },
+      spam: { run: () => void act('spam'), enabled: canAct },
+      shortcuts: { run: () => setHelp(true) },
+      unread: { run: () => void act('unread'), enabled: canAct },
+      read: { run: () => void act('read'), enabled: canAct },
+      star: { run: toggleStar, enabled: canAct },
+      move: { run: () => openMove(targets()), enabled: canAct && !allMatching },
+      undo: { run: () => void undo(), enabled: !blocked && canUndo },
+      reply: { run: () => latest && void compose(latest), enabled: inThread },
+      replyAll: { run: () => latest && void compose(latest, 'replyAll'), enabled: inThread },
+      forward: { run: () => latest && void compose(latest, 'forward'), enabled: inThread },
+      unsubscribe: {
+        run: () => void unsubscribe(),
+        enabled: !blocked && unsubscribeState === 'available',
+      },
+      goInbox: { run: () => go({ view: 'inbox' }) },
+      goStarred: { run: () => go({ view: 'starred' }) },
+      goSent: { run: () => go({ view: 'sent' }) },
+      goDrafts: { run: () => go({ view: 'drafts' }) },
+      goArchive: { run: () => go({ view: 'archive' }) },
     },
-    { ...on, enabled: !blocked && !!route.thread },
+    !blocked,
   )
-  useHotkey(
-    'A',
-    () => {
-      if (latest) void compose(latest, 'replyAll')
-    },
-    { ...on, enabled: !blocked && !!route.thread },
-  )
-  useHotkey(
-    'F',
-    () => {
-      if (latest) void compose(latest, 'forward')
-    },
-    { ...on, enabled: !blocked && !!route.thread },
-  )
-  useHotkey('Mod+U', () => void unsubscribe(), {
-    ...on,
-    enabled: !blocked && unsubscribeState === 'available',
-  })
-  useHotkeySequence(['G', 'I'], () => go({ view: 'inbox' }), on)
-  useHotkeySequence(['G', 'S'], () => go({ view: 'starred' }), on)
-  useHotkeySequence(['G', 'T'], () => go({ view: 'sent' }), on)
-  useHotkeySequence(['G', 'D'], () => go({ view: 'drafts' }), on)
-  useHotkeySequence(['G', 'A'], () => go({ view: 'archive' }), on)
   const suggestions = useMemo(() => {
     // People you hear from most come first; your own addresses never appear.
     const own = new Set(accounts.map((a) => a.email.toLowerCase()))
@@ -1061,7 +1027,7 @@ export function App() {
           id: 'archive',
           label: 'Archive',
           icon: Archive,
-          key: 'E',
+          key: keys('archive'),
           run: () => void act('archive'),
           ...limited('archive'),
         },
@@ -1069,7 +1035,7 @@ export function App() {
           id: 'trash',
           label: 'Move to trash',
           icon: Trash2,
-          key: '#',
+          key: keys('trash'),
           keywords: 'delete',
           run: () => void act('trash'),
           ...limited('trash'),
@@ -1078,21 +1044,21 @@ export function App() {
           id: 'read',
           label: 'Mark as read',
           icon: MailOpen,
-          key: 'Shift I',
+          key: keys('read'),
           run: () => void act('read'),
         },
         {
           id: 'unread',
           label: 'Mark as unread',
           icon: Mail,
-          key: 'U',
+          key: keys('unread'),
           run: () => void act('unread'),
         },
         {
           id: 'star',
           label: 'Star or unstar',
           icon: Star,
-          key: 'S',
+          key: keys('star'),
           keywords: 'flag favorite',
           run: toggleStar,
         },
@@ -1102,7 +1068,7 @@ export function App() {
                 id: 'move',
                 label: 'Move to folder…',
                 icon: FolderInput,
-                key: 'V',
+                key: keys('move'),
                 keywords: 'label file',
                 run: () => openMove(targets()),
                 ...limited('move'),
@@ -1113,7 +1079,7 @@ export function App() {
           id: 'spam',
           label: 'Mark as spam',
           icon: ShieldX,
-          key: '!',
+          key: keys('spam'),
           keywords: 'junk',
           run: () => void act('spam'),
           ...limited('spam'),
@@ -1124,21 +1090,21 @@ export function App() {
                 id: 'reply',
                 label: 'Reply',
                 icon: Reply,
-                key: 'R',
+                key: keys('reply'),
                 run: () => void compose(latest),
               },
               {
                 id: 'reply-all',
                 label: 'Reply all',
                 icon: ReplyAll,
-                key: 'A',
+                key: keys('replyAll'),
                 run: () => void compose(latest, 'replyAll'),
               },
               {
                 id: 'forward',
                 label: 'Forward',
                 icon: Forward,
-                key: 'F',
+                key: keys('forward'),
                 run: () => void compose(latest, 'forward'),
               },
             ]
@@ -1149,7 +1115,7 @@ export function App() {
                 id: 'unsubscribe',
                 label: 'Unsubscribe from mailing list',
                 icon: MailMinus,
-                key: 'Ctrl U',
+                key: keys('unsubscribe'),
                 keywords: 'newsletter opt out stop',
                 run: () => void unsubscribe(),
                 ...(unsubscribeState === 'pending'
@@ -1171,7 +1137,7 @@ export function App() {
             group: 'Suggested',
             label: 'Undo “' + toast.text + '”',
             icon: Undo2,
-            key: 'Z',
+            key: keys('undo'),
             run: () => void undo(),
           },
         ]
@@ -1182,7 +1148,7 @@ export function App() {
       group: 'Mail',
       label: 'Compose a message',
       icon: PenLine,
-      key: 'C',
+      key: keys('compose'),
       keywords: 'new write email',
       run: () => void compose(),
     },
@@ -1191,7 +1157,7 @@ export function App() {
       group: 'Mail',
       label: 'Search mail',
       icon: Search,
-      key: '/',
+      key: keys('search'),
       keywords: 'find',
       run: focusSearch,
     },
@@ -1208,7 +1174,7 @@ export function App() {
       group: 'Go to',
       label: v.title,
       icon: v.icon,
-      key: v.key,
+      key: v.shortcut && keys(v.shortcut),
       keywords: 'go open view ' + (v.id === 'junk' ? 'junk' : ''),
       run: () => go({ view: v.id }),
     })),
@@ -1275,7 +1241,7 @@ export function App() {
       group: 'Preferences',
       label: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
       icon: collapsed ? PanelLeftOpen : PanelLeftClose,
-      key: '[',
+      key: keys('toggleSidebar'),
       keywords: 'navigation panel hide show',
       run: () => setCollapsed(!collapsed),
     },
@@ -1284,7 +1250,7 @@ export function App() {
       group: 'Preferences',
       label: 'Settings',
       icon: SettingsIcon,
-      key: 'Ctrl ,',
+      key: keys('settings'),
       keywords: 'preferences options',
       run: () => openSettings(),
     },
@@ -1309,9 +1275,17 @@ export function App() {
       group: 'Help',
       label: 'Keyboard shortcuts',
       icon: Keyboard,
-      key: '?',
+      key: keys('shortcuts'),
       keywords: 'help keys hotkeys',
       run: () => setHelp(true),
+    },
+    {
+      id: 'shortcut-settings',
+      group: 'Help',
+      label: 'Customize keyboard shortcuts',
+      icon: Keyboard,
+      keywords: 'hotkeys keys bindings change edit',
+      run: () => openSettings('shortcuts'),
     },
   ]
   const activeIndex = conversations.findIndex(
@@ -1522,7 +1496,7 @@ export function App() {
                 </IconButton>
                 <IconButton
                   label="Search mail"
-                  shortcut="/"
+                  shortcut={keys('search')}
                   onClick={() => {
                     setSearchOpen(!searchOpen)
                     requestAnimationFrame(() => searchInput.current?.focus())
@@ -1668,7 +1642,7 @@ export function App() {
                 <span className="toolbar-divider" />
                 <HintIconButton
                   label="Archive selected"
-                  shortcut="E"
+                  shortcut={keys('archive')}
                   disabled={busy}
                   hint={unavailable('archive')}
                   onClick={() => void act('archive')}
@@ -1736,7 +1710,7 @@ export function App() {
                 <span className="toolbar-divider" />
                 <IconButton
                   label="Clear selection"
-                  shortcut="Esc"
+                  shortcut={keys('back')}
                   disabled={busy}
                   onClick={() => {
                     setSelected(new Set())
@@ -1856,9 +1830,9 @@ export function App() {
                   {hasSearchFilters && (
                     <Button onClick={() => setFilters({})}>Clear filters</Button>
                   )}
-                  {view === 'inbox' && !route.q && !hasFilters && (
+                  {view === 'inbox' && !route.q && !hasFilters && keys('compose') && (
                     <span className="empty-hint">
-                      <kbd>C</kbd> Write a message
+                      <ShortcutHint id="compose" /> Write a message
                     </span>
                   )}
                 </EmptyState>
@@ -1921,12 +1895,12 @@ export function App() {
                 onClick={() => setHelp(true)}
                 aria-label="Show keyboard shortcuts"
               >
-                <kbd>J</kbd>
-                <kbd>K</kbd>
+                <ShortcutHint id="next" />
+                <ShortcutHint id="previous" />
                 <span>Navigate</span>
-                <kbd>↵</kbd>
+                <ShortcutHint id="open" />
                 <span>Open</span>
-                <kbd>?</kbd>
+                <ShortcutHint id="shortcuts" className="footer-help-keys" />
                 <span>Shortcuts</span>
               </button>
             </footer>
@@ -1951,7 +1925,7 @@ export function App() {
           <span>{toast.text}</span>
           {canUndo && (
             <button className="toast-undo" onClick={() => void undo()}>
-              Undo <kbd>Z</kbd>
+              Undo <ShortcutHint id="undo" />
             </button>
           )}
           <button

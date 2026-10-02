@@ -202,6 +202,11 @@ export interface Settings {
   signatures: Record<string, string>
   /** Where the reader goes after a conversation leaves the current view. */
   afterArchive?: 'next' | 'previous' | 'list'
+  /**
+   * Keyboard shortcuts changed from their defaults, by action. Each binding is a list of chords
+   * pressed in turn, such as `['Mod+K']` or `['G', 'I']`; an empty list turns a shortcut off.
+   */
+  shortcuts?: Record<string, string[][]>
 }
 export const defaultSettings: Settings = {
   theme: 'dark',

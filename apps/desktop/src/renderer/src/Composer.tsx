@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useForm } from '@tanstack/react-form'
 import { Dialog } from '@base-ui/react/dialog'
-import { useHotkey } from '@tanstack/react-hotkeys'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -32,6 +31,7 @@ import { api, isDemo } from './api'
 import { localSaveDraft, localDeleteDraft } from './cache'
 import { RecipientField } from './RecipientField'
 import { formatBytes } from './mail-date'
+import { bindingText, useShortcutHandlers, useShortcuts } from './shortcuts'
 
 /** Plain wording for a finished send; the Drafts view offers recovery for anything left over. */
 function sentMessage(result: SendResult): string {
@@ -95,6 +95,8 @@ export function Composer({
   notify: (message: string, tone?: 'error' | 'info') => void
   onSaved: () => void
 }) {
+  const shortcuts = useShortcuts()
+  const sendShortcut = shortcuts.bindings.send[0]
   const [draft, setDraft] = useState(initial),
     [state, setState] = useState(
       initial.status === 'uncertain'
@@ -318,10 +320,8 @@ export function Composer({
       setSending(false)
     }
   }
-  useHotkey('Mod+Enter', () => void send(), {
-    conflictBehavior: 'replace',
-    ignoreInputs: false,
-    enabled: !linkOpen && !discardOpen,
+  useShortcutHandlers(shortcuts.bindings, {
+    send: { run: () => void send(), ignoreInputs: false, enabled: !linkOpen && !discardOpen },
   })
   const addressField = (name: 'to' | 'cc' | 'bcc', label: string) => (
     <RecipientField
@@ -607,7 +607,7 @@ export function Composer({
                   : isDemo
                     ? 'Simulate send'
                     : 'Send message'}
-              <span className="send-shortcut">Ctrl ↵</span>
+              {sendShortcut && <span className="send-shortcut">{bindingText(sendShortcut)}</span>}
             </Button>
             <span className="compose-account">{account.email}</span>
             <IconButton
