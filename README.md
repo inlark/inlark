@@ -65,8 +65,9 @@ Packaged builds check for updates in the background. When an update downloads su
 | macOS    | DMG or ZIP, for both Apple Silicon and Intel               |
 | Linux    | AppImage, `.deb` or `.rpm` (x64), or [Nix](#nix-and-nixos) |
 
-The Windows and macOS builds aren't signed yet, so your system will ask you to confirm before the first launch. That's expected.
-Automatic updates on macOS require code signing; until signed builds are available, use the download link shown in Inlark when a new release is available.
+The release workflow signs macOS builds and notarizes them with Apple. Older unsigned macOS builds
+need a manual install of a signed release before automatic updates can work. Windows builds aren't
+signed yet, so Windows may ask you to confirm before the first launch.
 
 ### Nix and NixOS
 
@@ -120,6 +121,8 @@ pnpm dev:web      # browser preview with sample mail, no real accounts
 ```
 
 Add `?stress=1` to the browser preview's URL for five synthetic 50,000-message inboxes, or run `pnpm dev -- --demo` for a sample workspace in the desktop app. On NixOS, run `nix develop path:.` first. The shell provides a compatible Electron.
+
+For release tags and the one-time Apple signing credentials, see [Desktop releases](docs/releasing.md).
 
 <details>
 <summary><b>Checks, packaging and releases</b></summary>
