@@ -40,6 +40,10 @@ mac:
 win:
   icon: resources/icon.png
   artifactName: 'Inlark-${version}-${arch}-setup.${ext}'
+  forceCodeSigning: true
+  signtoolOptions:
+    signingHashAlgorithms: [sha256]
+    rfc3161TimeStampServer: http://time.certum.pl
 deb:
   packageName: inlark
   depends:

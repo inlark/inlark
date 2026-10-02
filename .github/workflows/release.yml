@@ -62,7 +62,7 @@ jobs:
         run: |
           for name in MAC_CSC_LINK MAC_CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
             if [ -z "${!name}" ]; then
-              echo "::error::Missing macOS release credential: $name. See docs/releasing.md."
+              echo "::error::Missing macOS release credential: $name."
               exit 1
             fi
           done
@@ -84,11 +84,50 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
       - name: Build desktop app
         run: pnpm build
+      - name: Prepare Windows signing with Certum
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: bash
+        env:
+          CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
+          CERTUM_USERNAME: ${{ secrets.CERTUM_USERNAME }}
+          CERTUM_CERTIFICATE_SHA1: ${{ secrets.CERTUM_CERTIFICATE_SHA1 }}
+        run: |
+          for name in CERTUM_OTP_URI CERTUM_USERNAME CERTUM_CERTIFICATE_SHA1; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing Windows release credential: $name."
+              exit 1
+            fi
+          done
+          bash .github/scripts/install-simplysign.sh
+          powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/configure-simplysign.ps1
+          powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/connect-simplysign.ps1
       - name: Package desktop app
-        if: runner.os != 'macOS'
+        if: runner.os == 'Linux'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: pnpm --filter @inlark/desktop exec electron-builder ${{ matrix.args }} --publish never
+      - name: Sign and package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CERTUM_CERTIFICATE_SHA1: ${{ secrets.CERTUM_CERTIFICATE_SHA1 }}
+          CERTUM_TIMESTAMP_SERVER: ${{ vars.CERTUM_TIMESTAMP_SERVER || 'http://time.certum.pl' }}
+        run: |
+          $intermediate = Join-Path $env:RUNNER_TEMP 'certum.cer'
+          Invoke-WebRequest -Uri https://repository.certum.pl/ccsca2021.cer -OutFile $intermediate
+          $thumbprint = ($env:CERTUM_CERTIFICATE_SHA1 -replace '\s', '').ToUpperInvariant()
+          pnpm --filter @inlark/desktop exec electron-builder ${{ matrix.args }} --publish never `
+            "--config.win.signtoolOptions.certificateSha1=$thumbprint" `
+            "--config.win.signtoolOptions.additionalCertificateFile=$intermediate" `
+            "--config.win.signtoolOptions.rfc3161TimeStampServer=$env:CERTUM_TIMESTAMP_SERVER"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify signed Windows app and installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CERTUM_CERTIFICATE_SHA1: ${{ secrets.CERTUM_CERTIFICATE_SHA1 }}
+        run: ./.github/scripts/verify-windows-signatures.ps1
       - name: Sign, notarize and package macOS app
         if: runner.os == 'macOS'
         env:
