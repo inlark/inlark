@@ -17,9 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check tag against desktop version
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Validate release version
         shell: bash
         run: |
+          npm --prefix apps/desktop version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version --ignore-scripts --package-lock=false
           node -e 'const version = require("./apps/desktop/package.json").version; const tag = process.env.GITHUB_REF_NAME; if (tag !== "v" + version) { console.error("Expected tag v" + version + ", got " + tag); process.exit(1) }'
 
   build:
@@ -51,6 +55,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Set desktop version from tag
+        shell: bash
+        run: npm --prefix apps/desktop version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version --ignore-scripts --package-lock=false
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
@@ -99,6 +106,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Set desktop version from tag
+        shell: bash
+        run: npm --prefix apps/desktop version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version --ignore-scripts --package-lock=false
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ github.token }}

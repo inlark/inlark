@@ -1,7 +1,7 @@
 { lib, stdenv, nodejs_24, pnpm_12, fetchPnpmDeps, pnpmConfigHook, makeWrapper, makeDesktopItem, copyDesktopItems, electron_44 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "inlark";
-  version = "0.1.0";
+  version = (builtins.fromJSON (builtins.readFile ../apps/desktop/package.json)).version;
   src = lib.cleanSourceWith {
     src = ../.;
     filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" ".astro" ".wrangler" "out" "dist" "release" ".git" ".test-data" "result" "test-results" ]);
