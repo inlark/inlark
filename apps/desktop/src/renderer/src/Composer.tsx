@@ -31,7 +31,7 @@ import { api, isDemo } from './api'
 import { localSaveDraft, localDeleteDraft } from './cache'
 import { RecipientField } from './RecipientField'
 import { formatBytes } from './mail-date'
-import { bindingText, useShortcutHandlers, useShortcuts } from './shortcuts'
+import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 
 /** Plain wording for a finished send; the Drafts view offers recovery for anything left over. */
 function sentMessage(result: SendResult): string {
@@ -96,6 +96,7 @@ export function Composer({
   onSaved: () => void
 }) {
   const shortcuts = useShortcuts()
+  const keys = useShortcutText()
   const sendShortcut = shortcuts.bindings.send[0]
   const [draft, setDraft] = useState(initial),
     [state, setState] = useState(
@@ -120,6 +121,8 @@ export function Composer({
     queryFn: () => api.identities(draft.accountId),
   })
   const locked = sending || draft.status === 'uncertain' || draft.status === 'sent'
+  const lockedRef = useRef(locked)
+  lockedRef.current = locked
   // A failed send is kept apart from the draft, so a later autosave can't clear the explanation.
   const [sendError, setSendError] = useState<Pick<Draft, 'error' | 'errorKind'>>()
   const shown = sendError ? { ...draft, ...sendError } : draft
@@ -320,8 +323,34 @@ export function Composer({
       setSending(false)
     }
   }
+  const attachFiles = async () => {
+    try {
+      const attachments = await api.stageAttachments()
+      // The file picker can outlive the composer or a send. Never change a locked draft.
+      if (!alive.current || lockedRef.current) return
+      update({ attachments: [...latest.current.attachments, ...attachments] })
+    } catch (error) {
+      notify(friendlyError(error))
+    }
+  }
+  const focusRecipient = (field: 'cc' | 'bcc') => {
+    setShowCc(true)
+    requestAnimationFrame(() => document.getElementById('compose-' + field)?.focus())
+  }
+  const canEdit = !linkOpen && !discardOpen && !locked
   useShortcutHandlers(shortcuts.bindings, {
-    send: { run: () => void send(), ignoreInputs: false, enabled: !linkOpen && !discardOpen },
+    // Keep the library's input-aware defaults: modifier shortcuts work while writing,
+    // but a custom letter or sequence must not send or discard a draft as someone types.
+    send: { run: () => void send(), enabled: !linkOpen && !discardOpen && !sending },
+    attachFiles: { run: () => void attachFiles(), enabled: canEdit },
+    showCc: { run: () => focusRecipient('cc'), enabled: canEdit },
+    showBcc: { run: () => focusRecipient('bcc'), enabled: canEdit },
+    expandComposer: {
+      run: () => setExpanded((current) => !current),
+      enabled: !linkOpen && !discardOpen,
+    },
+    saveClose: { run: () => void close(), enabled: !linkOpen && !discardOpen && !sending },
+    discardDraft: { run: () => setDiscardOpen(true), enabled: canEdit },
   })
   const addressField = (name: 'to' | 'cc' | 'bcc', label: string) => (
     <RecipientField
@@ -338,10 +367,11 @@ export function Composer({
         <button
           type="button"
           className="compose-cc-toggle"
+          title={keys('showCc')}
+          disabled={locked}
           onClick={(event) => {
             event.stopPropagation()
-            setShowCc(true)
-            requestAnimationFrame(() => document.getElementById('compose-cc')?.focus())
+            focusRecipient('cc')
           }}
         >
           Cc / Bcc
@@ -394,6 +424,7 @@ export function Composer({
               </span>
               <IconButton
                 label={expanded ? 'Restore composer size' : 'Expand composer'}
+                shortcut={keys('expandComposer')}
                 onClick={() => setExpanded(!expanded)}
               >
                 <ArrowUpRight size={14} />
@@ -404,6 +435,7 @@ export function Composer({
                     variant="ghost"
                     size="icon"
                     aria-label="Save and close"
+                    title={keys('saveClose')}
                     disabled={sending}
                   />
                 }
@@ -579,14 +611,8 @@ export function Composer({
             <span className="toolbar-divider" />
             <IconButton
               label="Attach files"
-              onClick={async () => {
-                try {
-                  const attachments = await api.stageAttachments()
-                  update({ attachments: [...latest.current.attachments, ...attachments] })
-                } catch (error) {
-                  notify(friendlyError(error))
-                }
-              }}
+              shortcut={keys('attachFiles')}
+              onClick={() => void attachFiles()}
             >
               <Paperclip size={15} />
             </IconButton>
@@ -612,6 +638,7 @@ export function Composer({
             <span className="compose-account">{account.email}</span>
             <IconButton
               label="Discard draft"
+              shortcut={keys('discardDraft')}
               onClick={() => setDiscardOpen(true)}
               disabled={locked}
             >

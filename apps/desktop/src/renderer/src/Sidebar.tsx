@@ -31,8 +31,8 @@ export const views: { id: View; title: string; icon: typeof Inbox; shortcut?: Sh
   { id: 'sent', title: 'Sent', icon: Send, shortcut: 'goSent' },
   { id: 'drafts', title: 'Drafts', icon: FileText, shortcut: 'goDrafts' },
   { id: 'archive', title: 'Archive', icon: Archive, shortcut: 'goArchive' },
-  { id: 'junk', title: 'Spam', icon: ShieldX },
-  { id: 'trash', title: 'Trash', icon: Trash2 },
+  { id: 'junk', title: 'Spam', icon: ShieldX, shortcut: 'goSpam' },
+  { id: 'trash', title: 'Trash', icon: Trash2, shortcut: 'goTrash' },
 ]
 const statusLabel: Record<Account['status'], string> = {
   connecting: 'connecting',

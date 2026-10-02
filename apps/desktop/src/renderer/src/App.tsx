@@ -27,6 +27,7 @@ import {
   MailMinus,
   FolderInput,
   ShieldX,
+  ShieldCheck,
   Reply,
   ReplyAll,
   Forward,
@@ -917,6 +918,12 @@ export function App() {
   const canAct = !blocked && hasTarget
   const inList = !blocked && !route.thread
   const inThread = !blocked && !!route.thread && !!latest
+  const inMailList = inList && view !== 'drafts'
+  const toggleUnread = () =>
+    setFilters((current) => ({ ...current, unread: current.unread ? undefined : true }))
+  const toggleDensity = () =>
+    setDensity((current) => (current === 'compact' ? 'comfortable' : 'compact'))
+  const createFolder = () => setFolderDialog({ operation: 'create', accountId: route.account })
   useShortcutHandlers(
     shortcuts.bindings,
     {
@@ -929,6 +936,20 @@ export function App() {
       toggleSidebar: { run: () => setCollapsed((c) => !c) },
       compose: { run: () => void compose() },
       search: { run: focusSearch },
+      refresh: {
+        run: () => void refresh(),
+        enabled: true,
+        // F5 must refresh mail instead of reloading the app even when search has focus.
+        // Keep custom letter bindings quiet while typing; modifier chords remain available.
+        ignoreInputs: (binding) =>
+          !binding.every((chord) =>
+            /(^|\+)(Mod|Ctrl|Control|Meta|Alt)\+|^(Shift\+)?F\d+$/.test(chord),
+          ),
+      },
+      filter: { run: () => setFilterOpen(true), enabled: inMailList },
+      toggleUnread: { run: toggleUnread, enabled: inMailList },
+      toggleDensity: { run: toggleDensity, enabled: inMailList },
+      createFolder: { run: createFolder, enabled: !blocked && !!accounts.length },
       next: { run: () => step(1) },
       previous: { run: () => step(-1) },
       open: { run: openFocused },
@@ -970,6 +991,8 @@ export function App() {
       archive: { run: () => void act('archive'), enabled: canAct },
       trash: { run: trashKey, enabled: canTrash },
       spam: { run: () => void act('spam'), enabled: canAct },
+      notSpam: { run: () => void act('notSpam'), enabled: canAct && view !== 'drafts' },
+      restore: { run: () => void act('restore'), enabled: canAct && view !== 'drafts' },
       shortcuts: { run: () => setHelp(true) },
       unread: { run: () => void act('unread'), enabled: canAct },
       read: { run: () => void act('read'), enabled: canAct },
@@ -988,6 +1011,9 @@ export function App() {
       goSent: { run: () => go({ view: 'sent' }) },
       goDrafts: { run: () => go({ view: 'drafts' }) },
       goArchive: { run: () => go({ view: 'archive' }) },
+      goSpam: { run: () => go({ view: 'junk' }) },
+      goTrash: { run: () => go({ view: 'trash' }) },
+      goAll: { run: () => go({ view: 'all' }) },
     },
     !blocked,
   )
@@ -1016,7 +1042,7 @@ export function App() {
       fail(e)
     }
   }
-  const commandTarget = route.thread || selected.size || focused
+  const commandTarget = view !== 'drafts' && (route.thread || selected.size || focused)
   const limited = (action: MailAction) => {
     const reason = commandTarget ? unavailable(action) : undefined
     return reason ? { disabled: true, description: reason } : {}
@@ -1083,6 +1109,24 @@ export function App() {
           keywords: 'junk',
           run: () => void act('spam'),
           ...limited('spam'),
+        },
+        {
+          id: 'not-spam',
+          label: 'Not spam',
+          icon: ShieldCheck,
+          key: keys('notSpam'),
+          keywords: 'junk',
+          run: () => void act('notSpam'),
+          ...limited('notSpam'),
+        },
+        {
+          id: 'restore',
+          label: 'Restore to inbox',
+          icon: Inbox,
+          key: keys('restore'),
+          keywords: 'recover unarchive',
+          run: () => void act('restore'),
+          ...limited('restore'),
         },
         ...(latest && route.thread
           ? [
@@ -1166,9 +1210,31 @@ export function App() {
       group: 'Mail',
       label: 'Check for new mail',
       icon: RefreshCw,
+      key: keys('refresh'),
       keywords: 'refresh sync reload',
       run: () => void refresh(),
     },
+    ...(view !== 'drafts' && !route.thread
+      ? [
+          {
+            id: 'filter',
+            group: 'Mail',
+            label: 'Filter conversations…',
+            icon: SlidersHorizontal,
+            key: keys('filter'),
+            run: () => setFilterOpen(true),
+          },
+          {
+            id: 'unread-view',
+            group: 'Mail',
+            label: filters.unread ? 'Show all messages' : 'Show only unread messages',
+            icon: Mail,
+            key: keys('toggleUnread'),
+            keywords: 'filter',
+            run: toggleUnread,
+          },
+        ]
+      : []),
     ...views.map((v) => ({
       id: 'view-' + v.id,
       group: 'Go to',
@@ -1178,6 +1244,15 @@ export function App() {
       keywords: 'go open view ' + (v.id === 'junk' ? 'junk' : ''),
       run: () => go({ view: v.id }),
     })),
+    {
+      id: 'view-all',
+      group: 'Go to',
+      label: 'All mail',
+      icon: Mail,
+      key: keys('goAll'),
+      keywords: 'go open view',
+      run: () => go({ view: 'all' }),
+    },
     ...(accounts.length > 1
       ? [
           {
@@ -1216,8 +1291,10 @@ export function App() {
       group: 'Folders',
       label: 'Create a folder…',
       icon: FolderPlus,
+      key: keys('createFolder'),
       keywords: 'new folder',
-      run: () => setFolderDialog({ operation: 'create' }),
+      run: createFolder,
+      disabled: !accounts.length,
     },
     ...(['dark', 'light', 'system'] as const).map((theme) => ({
       id: 'theme-' + theme,
@@ -1233,8 +1310,9 @@ export function App() {
       group: 'Preferences',
       label: density === 'compact' ? 'Comfortable density' : 'Compact density',
       icon: Rows3,
+      key: keys('toggleDensity'),
       keywords: 'display rows spacing list',
-      run: () => setDensity(density === 'compact' ? 'comfortable' : 'compact'),
+      run: toggleDensity,
     },
     {
       id: 'sidebar',
@@ -1488,7 +1566,11 @@ export function App() {
                 {route.q && <p>Results for “{route.q}”</p>}
               </div>
               <div className="list-heading-actions">
-                <IconButton label="Refresh mail" onClick={() => void refresh()}>
+                <IconButton
+                  label="Refresh mail"
+                  shortcut={keys('refresh')}
+                  onClick={() => void refresh()}
+                >
                   <RefreshCw
                     size={15}
                     className={mail.isFetching && !mail.isFetchingNextPage ? 'spin' : ''}
@@ -1610,13 +1692,19 @@ export function App() {
                   <button
                     aria-pressed={!!filters.unread}
                     className={filters.unread ? 'active' : ''}
+                    title={keys('toggleUnread')}
                     onClick={() => setFilters((f) => ({ ...f, unread: true }))}
                   >
                     Unread
                   </button>
                 </div>
                 <div className="list-toolbar-actions">
-                  <Button variant="ghost" size="small" onClick={() => setFilterOpen(true)}>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    title={keys('filter')}
+                    onClick={() => setFilterOpen(true)}
+                  >
                     <SlidersHorizontal size={13} />
                     Filter{hasFilters && <span className="filter-dot" />}
                   </Button>
@@ -1651,6 +1739,7 @@ export function App() {
                 </HintIconButton>
                 <IconButton
                   label="Mark selected read"
+                  shortcut={keys('read')}
                   disabled={busy}
                   onClick={() => void act('read')}
                 >
@@ -1658,6 +1747,7 @@ export function App() {
                 </IconButton>
                 <HintIconButton
                   label="Trash selected"
+                  shortcut={keys('trash')}
                   disabled={busy}
                   hint={unavailable('trash')}
                   onClick={() => void act('trash')}
@@ -1676,19 +1766,32 @@ export function App() {
                     </Button>
                   }
                 >
-                  <MenuItem onClick={() => void act('unread')}>Mark unread</MenuItem>
-                  <MenuItem onClick={() => void act('star')}>Star</MenuItem>
+                  <MenuItem onClick={() => void act('unread')}>
+                    Mark unread
+                    <ShortcutHint id="unread" className="menu-shortcut" />
+                  </MenuItem>
+                  <MenuItem onClick={() => void act('star')}>
+                    Star
+                    <ShortcutHint id="star" className="menu-shortcut" />
+                  </MenuItem>
                   <MenuItem
                     onClick={() => openMove(targets())}
                     disabled={allMatching || !!unavailable('move')}
                   >
                     Move to folder
+                    <ShortcutHint id="move" className="menu-shortcut" />
                   </MenuItem>
                   <MenuItem onClick={() => void act('spam')} disabled={!!unavailable('spam')}>
                     Mark spam
+                    <ShortcutHint id="spam" className="menu-shortcut" />
+                  </MenuItem>
+                  <MenuItem onClick={() => void act('notSpam')} disabled={!!unavailable('notSpam')}>
+                    Not spam
+                    <ShortcutHint id="notSpam" className="menu-shortcut" />
                   </MenuItem>
                   <MenuItem onClick={() => void act('restore')} disabled={!!unavailable('restore')}>
                     Restore to inbox
+                    <ShortcutHint id="restore" className="menu-shortcut" />
                   </MenuItem>
                   {view === 'trash' && (
                     <MenuItem

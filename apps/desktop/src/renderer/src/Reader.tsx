@@ -710,10 +710,12 @@ export function Reader({
           <MenuItem onClick={() => onAction('notSpam')} disabled={!!moveLimit}>
             <ShieldCheck size={14} />
             Not spam
+            <ShortcutHint id="notSpam" className="menu-shortcut" />
           </MenuItem>
           <MenuItem onClick={() => onAction('restore')} disabled={!!moveLimit}>
             <Inbox size={14} />
             Restore to inbox
+            <ShortcutHint id="restore" className="menu-shortcut" />
           </MenuItem>
           {moveLimit && <p className="menu-note">{moveLimit}</p>}
         </Dropdown>

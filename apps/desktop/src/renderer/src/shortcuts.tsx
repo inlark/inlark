@@ -35,6 +35,13 @@ export const shortcutDefinitions = [
     defaults: [['Escape']],
   },
   { id: 'search', section: 'Navigate', label: 'Search mail', defaults: [['/']] },
+  { id: 'filter', section: 'Navigate', label: 'Filter conversations', defaults: [['Shift+F']] },
+  {
+    id: 'toggleUnread',
+    section: 'Navigate',
+    label: 'Toggle unread-only view',
+    defaults: [['Shift+L']],
+  },
   { id: 'commandMenu', section: 'Navigate', label: 'Command menu', defaults: [['Mod+K']] },
   { id: 'toggleSidebar', section: 'Navigate', label: 'Toggle sidebar', defaults: [['[']] },
   { id: 'goInbox', section: 'Go to', label: 'Inbox', defaults: [['G', 'I']] },
@@ -42,6 +49,9 @@ export const shortcutDefinitions = [
   { id: 'goSent', section: 'Go to', label: 'Sent', defaults: [['G', 'T']] },
   { id: 'goDrafts', section: 'Go to', label: 'Drafts', defaults: [['G', 'D']] },
   { id: 'goArchive', section: 'Go to', label: 'Archive', defaults: [['G', 'A']] },
+  { id: 'goSpam', section: 'Go to', label: 'Spam', defaults: [['G', 'J']] },
+  { id: 'goTrash', section: 'Go to', label: 'Trash', defaults: [['G', 'B']] },
+  { id: 'goAll', section: 'Go to', label: 'All mail', defaults: [['G', 'M']] },
   { id: 'archive', section: 'Organize', label: 'Archive', defaults: [['E']] },
   {
     id: 'trash',
@@ -51,7 +61,10 @@ export const shortcutDefinitions = [
     defaults: [['#'], ['Backspace'], ['Delete']],
   },
   { id: 'spam', section: 'Organize', label: 'Mark as spam', defaults: [['!']] },
+  { id: 'notSpam', section: 'Organize', label: 'Not spam', defaults: [['Shift+N']] },
+  { id: 'restore', section: 'Organize', label: 'Restore to inbox', defaults: [['Shift+E']] },
   { id: 'move', section: 'Organize', label: 'Move to folder', defaults: [['V']] },
+  { id: 'createFolder', section: 'Organize', label: 'Create a folder', defaults: [] },
   {
     id: 'unsubscribe',
     section: 'Organize',
@@ -70,6 +83,36 @@ export const shortcutDefinitions = [
   { id: 'replyAll', section: 'Write', label: 'Reply all', defaults: [['A']] },
   { id: 'forward', section: 'Write', label: 'Forward', defaults: [['F']] },
   { id: 'send', section: 'Write', label: 'Send message', defaults: [['Mod+Enter']] },
+  {
+    id: 'attachFiles',
+    section: 'Write',
+    label: 'Attach files',
+    description: 'While composing a message.',
+    defaults: [['Mod+Shift+A']],
+  },
+  { id: 'showCc', section: 'Write', label: 'Show and focus Cc', defaults: [['Mod+Shift+C']] },
+  { id: 'showBcc', section: 'Write', label: 'Show and focus Bcc', defaults: [['Mod+Shift+B']] },
+  {
+    id: 'expandComposer',
+    section: 'Write',
+    label: 'Expand or restore composer',
+    defaults: [['Mod+Shift+F']],
+  },
+  {
+    id: 'saveClose',
+    section: 'Write',
+    label: 'Save and close draft',
+    defaults: [['Mod+Shift+Enter']],
+  },
+  {
+    id: 'discardDraft',
+    section: 'Write',
+    label: 'Discard draft',
+    description: 'Asks for confirmation before deleting.',
+    defaults: [['Mod+Shift+Backspace']],
+  },
+  { id: 'refresh', section: 'App', label: 'Refresh mail', defaults: [['Mod+R'], ['F5']] },
+  { id: 'toggleDensity', section: 'App', label: 'Toggle message density', defaults: [] },
   { id: 'settings', section: 'App', label: 'Open settings', defaults: [['Mod+,']] },
   { id: 'shortcuts', section: 'App', label: 'Keyboard shortcuts', defaults: [['?']] },
 ] as const satisfies readonly {
@@ -101,7 +144,7 @@ const sameBindings = (a: Binding[], b: Binding[]) =>
   a.length === b.length && a.every((binding, index) => sameBinding(binding, b[index]))
 
 export function resolveShortcuts(overrides: ShortcutOverrides = {}): ShortcutBindings {
-  return Object.fromEntries(
+  const bindings = Object.fromEntries(
     shortcutDefinitions.map(({ id }) => {
       // Skip malformed keys so one bad saved value can't break registering the rest.
       const saved = overrides[id]?.filter((binding) =>
@@ -110,6 +153,18 @@ export function resolveShortcuts(overrides: ShortcutOverrides = {}): ShortcutBin
       return [id, saved || defaultBindings(id)]
     }),
   ) as ShortcutBindings
+  // A newly introduced default must never take keys someone already assigned to another action.
+  const customized = new Set(
+    shortcutDefinitions.filter(({ id }) => overrides[id]).map(({ id }) => id),
+  )
+  if (customized.size)
+    for (const { id } of shortcutDefinitions)
+      if (!customized.has(id))
+        bindings[id] = bindings[id].filter(
+          (binding) =>
+            !findConflicts(bindings, id, binding).some((conflict) => customized.has(conflict.id)),
+        )
+  return bindings
 }
 
 /** Records only what differs from the defaults, so improved defaults still reach everyone else. */
@@ -216,7 +271,7 @@ export type ShortcutHandler = {
   run: () => void
   /** Defaults to the hook's `enabled`. */
   enabled?: boolean
-  ignoreInputs?: boolean
+  ignoreInputs?: boolean | ((binding: Binding) => boolean)
 }
 
 /** Registers every binding of each handled shortcut. */
@@ -231,12 +286,29 @@ export function useShortcutHandlers(
     const options = {
       conflictBehavior: 'replace',
       enabled: handler.enabled ?? enabled,
-      ...(handler.ignoreInputs !== undefined && { ignoreInputs: handler.ignoreInputs }),
     } as const
     for (const binding of bindings[id]) {
+      const bindingOptions = {
+        ...options,
+        ...(handler.ignoreInputs !== undefined && {
+          ignoreInputs:
+            typeof handler.ignoreInputs === 'function'
+              ? handler.ignoreInputs(binding)
+              : handler.ignoreInputs,
+        }),
+      }
       if (binding.length === 1)
-        hotkeys.push({ hotkey: binding[0] as Hotkey, callback: handler.run, options })
-      else sequences.push({ sequence: binding as Hotkey[], callback: handler.run, options })
+        hotkeys.push({
+          hotkey: binding[0] as Hotkey,
+          callback: handler.run,
+          options: bindingOptions,
+        })
+      else
+        sequences.push({
+          sequence: binding as Hotkey[],
+          callback: handler.run,
+          options: bindingOptions,
+        })
     }
   }
   useHotkeys(hotkeys)

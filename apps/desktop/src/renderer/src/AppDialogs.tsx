@@ -11,7 +11,7 @@ export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () =
         if (!value) onClose()
       }}
       title="Keyboard shortcuts"
-      description="Click any keys to change them, or + to add another. Shortcuts are paused while you type in a field."
+      description="Click any keys to change them, or + to add another. Letter shortcuts are paused while you type in a field."
       className="shortcut-modal"
     >
       <ShortcutEditor />
