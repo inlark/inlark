@@ -170,6 +170,7 @@ export const settingsSchema = z.object({
   closeToTray: z.boolean(),
   defaultAccountId: id.optional(),
   signatures: z.record(z.string(), z.string().max(100_000)),
+  htmlSignatures: z.record(z.string(), z.boolean()).optional(),
   afterArchive: z.enum(['next', 'previous', 'list']).optional(),
   shortcuts: z
     .record(z.string().max(64), z.array(z.array(z.string().min(1).max(64)).min(1).max(4)).max(16))
