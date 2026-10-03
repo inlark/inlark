@@ -34,6 +34,8 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 app.setName('Inlark')
+if (process.platform === 'linux' && process.env.FLATPAK_ID)
+  app.setDesktopName(process.env.FLATPAK_ID + '.desktop')
 if (process.env.INLARK_DATA_DIR) app.setPath('userData', process.env.INLARK_DATA_DIR)
 let window: BrowserWindow | null = null,
   tray: Tray | null = null,

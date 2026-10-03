@@ -116,6 +116,28 @@ function steps({ build, file }: Download): Step[] {
         connect,
       ]
     }
+    case 'flatpak':
+      return [
+        {
+          title: 'Install the bundle',
+          body: 'With Flatpak installed, open the file in your software center or install it from a terminal.',
+          visual: (
+            <CodeBlock
+              code={`cd ~/Downloads\nflatpak install --user ./${file}`}
+              title="Terminal"
+              className="h-full"
+            />
+          ),
+        },
+        {
+          title: 'Open Inlark',
+          body: 'Find it in your app menu or launch it from a terminal. Install a newer bundle to update.',
+          visual: (
+            <CodeBlock code="flatpak run com.inlark.Inlark" title="Terminal" className="h-full" />
+          ),
+        },
+        connect,
+      ]
     case 'nix':
       return [
         {

@@ -34,7 +34,9 @@ export class UpdateManager {
   }
 
   start() {
-    if (!app.isPackaged) return
+    // Flatpak owns application updates. Its immutable /app must never be
+    // replaced by electron-updater or show the GitHub installer fallback.
+    if (!app.isPackaged || process.env.FLATPAK_ID) return
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.autoRunAppAfterInstall = false
