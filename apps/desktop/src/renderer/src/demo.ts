@@ -762,9 +762,11 @@ export const demoAPI: DesktopMailAPI = {
       if (destination) next.mailboxIds = { [destination]: true }
       changes.set(key, input.action === 'destroy' ? null : next)
     }
+    changed()
+    // Like the desktop service, a permanent deletion has nothing to undo.
+    if (input.action === 'destroy') return { changed: saved.length, failures: [] }
     const undoId = crypto.randomUUID()
     undoStack.set(undoId, saved)
-    changed()
     return { changed: saved.length, failures: [], undoId }
   },
   mutateAll: async (query, action) => {

@@ -33,6 +33,12 @@ import { RecipientField } from './RecipientField'
 import { formatBytes } from './mail-date'
 import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { SignatureNode } from './signature'
+import { linkTarget } from './link-target'
+
+const validAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+/** The editor's own formatting keys, which follow the platform (⌘ on macOS, Ctrl elsewhere). */
+const boldKeys = bindingText(['Mod+B'])
+const italicKeys = bindingText(['Mod+I'])
 
 /** Plain wording for a finished send; the Drafts view offers recovery for anything left over. */
 function sentMessage(result: SendResult): string {
@@ -112,6 +118,8 @@ export function Composer({
     [expanded, setExpanded] = useState(false),
     [linkOpen, setLinkOpen] = useState(false),
     [linkValue, setLinkValue] = useState(''),
+    [linkError, setLinkError] = useState(''),
+    [editingLink, setEditingLink] = useState(false),
     [discardOpen, setDiscardOpen] = useState(false)
   const latest = useRef(draft),
     sync = useRef<Promise<unknown>>(Promise.resolve()),
@@ -259,18 +267,28 @@ export function Composer({
       onSaved()
       onClose()
     } catch (e) {
-      notify('Your draft could not be saved. ' + friendlyError(e))
+      notify('Your draft could not be saved. ' + friendlyError(e), 'error')
     }
   }
   const send = async () => {
     if (sending || account.status !== 'connected') return
-    const recipients = [...latest.current.to, ...latest.current.cc, ...latest.current.bcc]
-    if (!recipients.length || recipients.some((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))) {
-      notify('Add valid email addresses before sending.')
+    const fields = ['to', 'cc', 'bcc'] as const
+    if (!fields.some((field) => latest.current[field].length)) {
+      notify('Add a recipient before sending.', 'error')
+      document.getElementById('compose-to')?.focus()
+      return
+    }
+    // Point at the address to fix; its chip is already marked in red.
+    const field = fields.find((name) => latest.current[name].some((a) => !validAddress(a.email)))
+    if (field) {
+      const invalid = latest.current[field].find((a) => !validAddress(a.email))!
+      notify('“' + (invalid.email || invalid.name) + '” isn’t a valid email address.', 'error')
+      if (field === 'to') document.getElementById('compose-to')?.focus()
+      else focusRecipient(field)
       return
     }
     if (!latest.current.identityId) {
-      notify('Select a sending identity.')
+      notify('Select a sending identity.', 'error')
       return
     }
     setSending(true)
@@ -290,7 +308,7 @@ export function Composer({
         onSaved()
         onClose()
       } else {
-        notify(result.message)
+        notify(result.message, 'error')
         const uncertain = { ...latest.current, status: 'uncertain' as const }
         latest.current = uncertain
         setDraft(uncertain)
@@ -332,8 +350,26 @@ export function Composer({
       if (!alive.current || lockedRef.current) return
       update({ attachments: [...latest.current.attachments, ...attachments] })
     } catch (error) {
-      notify(friendlyError(error))
+      notify(friendlyError(error), 'error')
     }
+  }
+  const insertLink = () => {
+    const href = linkTarget(linkValue)
+    if (!href || !editor) {
+      setLinkError('Enter a web address such as example.com, or an email address.')
+      return
+    }
+    const chain = editor.chain().focus()
+    // With nothing selected, the address itself becomes the link text, so the link is visible.
+    if (editor.state.selection.empty && !editor.isActive('link'))
+      chain.insertContent({
+        type: 'text',
+        text: linkValue.trim(),
+        marks: [{ type: 'link', attrs: { href } }],
+      })
+    else chain.extendMarkRange('link').setLink({ href })
+    chain.run()
+    setLinkOpen(false)
   }
   const focusRecipient = (field: 'cc' | 'bcc') => {
     setShowCc(true)
@@ -464,7 +500,7 @@ export function Composer({
                       serverFingerprint: undefined,
                     })
                   } catch (error) {
-                    notify(friendlyError(error))
+                    notify(friendlyError(error), 'error')
                   }
                 }}
               />
@@ -575,7 +611,7 @@ export function Composer({
           <fieldset className="compose-format" disabled={locked}>
             <IconButton
               label="Bold"
-              shortcut="Ctrl B"
+              shortcut={boldKeys}
               onClick={() => editor?.chain().focus().toggleBold().run()}
               className={formatting?.bold ? 'active-format' : ''}
               aria-pressed={formatting?.bold || false}
@@ -586,7 +622,7 @@ export function Composer({
               label="Italic"
               className={formatting?.italic ? 'active-format' : ''}
               aria-pressed={formatting?.italic || false}
-              shortcut="Ctrl I"
+              shortcut={italicKeys}
               onClick={() => editor?.chain().focus().toggleItalic().run()}
             >
               <Italic size={14} />
@@ -600,11 +636,14 @@ export function Composer({
               <BulletList size={15} />
             </IconButton>
             <IconButton
-              label="Add link"
+              label={formatting?.link ? 'Edit link' : 'Add link'}
               className={formatting?.link ? 'active-format' : ''}
               aria-pressed={formatting?.link || false}
               onClick={() => {
-                setLinkValue(editor?.getAttributes('link').href || '')
+                const href: string = editor?.getAttributes('link').href || ''
+                setEditingLink(!!href)
+                setLinkValue(href.replace(/^mailto:/i, ''))
+                setLinkError('')
                 setLinkOpen(true)
               }}
             >
@@ -667,7 +706,7 @@ export function Composer({
                 onSaved()
                 onClose()
               } catch (e) {
-                notify(friendlyError(e))
+                notify(friendlyError(e), 'error')
               }
             }}
           >
@@ -675,29 +714,56 @@ export function Composer({
           </Button>
         </div>
       </Modal>
-      <Modal open={linkOpen} onOpenChange={setLinkOpen} title="Add a link">
-        <label>
-          URL
-          <input
-            value={linkValue}
-            placeholder="https://…"
-            onChange={(e) => setLinkValue(e.target.value)}
-          />
-        </label>
-        <div className="modal-actions">
-          <Button onClick={() => setLinkOpen(false)}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              if (/^https?:\/\//.test(linkValue)) {
-                editor?.chain().focus().extendMarkRange('link').setLink({ href: linkValue }).run()
-                setLinkOpen(false)
-              }
-            }}
-          >
-            Insert link
-          </Button>
-        </div>
+      <Modal
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        title={editingLink ? 'Edit link' : 'Add a link'}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            insertLink()
+          }}
+        >
+          <label className="modal-field">
+            Web or email address
+            <input
+              autoFocus
+              value={linkValue}
+              placeholder="example.com"
+              spellCheck={false}
+              aria-invalid={!!linkError || undefined}
+              aria-describedby={linkError ? 'compose-link-error' : undefined}
+              onChange={(e) => {
+                setLinkValue(e.target.value)
+                setLinkError('')
+              }}
+            />
+          </label>
+          {linkError && (
+            <span className="field-error" id="compose-link-error" role="alert">
+              {linkError}
+            </span>
+          )}
+          <div className="modal-actions">
+            {editingLink && (
+              <Button
+                variant="ghost"
+                className="modal-action-start"
+                onClick={() => {
+                  editor?.chain().focus().extendMarkRange('link').unsetLink().run()
+                  setLinkOpen(false)
+                }}
+              >
+                Remove link
+              </Button>
+            )}
+            <Button onClick={() => setLinkOpen(false)}>Cancel</Button>
+            <Button variant="primary" type="submit">
+              {editingLink ? 'Update link' : 'Insert link'}
+            </Button>
+          </div>
+        </form>
       </Modal>
     </Dialog.Root>
   )
