@@ -57,27 +57,13 @@ If you run your own mail server, or just have a few accounts at small providers,
 
 Grab the latest build from the [releases page](https://github.com/inlark/inlark/releases/latest):
 
-Native packaged builds check for updates in the background. When an update downloads successfully, Inlark installs it after you quit, so it never interrupts your work. If the automatic update fails, Inlark links to the [download page](https://inlark.com/download) for a manual install.
+Packaged builds check for updates in the background. When an update downloads successfully, Inlark installs it after you quit, so it never interrupts your work. If the automatic update fails, Inlark links to the [download page](https://inlark.com/download) for a manual install.
 
-| Platform | Download                                                                         |
-| -------- | -------------------------------------------------------------------------------- |
-| Windows  | Installer (x64)                                                                  |
-| macOS    | DMG or ZIP, for both Apple Silicon and Intel                                     |
-| Linux    | AppImage, `.deb`, `.rpm`, or [Flatpak](#flatpak) (x64), or [Nix](#nix-and-nixos) |
-
-### Flatpak
-
-Download `Inlark-<version>-x64.flatpak` from the releases page, then install and launch it:
-
-```sh
-flatpak install --user ./Inlark-<version>-x64.flatpak
-flatpak run com.inlark.Inlark
-```
-
-Flatpak manages updates through your software centre or `flatpak update`; GitHub
-bundles can be updated by installing the newer bundle. App data is kept separately
-under `~/.var/app/com.inlark.Inlark/config/Inlark`. Flathub publishing is prepared
-and requires the initial Flathub review; see the [packaging and publishing guide](apps/desktop/packaging/flatpak/README.md).
+| Platform | Download                                                   |
+| -------- | ---------------------------------------------------------- |
+| Windows  | Installer (x64)                                            |
+| macOS    | DMG or ZIP, for both Apple Silicon and Intel               |
+| Linux    | AppImage, `.deb` or `.rpm` (x64), or [Nix](#nix-and-nixos) |
 
 ### Nix and NixOS
 
@@ -142,9 +128,7 @@ pnpm check             # formatting, types, tests and a production build
 pnpm test:stalwart     # real JMAP, IMAP and SMTP against a disposable Stalwart server (Podman or CONTAINER_RUNTIME=docker)
 nix build path:.       # Nix package in ./result/bin/inlark
 pnpm package:linux     # AppImage, .deb and .rpm in apps/desktop/release
-pnpm package:flatpak   # Flatpak bundle and Flathub recipe (requires Flatpak and flatpak-builder)
 pnpm test:deb          # Debian packaging smoke test (Podman)
-pnpm test:flatpak      # installed Flatpak smoke test (requires Xvfb and xauth)
 ```
 
 The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml` and the dependency hash in `nix/package.nix`. After changing dependencies, replace that hash with the one Nix reports.
