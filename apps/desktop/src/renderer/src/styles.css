@@ -513,7 +513,7 @@
   border: 0;
   background: none;
   color: var(--accent);
-  font-size: 10px;
+  font-size: 11px;
   padding: 0;
   text-align: left;
 }
@@ -866,6 +866,10 @@ svg.starred {
 .reader-scroll {
   flex: 1;
   overflow: auto;
+}
+/* Focused on open so the keyboard scrolls the conversation; the whole pane needs no ring. */
+.reader-scroll:focus-visible {
+  outline: none;
 }
 .reader-content {
   width: min(840px, 100%);
@@ -1923,7 +1927,7 @@ svg.starred {
   padding: 10px 22px;
   font-size: 11px;
   color: var(--red);
-  background: var(--accent-tint);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 .compose-attachments {
   display: flex;
@@ -2186,6 +2190,45 @@ svg.starred {
   margin-left: -10px;
   color: var(--muted);
 }
+.move-modal {
+  width: min(440px, calc(100vw - 40px));
+}
+.folder-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin-bottom: 8px;
+  padding: 0 11px;
+  color: var(--muted);
+  background: var(--field);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms;
+}
+.folder-search:focus-within {
+  border-color: var(--accent-solid);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.folder-search input {
+  height: 100%;
+  padding: 0;
+  font-size: 12px;
+  background: none;
+  border: 0;
+}
+.folder-search input:focus-visible {
+  outline: none;
+}
+/* Long folder lists scroll inside the dialog so the search field stays in view. */
+.folder-picker {
+  max-height: min(340px, calc(100vh - 280px));
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+}
 .folder-picker button {
   width: 100%;
   display: flex;
@@ -2193,16 +2236,49 @@ svg.starred {
   gap: 12px;
   background: none;
   border: 0;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 6px;
   font-size: 12px;
   text-align: left;
+  color: var(--secondary);
 }
-.folder-picker button svg:last-child {
-  margin-left: auto;
+.folder-picker button > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.folder-picker button:hover {
+.folder-picker button svg {
+  color: var(--muted);
+}
+.folder-picker button.active {
   background: var(--hover);
+  color: var(--text-strong);
+}
+.folder-picker button.active svg {
+  color: var(--text-strong);
+}
+.folder-picker-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* A text field directly inside a dialog, labelled above. */
+.modal-field input {
+  margin-top: 6px;
+}
+/* A secondary choice such as “Remove link” sits apart from Cancel and the main action. */
+.modal-actions > .modal-action-start {
+  margin-right: auto;
+  margin-left: -10px;
+  color: var(--muted);
+}
+.modal-actions > .modal-action-start:hover:not(:disabled) {
+  color: var(--red);
 }
 .startup-error {
   max-width: 520px;
@@ -2553,7 +2629,8 @@ fieldset.compose-format:disabled {
 .reply-prompt:hover {
   background: var(--hover);
 }
-.reply-prompt > span {
+/* Only the label grows; the shortcut hint is a span too and belongs at the far end. */
+.reply-prompt > span:not(.shortcut-keys) {
   flex: 1;
   min-width: 0;
 }

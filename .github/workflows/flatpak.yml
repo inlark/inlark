@@ -1,0 +1,116 @@
+name: Build Flatpak
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/flatpak.yml'
+      - '.github/workflows/release.yml'
+      - 'scripts/*flatpak*'
+      - 'apps/desktop/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Release tag to package
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Set release version
+        id: version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$RELEASE_VERSION" ]; then
+            npm --prefix apps/desktop version "${RELEASE_VERSION#v}" --no-git-tag-version --allow-same-version --ignore-scripts --package-lock=false
+          fi
+          echo "version=$(node -p "require('./apps/desktop/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Package Linux directory
+        run: pnpm --filter @inlark/desktop exec electron-builder --linux dir --x64 --publish never
+      - name: Prepare archive and manifests
+        run: bash scripts/flatpak-archive.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-input
+          path: |
+            apps/desktop/release/Inlark-*-x64.tar.gz
+            apps/desktop/release/flatpak/local/
+            apps/desktop/release/flatpak/flathub/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flathub-manifest
+          path: apps/desktop/release/flatpak/flathub/
+          if-no-files-found: error
+
+  flatpak:
+    needs: package
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: flatpak-input
+          path: apps/desktop/release/
+      - name: Validate desktop and AppStream metadata
+        run: |
+          desktop-file-validate apps/desktop/release/flatpak/local/com.inlark.Inlark.desktop
+          appstreamcli validate --no-net apps/desktop/release/flatpak/local/com.inlark.Inlark.metainfo.xml
+          flatpak-builder-lint manifest apps/desktop/release/flatpak/flathub/com.inlark.Inlark.json
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: apps/desktop/release/flatpak/local/com.inlark.Inlark.json
+          bundle: apps/desktop/release/Inlark-${{ needs.package.outputs.version }}-x64.flatpak
+          branch: stable
+          mirror-screenshots-url: https://dl.flathub.org/media
+          upload-artifact: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-flatpak
+          path: |
+            apps/desktop/release/Inlark-*-x64.tar.gz
+            apps/desktop/release/Inlark-*-x64.flatpak
+          if-no-files-found: error
+
+  smoke:
+    needs: [package, flatpak]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: desktop-linux-flatpak
+          path: apps/desktop/release/
+      - name: Install Flatpak test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb xauth dbus-x11
+          # Allow nested sandbox namespaces on this disposable test runner.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Smoke-test installed Flatpak
+        run: bash scripts/test-flatpak.sh "apps/desktop/release/Inlark-${{ needs.package.outputs.version }}-x64.flatpak"

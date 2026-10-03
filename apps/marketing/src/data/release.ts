@@ -2,7 +2,7 @@ import { links, version as packagedVersion } from './links'
 
 export type Os = 'mac' | 'windows' | 'linux'
 export type BuildId =
-  'mac-arm64' | 'mac-x64' | 'windows' | 'appimage' | 'deb' | 'rpm' | 'nix' | 'nixos'
+  'mac-arm64' | 'mac-x64' | 'windows' | 'appimage' | 'deb' | 'rpm' | 'flatpak' | 'nix' | 'nixos'
 
 export interface Build {
   id: BuildId
@@ -57,6 +57,13 @@ export const builds: Build[] = [
     label: 'Fedora',
     detail: '.rpm package',
     file: (v) => `Inlark-${v}-x86_64.rpm`,
+  },
+  {
+    id: 'flatpak',
+    os: 'linux',
+    label: 'Flatpak',
+    detail: 'Sandboxed package, 64-bit Intel or AMD',
+    file: (v) => `Inlark-${v}-x64.flatpak`,
   },
   { id: 'nix', os: 'linux', label: 'Nix', detail: 'Any Linux with Nix, x86-64 or ARM' },
   { id: 'nixos', os: 'linux', label: 'NixOS', detail: 'Flake module' },

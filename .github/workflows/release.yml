@@ -214,8 +214,14 @@ jobs:
           test -f "$RUNNER_TEMP/inlark-profile/share/applications/inlark.desktop"
           test -f "$RUNNER_TEMP/inlark-profile/share/icons/hicolor/512x512/apps/inlark.png"
 
+  flatpak:
+    needs: validate-tag
+    uses: ./.github/workflows/flatpak.yml
+    with:
+      version: ${{ github.ref_name }}
+
   release:
-    needs: [build, nix]
+    needs: [build, nix, flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -237,6 +243,8 @@ jobs:
             echo "Expected 8 installers, found $count" >&2
             exit 1
           fi
+          test -f "release-assets/Inlark-${RELEASE_TAG#v}-x64.flatpak"
+          test -f "release-assets/Inlark-${RELEASE_TAG#v}-x64.tar.gz"
           channel="${RELEASE_TAG#v}"
           if [[ "$channel" == *-* ]]; then
             channel="${channel#*-}"
@@ -259,3 +267,24 @@ jobs:
           fi
           gh release create "$RELEASE_TAG" release-assets/* \
             --verify-tag --generate-notes "${options[@]}"
+
+  flathub:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') && vars.FLATHUB_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: flathub-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: flathub-manifest
+          path: apps/desktop/release/flatpak/flathub/
+      - name: Update Flathub and enable merge after checks
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/publish-flathub.sh

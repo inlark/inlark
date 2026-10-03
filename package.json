@@ -12,11 +12,13 @@
     "test": "vitest run",
     "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "package:linux": "bash scripts/package-linux.sh",
+    "package:flatpak": "bash scripts/package-flatpak.sh",
     "test:integration": "vitest run --no-file-parallelism tests/stalwart.integration.test.ts tests/stalwart-imap.integration.test.ts",
     "test:stalwart": "node scripts/stalwart-test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:deb": "bash scripts/test-deb.sh"
+    "test:deb": "bash scripts/test-deb.sh",
+    "test:flatpak": "bash scripts/test-flatpak.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
