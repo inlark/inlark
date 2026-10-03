@@ -11,6 +11,7 @@ import {
 import { TooltipProvider } from '@inlark/ui'
 import { queryClient, restoreCache } from './cache'
 import { App } from './App'
+import { ShortcutsProvider } from './ShortcutsProvider'
 import '@inlark/ui/styles.css'
 import './styles.css'
 
@@ -83,7 +84,9 @@ void restoreCache().finally(() =>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider delay={500}>
-            <RouterProvider router={router} />
+            <ShortcutsProvider>
+              <RouterProvider router={router} />
+            </ShortcutsProvider>
           </TooltipProvider>
         </QueryClientProvider>
       </ErrorBoundary>

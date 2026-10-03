@@ -15,6 +15,7 @@ import {
   Folder,
   Send,
   SquarePen,
+  Keyboard,
 } from '@inlark/ui/icons'
 import { Button, Dropdown, EmptyState, MenuItem, Modal, Select, Switch } from '@inlark/ui'
 import {
@@ -31,6 +32,7 @@ import { SignatureSettings } from './SignatureSettings'
 import { AccountSetup, type SetupMode } from './AccountSetup'
 import { FolderMappingsDialog } from './FolderMappings'
 import { IndexingMeter } from './IndexingMeter'
+import { ShortcutEditor } from './ShortcutEditor'
 
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
@@ -209,6 +211,7 @@ export function SettingsPanel({
               ['general', 'General', SlidersHorizontal],
               ['accounts', 'Accounts', Mail],
               ['signatures', 'Signatures', PenLine],
+              ['shortcuts', 'Shortcuts', Keyboard],
               ['about', 'About', Info],
             ].map(([id, name, Icon]) => {
               const Component = Icon as typeof Mail
@@ -554,6 +557,15 @@ export function SettingsPanel({
                     </EmptyState>
                   </div>
                 )}
+              </>
+            )}
+            {tab === 'shortcuts' && (
+              <>
+                <h3>Keyboard shortcuts</h3>
+                <p className="settings-lead">
+                  Click any keys to change them, or + to add another. Changes save right away.
+                </p>
+                <ShortcutEditor />
               </>
             )}
             {tab === 'about' && (

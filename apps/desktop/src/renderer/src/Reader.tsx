@@ -44,6 +44,7 @@ import { formatBytes, longDate, messageDate } from './mail-date'
 import { AccountMark } from './AccountMark'
 import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
+import { ShortcutHint, useShortcutText } from './shortcuts'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
@@ -555,7 +556,7 @@ function UnsubscribeButton({ state, onClick }: { state: UnsubscribeState; onClic
         <Tooltip.Positioner sideOffset={7}>
           <Tooltip.Popup className="tooltip">
             Unsubscribe from this mailing list
-            <kbd>Ctrl U</kbd>
+            <ShortcutHint id="unsubscribe" />
           </Tooltip.Popup>
         </Tooltip.Positioner>
       </Tooltip.Portal>
@@ -595,6 +596,7 @@ export function Reader({
   onUnsubscribe,
   loading = false,
 }: ReaderProps) {
+  const keys = useShortcutText()
   const last = messages[messages.length - 1]
   const initiallyExpanded = () =>
     new Set(
@@ -651,7 +653,7 @@ export function Reader({
         <HintIconButton
           disabled={busy}
           label="Archive"
-          shortcut="E"
+          shortcut={keys('archive')}
           hint={moveLimit}
           onClick={() => onAction('archive')}
         >
@@ -660,7 +662,7 @@ export function Reader({
         <HintIconButton
           disabled={busy}
           label="Move to trash"
-          shortcut="#"
+          shortcut={keys('trash')}
           hint={moveLimit}
           onClick={() => onAction('trash')}
         >
@@ -669,7 +671,7 @@ export function Reader({
         <IconButton
           disabled={busy}
           label="Mark unread"
-          shortcut="U"
+          shortcut={keys('unread')}
           onClick={() => onAction('unread')}
         >
           <Mail size={16} />
@@ -678,7 +680,7 @@ export function Reader({
           disabled={busy}
           aria-pressed={starred}
           label={starred ? 'Remove star' : 'Star conversation'}
-          shortcut="S"
+          shortcut={keys('star')}
           onClick={() => onAction(starred ? 'unstar' : 'star')}
         >
           <Star size={16} className={starred ? 'starred' : ''} />
@@ -698,20 +700,22 @@ export function Reader({
           <MenuItem onClick={onMove} disabled={!!moveLimit}>
             <FolderInput size={14} />
             Move to folder
-            <kbd className="menu-shortcut">V</kbd>
+            <ShortcutHint id="move" className="menu-shortcut" />
           </MenuItem>
           <MenuItem onClick={() => onAction('spam')} disabled={!!moveLimit}>
             <ShieldX size={14} />
             Mark as spam
-            <kbd className="menu-shortcut">!</kbd>
+            <ShortcutHint id="spam" className="menu-shortcut" />
           </MenuItem>
           <MenuItem onClick={() => onAction('notSpam')} disabled={!!moveLimit}>
             <ShieldCheck size={14} />
             Not spam
+            <ShortcutHint id="notSpam" className="menu-shortcut" />
           </MenuItem>
           <MenuItem onClick={() => onAction('restore')} disabled={!!moveLimit}>
             <Inbox size={14} />
             Restore to inbox
+            <ShortcutHint id="restore" className="menu-shortcut" />
           </MenuItem>
           {moveLimit && <p className="menu-note">{moveLimit}</p>}
         </Dropdown>
@@ -725,13 +729,18 @@ export function Reader({
           <span role="status">{busy ? 'Updating…' : position}</span>
           <IconButton
             label="Previous conversation"
-            shortcut="K"
+            shortcut={keys('previous')}
             onClick={onPrevious}
             disabled={!onPrevious}
           >
             <ChevronUp size={16} />
           </IconButton>
-          <IconButton label="Next conversation" shortcut="J" onClick={onNext} disabled={!onNext}>
+          <IconButton
+            label="Next conversation"
+            shortcut={keys('next')}
+            onClick={onNext}
+            disabled={!onNext}
+          >
             <ChevronDown size={16} />
           </IconButton>
         </div>
@@ -904,18 +913,18 @@ export function Reader({
               <span>
                 <strong>Reply to {last.from[0]?.name || last.from[0]?.email || 'sender'}</strong>
               </span>
-              <kbd>R</kbd>
+              <ShortcutHint id="reply" />
             </button>
             <div className="reply-bar">
               <Button variant="ghost" onClick={() => onReply(last, 'replyAll')}>
                 <ReplyAll size={14} />
                 Reply all
-                <kbd>A</kbd>
+                <ShortcutHint id="replyAll" />
               </Button>
               <Button variant="ghost" onClick={() => onReply(last, 'forward')}>
                 <Forward size={14} />
                 Forward
-                <kbd>F</kbd>
+                <ShortcutHint id="forward" />
               </Button>
             </div>
           </div>

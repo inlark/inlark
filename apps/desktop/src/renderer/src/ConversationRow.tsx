@@ -6,6 +6,7 @@ import { SenderAvatar } from './SenderAvatar'
 import { AccountMark } from './AccountMark'
 import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
+import { useShortcutText } from './shortcuts'
 
 export function senderLabel(conversation: Conversation) {
   return conversation.from.map((sender) => sender.name || sender.email.split('@')[0]).join(', ')
@@ -40,6 +41,7 @@ export function ConversationRow({
   onTrash?: () => void
   onToggleRead: () => void
 }) {
+  const keys = useShortcutText()
   const moveLimit = actionLimit(a, 'move')
   return (
     <div
@@ -102,7 +104,7 @@ export function ConversationRow({
         <div className="row-quick-actions" onClick={(event) => event.stopPropagation()}>
           <IconButton
             label={c.unread ? 'Mark as read' : 'Mark as unread'}
-            shortcut={c.unread ? 'Shift I' : 'U'}
+            shortcut={keys(c.unread ? 'read' : 'unread')}
             disabled={busy}
             onClick={onToggleRead}
           >
@@ -111,7 +113,7 @@ export function ConversationRow({
           {onArchive && (
             <HintIconButton
               label="Archive"
-              shortcut="E"
+              shortcut={keys('archive')}
               disabled={busy}
               hint={moveLimit}
               onClick={onArchive}
@@ -122,7 +124,7 @@ export function ConversationRow({
           {onTrash && (
             <HintIconButton
               label="Move to trash"
-              shortcut="#"
+              shortcut={keys('trash')}
               disabled={busy}
               hint={moveLimit}
               onClick={onTrash}

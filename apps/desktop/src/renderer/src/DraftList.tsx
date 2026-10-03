@@ -2,6 +2,7 @@ import { ArrowUpRight, FileText, Trash2, X } from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
 import type { Account, Draft, Message } from '@inlark/core'
 import { shortDate } from './mail-date'
+import { useShortcutText } from './shortcuts'
 
 export type DraftItem =
   { kind: 'local'; key: string; draft: Draft } | { kind: 'server'; key: string; message: Message }
@@ -25,6 +26,7 @@ export function DraftRows({
   onSelect: (key: string, range: boolean) => void
   onDelete: (keys: string[]) => void
 }) {
+  const keys = useShortcutText()
   return (
     <div className={'draft-rows' + (selected.size ? ' selecting' : '')}>
       {items.map((item) => {
@@ -65,7 +67,11 @@ export function DraftRows({
             <span className="draft-actions">
               <ArrowUpRight size={14} aria-hidden="true" />
               {canDelete && (
-                <IconButton label="Delete draft" shortcut="#" onClick={() => onDelete([item.key])}>
+                <IconButton
+                  label="Delete draft"
+                  shortcut={keys('trash')}
+                  onClick={() => onDelete([item.key])}
+                >
                   <Trash2 size={15} />
                 </IconButton>
               )}
@@ -90,6 +96,7 @@ export function DraftSelectionBar({
   onDelete: () => void
   onClear: () => void
 }) {
+  const keys = useShortcutText()
   return (
     <div className="selection-bar" role="region" aria-label="Selection actions">
       <div className="selection-summary">
@@ -105,13 +112,13 @@ export function DraftSelectionBar({
       <span className="toolbar-divider" />
       <IconButton
         label={count > 1 ? 'Delete drafts' : 'Delete draft'}
-        shortcut="#"
+        shortcut={keys('trash')}
         onClick={onDelete}
       >
         <Trash2 size={16} />
       </IconButton>
       <span className="toolbar-divider" />
-      <IconButton label="Clear selection" shortcut="Esc" onClick={onClear}>
+      <IconButton label="Clear selection" shortcut={keys('back')} onClick={onClear}>
         <X size={14} />
       </IconButton>
     </div>
