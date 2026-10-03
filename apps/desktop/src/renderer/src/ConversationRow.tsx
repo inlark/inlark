@@ -43,6 +43,7 @@ export function ConversationRow({
 }) {
   const keys = useShortcutText()
   const moveLimit = actionLimit(a, 'move')
+  const subject = c.subject || '(No subject)'
   return (
     <div
       className={
@@ -59,7 +60,7 @@ export function ConversationRow({
     >
       <div className="row-selector" role="gridcell" onClick={(event) => event.stopPropagation()}>
         <Checkbox
-          aria-label={'Select ' + c.subject}
+          aria-label={'Select ' + subject}
           checked={selected}
           disabled={busy}
           onCheckedChange={(_, event) => onSelect(!!(event as MouseEvent).shiftKey)}
@@ -78,7 +79,7 @@ export function ConversationRow({
         {c.count > 1 && <small>{c.count}</small>}
       </div>
       <div className="row-content" role="gridcell">
-        <span className="row-subject">{c.subject || '(No subject)'}</span>
+        <span className="row-subject">{subject}</span>
         <span className="row-preview">{c.preview}</span>
       </div>
       <div className="row-meta" role="gridcell">
@@ -91,7 +92,7 @@ export function ConversationRow({
         </time>
         <button
           className={'row-star ' + (c.starred ? 'starred' : '')}
-          aria-label={c.starred ? 'Unstar ' + c.subject : 'Star ' + c.subject}
+          aria-label={(c.starred ? 'Unstar ' : 'Star ') + subject}
           aria-pressed={c.starred}
           disabled={busy}
           onClick={(event) => {

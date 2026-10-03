@@ -145,6 +145,9 @@ export function FolderDialog({
   onSave: (name: string) => void
 }) {
   const [name, setName] = useState(dialog?.folder?.name || '')
+  const operation = dialog?.operation
+  // Renaming to the same name would only make a round trip to the server.
+  const ready = !!name.trim() && !(operation === 'rename' && name.trim() === dialog?.folder?.name)
   return (
     <Modal
       open={!!dialog}
@@ -152,84 +155,119 @@ export function FolderDialog({
         if (!open) onClose()
       }}
       title={
-        dialog?.operation === 'delete'
+        operation === 'delete'
           ? 'Delete “' + name + '”?'
-          : dialog?.operation === 'rename'
+          : operation === 'rename'
             ? 'Rename folder'
             : 'Create a folder'
       }
       description={
-        dialog?.operation === 'delete'
+        operation === 'delete'
           ? 'The folder is deleted on the server. Messages that are also in other folders stay there.'
           : undefined
       }
     >
-      {dialog?.operation !== 'delete' && (
-        <label>
-          Folder name
-          <input
-            autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && name.trim()) onSave(name)
-            }}
-          />
-        </label>
-      )}
-      <div className="modal-actions">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant={dialog?.operation === 'delete' ? 'danger' : 'primary'}
-          disabled={!name.trim()}
-          onClick={() => onSave(name)}
-        >
-          {dialog?.operation === 'delete' ? 'Delete folder' : 'Save folder'}
-        </Button>
-      </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (ready) onSave(name)
+        }}
+      >
+        {operation !== 'delete' && (
+          <label className="modal-field">
+            Folder name
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+        )}
+        <div className="modal-actions">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            type="submit"
+            variant={operation === 'delete' ? 'danger' : 'primary'}
+            disabled={!ready}
+          >
+            {operation === 'delete'
+              ? 'Delete folder'
+              : operation === 'rename'
+                ? 'Rename folder'
+                : 'Create folder'}
+          </Button>
+        </div>
+      </form>
     </Modal>
   )
 }
 
+/** Names the action and how many conversations it reaches, so the choice is never vague. */
+export function confirmActionCopy(action: MailAction, count: number) {
+  const n = count.toLocaleString()
+  const them = count === 1 ? 'this conversation' : 'all ' + n + ' conversations'
+  if (action === 'destroy')
+    return {
+      title:
+        count === 1
+          ? 'Delete this conversation permanently?'
+          : 'Delete ' + n + ' conversations permanently?',
+      description:
+        (count === 1 ? 'Its' : 'Their') +
+        ' messages are removed from the server. This can’t be undone.',
+      confirm: 'Delete permanently',
+    }
+  const copy: Record<Exclude<MailAction, 'destroy'>, [title: string, confirm: string]> = {
+    archive: ['Archive ' + them + '?', 'Archive'],
+    trash: ['Move ' + them + ' to trash?', 'Move to trash'],
+    spam: ['Mark ' + them + ' as spam?', 'Mark as spam'],
+    notSpam: ['Move ' + them + ' to the inbox?', 'Not spam'],
+    read: ['Mark ' + them + ' as read?', 'Mark as read'],
+    unread: ['Mark ' + them + ' as unread?', 'Mark as unread'],
+    star: ['Star ' + them + '?', 'Star'],
+    unstar: ['Remove the star from ' + them + '?', 'Remove star'],
+    move: ['Move ' + them + '?', 'Move'],
+    restore: ['Restore ' + them + ' to the inbox?', 'Restore'],
+  }
+  const [title, confirm] = copy[action]
+  return {
+    title,
+    description:
+      'Includes conversations that haven’t loaded yet. Inlark tells you about any it couldn’t change.',
+    confirm,
+  }
+}
+
 export function ConfirmActionDialog({
   action,
-  total,
+  count,
   onClose,
   onConfirm,
 }: {
   action?: MailAction
-  total: number
+  /** How many conversations the action reaches. */
+  count: number
   onClose: () => void
   onConfirm: (action: MailAction) => void
 }) {
+  // Keep the wording while the dialog fades out after the action is cleared.
+  const [shown, setShown] = useState({ action, count })
+  if (action && (action !== shown.action || count !== shown.count)) setShown({ action, count })
+  const copy = shown.action && confirmActionCopy(shown.action, shown.count)
   return (
     <Modal
       open={!!action}
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={
-        action === 'destroy'
-          ? 'Permanently delete these conversations?'
-          : 'Update all matching conversations?'
-      }
-      description={
-        action === 'destroy'
-          ? 'This removes messages from the server permanently and cannot be undone.'
-          : 'This applies to all ' +
-            total.toLocaleString() +
-            ' matching conversations, including those beyond the loaded page. Partial failures will be reported.'
-      }
+      title={copy ? copy.title : ''}
+      description={copy?.description}
     >
       <div className="modal-actions">
         <Button onClick={onClose}>Cancel</Button>
         <Button
-          variant={action === 'destroy' ? 'danger' : 'primary'}
+          variant={shown.action === 'destroy' ? 'danger' : 'primary'}
           onClick={() => {
             if (action) onConfirm(action)
           }}
         >
-          Confirm
+          {copy?.confirm}
         </Button>
       </div>
     </Modal>
