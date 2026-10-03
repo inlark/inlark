@@ -20,7 +20,7 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(date).toISOString().slice(0, 1
 const hash = createHash('sha256')
 for await (const chunk of createReadStream(archive)) hash.update(chunk)
 const sha256 = hash.digest('hex')
-const template = join(root, 'packaging/flatpak')
+const template = join(root, 'apps/desktop/packaging/flatpak')
 const output = resolve(outputArgument)
 
 // The published manifest uses immutable release URLs. The CI/local variant uses

@@ -77,7 +77,7 @@ flatpak run com.inlark.Inlark
 Flatpak manages updates through your software centre or `flatpak update`; GitHub
 bundles can be updated by installing the newer bundle. App data is kept separately
 under `~/.var/app/com.inlark.Inlark/config/Inlark`. Flathub publishing is prepared
-and requires the initial Flathub review; see the [packaging and publishing guide](packaging/flatpak/README.md).
+and requires the initial Flathub review; see the [packaging and publishing guide](apps/desktop/packaging/flatpak/README.md).
 
 ### Nix and NixOS
 
