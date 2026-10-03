@@ -45,6 +45,7 @@ import { AccountMark } from './AccountMark'
 import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
+import { emailSanitizeOptions } from './email-html'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
@@ -201,30 +202,10 @@ export function EmailBody({
         (message.text?.trim() ? message.text : message.preview) ||
           'No readable message body is available.',
       )
-      template.innerHTML = DOMPurify.sanitize((message.html?.trim() ? message.html : '') || plain, {
-        FORBID_TAGS: [
-          'script',
-          'style',
-          'iframe',
-          'frame',
-          'object',
-          'embed',
-          'form',
-          'input',
-          'button',
-          'textarea',
-          'select',
-          'meta',
-          'base',
-          'link',
-          'svg',
-          'math',
-          'video',
-          'audio',
-          'source',
-        ],
-        FORBID_ATTR: ['srcset', 'action', 'formaction', 'ping', 'autofocus', 'contenteditable'],
-      })
+      template.innerHTML = DOMPurify.sanitize(
+        (message.html?.trim() ? message.html : '') || plain,
+        emailSanitizeOptions,
+      )
       if (
         !template.content.textContent?.trim() &&
         (message.text?.trim() || message.preview?.trim())

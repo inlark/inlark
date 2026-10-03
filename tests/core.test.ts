@@ -11,6 +11,9 @@ import {
   draftSchema,
   sendDraftSchema,
   defaultSettings,
+  identityKey,
+  identitySignature,
+  settingsSchema,
   appearanceSchema,
   nextAccountColor,
   accountColors,
@@ -209,5 +212,43 @@ describe('account appearance', () => {
     expect(nextAccountColor([accountColors[1], accountColors[2].toUpperCase()])).toBe(
       accountColors[3],
     )
+  })
+})
+
+describe('signatures', () => {
+  const identity = { accountId: 'a', id: 'i' }
+  const key = identityKey('a', 'i')
+
+  it('prefers the signature written in Inlark, in the format it was written in', () => {
+    const server = { ...identity, textSignature: 'Server', htmlSignature: '<b>Server</b>' }
+    expect(identitySignature({ signatures: { [key]: 'Paul' } }, server)).toEqual({
+      format: 'text',
+      value: 'Paul',
+    })
+    expect(
+      identitySignature(
+        { signatures: { [key]: '<b>Paul</b>' }, htmlSignatures: { [key]: true } },
+        server,
+      ),
+    ).toEqual({ format: 'html', value: '<b>Paul</b>' })
+    // Clearing a signature is a choice, not a reason to fall back to the server's.
+    expect(identitySignature({ signatures: { [key]: '' } }, server).value).toBe('')
+  })
+
+  it('falls back to the server identity, preferring its HTML signature', () => {
+    expect(identitySignature(defaultSettings, { ...identity, htmlSignature: '<i>Hi</i>' })).toEqual(
+      { format: 'html', value: '<i>Hi</i>' },
+    )
+    expect(
+      identitySignature(defaultSettings, { ...identity, textSignature: 'Hi', htmlSignature: ' ' }),
+    ).toEqual({ format: 'text', value: 'Hi' })
+    expect(identitySignature(defaultSettings, identity)).toEqual({ format: 'text', value: '' })
+  })
+
+  it('accepts settings saved before HTML signatures existed', () => {
+    expect(settingsSchema.parse({ ...defaultSettings, signatures: { [key]: 'Paul' } })).toEqual({
+      ...defaultSettings,
+      signatures: { [key]: 'Paul' },
+    })
   })
 })

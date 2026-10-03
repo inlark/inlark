@@ -6,12 +6,29 @@ import type {
   Message,
   ProviderPage,
   QueryPage,
+  Settings,
 } from './model'
 
 export const scopeKey = (accountId: string, id: string) => JSON.stringify([accountId, id])
 export const accountKey = (connectionId: string, remoteId: string) =>
   JSON.stringify([connectionId, remoteId])
 export const identityKey = (accountId: string, id: string) => scopeKey(accountId, id)
+export interface Signature {
+  format: 'text' | 'html'
+  value: string
+}
+/** The signature for an identity: the user's own when they wrote one, else the server's. */
+export function identitySignature(
+  settings: Pick<Settings, 'signatures' | 'htmlSignatures'>,
+  identity: Pick<Identity, 'accountId' | 'id' | 'textSignature' | 'htmlSignature'>,
+): Signature {
+  const key = identityKey(identity.accountId, identity.id)
+  const own = settings.signatures[key]
+  if (own !== undefined)
+    return { format: settings.htmlSignatures?.[key] ? 'html' : 'text', value: own }
+  if (identity.htmlSignature?.trim()) return { format: 'html', value: identity.htmlSignature }
+  return { format: 'text', value: identity.textSignature ?? '' }
+}
 export function conversationFromMessages(
   accountId: string,
   threadId: string,

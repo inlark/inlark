@@ -529,12 +529,17 @@ export function SettingsPanel({
                 {bootstrap.accounts.length ? (
                   <>
                     <p className="settings-lead">
-                      Added to new messages, replies and forwards. Changes save as you type.
+                      Added to new messages, replies and forwards. Write plain text or HTML. Changes
+                      save as you type.
                     </p>
                     <SignatureSettings
                       accounts={bootstrap.accounts}
-                      signatures={bootstrap.settings.signatures}
-                      onSave={(signatures) => update({ signatures })}
+                      signatures={{
+                        signatures: bootstrap.settings.signatures,
+                        htmlSignatures: bootstrap.settings.htmlSignatures,
+                      }}
+                      remoteImages={bootstrap.settings.remoteImages}
+                      onSave={update}
                     />
                   </>
                 ) : (

@@ -2,23 +2,55 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { Check } from '@inlark/ui/icons'
 import { Spinner } from '@inlark/ui'
-import { identityKey, type Account, type Settings as Preferences } from '@inlark/core'
+import {
+  identityKey,
+  identitySignature,
+  type Account,
+  type Identity,
+  type Settings as Preferences,
+} from '@inlark/core'
 import { api } from './api'
 import { AccountMark } from './AccountMark'
+import { SegmentedControl } from './SegmentedControl'
+import { SignaturePreview, signatureText } from './signature'
 
-type Signatures = Preferences['signatures']
+type Signatures = Pick<Preferences, 'signatures' | 'htmlSignatures'>
+type Format = 'text' | 'html'
+
+const formats = [
+  { value: 'text', label: 'Text' },
+  { value: 'html', label: 'HTML' },
+] as const
 
 const same = (a: Signatures, b: Signatures) =>
-  Object.keys({ ...a, ...b }).every((key) => (a[key] ?? '') === (b[key] ?? ''))
+  Object.keys({ ...a.signatures, ...b.signatures, ...a.htmlSignatures, ...b.htmlSignatures }).every(
+    (key) =>
+      (a.signatures[key] ?? '') === (b.signatures[key] ?? '') &&
+      !!a.htmlSignatures?.[key] === !!b.htmlSignatures?.[key],
+  )
+
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** A first draft of the signature in the other format, when there's nothing better to restore. */
+const convert = (value: string, to: Format) =>
+  to === 'html'
+    ? value.trim()
+      ? '<p>' + escapeHtml(value).replace(/\n/g, '<br>\n') + '</p>'
+      : ''
+    : signatureText(value)
 
 /** Every account's signatures on one page, saved automatically as they're typed. */
 export function SignatureSettings({
   accounts,
   signatures,
+  remoteImages,
   onSave,
 }: {
   accounts: Account[]
   signatures: Signatures
+  /** Remote images in an HTML signature can only be previewed when these are allowed. */
+  remoteImages: boolean
   onSave: (signatures: Signatures) => Promise<boolean>
 }) {
   const identities = useQueries({
@@ -28,11 +60,14 @@ export function SignatureSettings({
       enabled: account.status === 'connected',
     })),
   })
-  const [values, setValues] = useState(signatures)
+  const [values, setValues] = useState<Signatures>(signatures)
   const [savedKey, setSavedKey] = useState<string>()
   const latest = useRef(values)
   const saved = useRef(signatures)
   const edited = useRef<string>(undefined)
+  // What each signature said in the format it was switched away from, so switching back
+  // restores it rather than a lossy conversion.
+  const previous = useRef(new Map<string, Record<Format, string | undefined>>())
   latest.current = values
   const save = async (next: Signatures) => {
     if (same(next, saved.current)) return
@@ -53,16 +88,52 @@ export function SignatureSettings({
     return () => clearTimeout(timer)
   }, [savedKey])
 
+  const set = (key: string, value: string, format: Format) => {
+    edited.current = key
+    setValues((current) => {
+      const { [key]: _, ...html } = current.htmlSignatures || {}
+      return {
+        signatures: { ...current.signatures, [key]: value },
+        htmlSignatures: format === 'html' ? { ...html, [key]: true } : html,
+      }
+    })
+  }
+  const switchFormat = (identity: Identity, format: Format) => {
+    const key = identityKey(identity.accountId, identity.id)
+    const current = identitySignature(latest.current, identity)
+    if (current.format === format) return
+    const remembered = previous.current.get(key) || { text: undefined, html: undefined }
+    previous.current.set(key, { ...remembered, [current.format]: current.value })
+    const restored = remembered[format]
+    set(key, restored?.trim() ? restored : convert(current.value, format), format)
+  }
+
+  const formatSwitch = (identity: Identity, address?: string) => (
+    <SegmentedControl
+      className="signature-format"
+      label={'Signature format' + (address ? ' for ' + address : '')}
+      value={identitySignature(values, identity).format}
+      options={formats}
+      onChange={(format) => switchFormat(identity, format)}
+    />
+  )
+
   return (
     <div className="signature-accounts">
       {accounts.map((account, index) => {
         const query = identities[index]
+        // A lone address is already named by the header, which then also holds its format.
+        const lone =
+          query.data?.length === 1 && query.data[0].email === account.email
+            ? query.data[0]
+            : undefined
         return (
           <section className="signature-account" key={account.id}>
             <header>
               <AccountMark account={account} size={20} />
               <strong>{account.name}</strong>
               <span>{account.email}</span>
+              {lone && account.status === 'connected' && formatSwitch(lone)}
             </header>
             {account.status !== 'connected' ? (
               <p className="signature-note">Reconnect this account to edit its signatures.</p>
@@ -76,37 +147,58 @@ export function SignatureSettings({
               query.data.map((identity) => {
                 const key = identityKey(account.id, identity.id)
                 const id = 'signature-' + key
+                const signature = identitySignature(values, identity)
+                const html = signature.format === 'html'
+                const name = identity === lone ? account.name + ' signature' : undefined
                 return (
                   <div className="signature-identity" key={key}>
-                    {/* The address only needs naming when it isn't obvious from the header. */}
-                    {(query.data.length > 1 || identity.email !== account.email) && (
-                      <label htmlFor={id}>
-                        {identity.name ? identity.name + ' · ' : ''}
-                        {identity.email}
-                      </label>
+                    {identity !== lone && (
+                      <div className="signature-identity-heading">
+                        <label htmlFor={id}>
+                          {identity.name ? identity.name + ' · ' : ''}
+                          {identity.email}
+                        </label>
+                        {formatSwitch(identity, identity.email)}
+                      </div>
                     )}
-                    <textarea
-                      id={id}
-                      rows={3}
-                      aria-label={query.data.length > 1 ? undefined : account.name + ' signature'}
-                      value={values[key] ?? identity.textSignature ?? ''}
-                      placeholder="No signature"
-                      onChange={(e) => {
-                        edited.current = key
-                        setValues((current) => ({ ...current, [key]: e.target.value }))
-                      }}
-                      onBlur={() => void save(latest.current)}
-                    />
-                    <span
-                      className={'signature-saved' + (savedKey === key ? ' visible' : '')}
-                      aria-live="polite"
-                    >
-                      {savedKey === key && (
-                        <>
-                          <Check size={11} /> Saved
-                        </>
-                      )}
-                    </span>
+                    <div className="signature-editor">
+                      <textarea
+                        id={id}
+                        rows={html ? 6 : 3}
+                        className={html ? 'signature-code' : undefined}
+                        aria-label={name && (html ? name + ' HTML' : name)}
+                        value={signature.value}
+                        placeholder={html ? 'Paste or write HTML…' : 'No signature'}
+                        spellCheck={!html}
+                        autoCapitalize={html ? 'off' : undefined}
+                        autoCorrect={html ? 'off' : undefined}
+                        onChange={(e) => set(key, e.target.value, signature.format)}
+                        onBlur={() => void save(latest.current)}
+                      />
+                      <span
+                        className={'signature-saved' + (savedKey === key ? ' visible' : '')}
+                        aria-live="polite"
+                      >
+                        {savedKey === key && (
+                          <>
+                            <Check size={11} /> Saved
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {html && signature.value.trim() && (
+                      <div className="signature-preview">
+                        <span>Preview</span>
+                        <SignaturePreview html={signature.value} />
+                        {!remoteImages &&
+                          /<img[^>]+src\s*=\s*["']?https?:/i.test(signature.value) && (
+                            <p className="signature-note">
+                              Turn on Load remote images in General to preview linked images.
+                              Recipients still see them.
+                            </p>
+                          )}
+                      </div>
+                    )}
                   </div>
                 )
               })

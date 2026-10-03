@@ -48,7 +48,7 @@ import {
   scopeKey,
   unlinkedServerDrafts,
   friendlyError,
-  identityKey,
+  identitySignature,
   mailtoDraft,
   replyRecipients,
   type Address,
@@ -89,6 +89,7 @@ import {
   type FolderDialogState,
 } from './AppDialogs'
 import { messageText } from './message-text'
+import { signatureBlock, signatureText } from './signature'
 import { selectConversation } from './selection'
 import { ShortcutHint, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { emptyListState } from './empty-states'
@@ -506,8 +507,7 @@ export function App() {
         ? replyRecipients(message, identities, kind === 'replyAll')
         : undefined
       const identity = recipients?.identity || identities[0]
-      const signature =
-        settings.signatures[identityKey(id, identity.id)] ?? identity.textSignature ?? ''
+      const signature = identitySignature(settings, identity)
       const who = (list: Address[]) =>
         list.map((a) => (a.name ? a.name + ' <' + a.email + '>' : a.email)).join(', ')
       const header = !message
@@ -540,11 +540,17 @@ export function App() {
         '<p>' +
         escapeHtml(partial.text || '').replace(/\n/g, '<br/>') +
         '</p>' +
-        (signature ? '<p><br/>' + escapeHtml(signature).replace(/\n/g, '<br/>') + '</p>' : '') +
+        (signature.format === 'html'
+          ? signature.value.trim()
+            ? signatureBlock(signature.value)
+            : ''
+          : signature.value
+            ? '<p><br/>' + escapeHtml(signature.value).replace(/\n/g, '<br/>') + '</p>'
+            : '') +
         quote
       const text = [
         partial.text || '',
-        signature,
+        signature.format === 'html' ? signatureText(signature.value) : signature.value,
         message
           ? header.join('\n') + '\n' + (kind === 'forward' ? body : body.replace(/^/gm, '> '))
           : '',

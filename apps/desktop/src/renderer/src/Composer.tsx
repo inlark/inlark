@@ -32,6 +32,7 @@ import { localSaveDraft, localDeleteDraft } from './cache'
 import { RecipientField } from './RecipientField'
 import { formatBytes } from './mail-date'
 import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
+import { SignatureNode } from './signature'
 
 /** Plain wording for a finished send; the Drafts view offers recovery for anything left over. */
 function sentMessage(result: SendResult): string {
@@ -155,6 +156,7 @@ export function Composer({
         link: { openOnClick: false },
       }),
       Placeholder.configure({ placeholder: 'Write your message…' }),
+      SignatureNode,
     ],
     content:
       initial.html ||

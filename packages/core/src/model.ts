@@ -200,6 +200,8 @@ export interface Settings {
   closeToTray: boolean
   defaultAccountId?: string
   signatures: Record<string, string>
+  /** Identities whose signature is HTML code rather than plain text, keyed like `signatures`. */
+  htmlSignatures?: Record<string, boolean>
   /** Where the reader goes after a conversation leaves the current view. */
   afterArchive?: 'next' | 'previous' | 'list'
   /**
