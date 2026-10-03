@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Inlark
+Comment=A considered home for your email
+Exec=inlark %U
+Icon=com.inlark.Inlark
+Terminal=false
+Categories=Network;Email;
+Keywords=mail;email;IMAP;JMAP;
+MimeType=x-scheme-handler/mailto;
+StartupWMClass=com.inlark.Inlark
+StartupNotify=true

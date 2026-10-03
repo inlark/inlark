@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Paul Koeck -->
+<component type="desktop-application">
+  <id>com.inlark.Inlark</id>
+  <name>Inlark</name>
+  <summary>A considered home for your email</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <developer id="com.inlark">
+    <name>Paul Koeck</name>
+  </developer>
+  <description>
+    <p>
+      Inlark is a fast, keyboard-friendly email client for the accounts you already own.
+      Connect directly to your JMAP or IMAP server, with no hosted service, subscription,
+      or telemetry.
+    </p>
+    <ul>
+      <li>Read conversations from several accounts in one unified inbox</li>
+      <li>Search, archive, organise, and write email with your keyboard or mouse</li>
+      <li>Keep drafts safe and undo everyday mailbox actions</li>
+      <li>Enjoy carefully designed dark and light appearances</li>
+    </ul>
+    <p>Inlark is an early preview. Gmail and Microsoft OAuth sign-in are not yet supported.</p>
+  </description>
+  <launchable type="desktop-id">com.inlark.Inlark.desktop</launchable>
+  <url type="homepage">https://inlark.com</url>
+  <url type="bugtracker">https://github.com/inlark/inlark/issues</url>
+  <url type="vcs-browser">https://github.com/inlark/inlark</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/inlark/inlark/v@VERSION@/.github/assets/inbox-dark.png</image>
+      <caption>A unified inbox with a clear identity for every account</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/inlark/inlark/v@VERSION@/.github/assets/reader-dark.png</image>
+      <caption>A focused conversation reader</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/inlark/inlark/v@VERSION@/.github/assets/inbox-light.png</image>
+      <caption>The same inbox in light appearance</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-contacts">intense</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="@VERSION@" date="@DATE@">
+      <url type="details">https://github.com/inlark/inlark/releases/tag/v@VERSION@</url>
+    </release>
+  </releases>
+</component>
