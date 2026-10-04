@@ -9,10 +9,11 @@ import {
 } from 'react'
 import type { Ref, RefObject } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { Account, Conversation, MailAction } from '@inlark/core'
+import type { Account, Conversation, MailAction, View } from '@inlark/core'
 import { Spinner } from '@inlark/ui'
 import { ConversationRow, senderLabel } from './ConversationRow'
 import { day } from './mail-date'
+import { offersAction } from './view-actions'
 
 export type ConversationListHandle = {
   scrollToConversation: (key: string) => void
@@ -39,7 +40,7 @@ const ListConversationRow = memo(function ListConversationRow({
   focused: boolean
   busy: boolean
   remoteImages: boolean
-  view: string
+  view: View
   onOpen: (conversation: Conversation) => void
   onFocus: (key: string) => void
   onSelect: (key: string, range: boolean) => void
@@ -56,8 +57,10 @@ const ListConversationRow = memo(function ListConversationRow({
       onSelect={(range) => onSelect(conversation.key, range)}
       busy={busy}
       remoteImages={remoteImages}
-      onArchive={view === 'archive' ? undefined : () => onAction('archive', conversation)}
-      onTrash={view === 'trash' ? undefined : () => onAction('trash', conversation)}
+      onArchive={
+        offersAction(view, 'archive') ? () => onAction('archive', conversation) : undefined
+      }
+      onTrash={offersAction(view, 'trash') ? () => onAction('trash', conversation) : undefined}
       onToggleRead={() => onAction(conversation.unread ? 'read' : 'unread', conversation)}
       onStar={() => onAction(conversation.starred ? 'unstar' : 'star', conversation)}
     />
@@ -97,7 +100,7 @@ export function ConversationList({
   focused: string
   busy: boolean
   remoteImages: boolean
-  view: string
+  view: View
   hasNextPage: boolean
   isFetchingNextPage: boolean
   listRef: RefObject<HTMLDivElement | null>

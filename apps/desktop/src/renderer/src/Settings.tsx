@@ -63,7 +63,7 @@ function AccountDetailsForm({
 }: {
   account: Account
   onDone: () => void
-  notify: (message: string) => void
+  notify: (message: string, tone?: 'error' | 'info') => void
 }) {
   const [name, setName] = useState(account.name)
   const [senderName, setSenderName] = useState(account.senderName || '')
@@ -83,7 +83,7 @@ function AccountDetailsForm({
           ])
           onDone()
         } catch (error) {
-          notify(friendlyError(error))
+          notify(friendlyError(error), 'error')
         } finally {
           setSaving(false)
         }
@@ -146,7 +146,7 @@ export function SettingsPanel({
   onClose: () => void
   bootstrap: Bootstrap
   onChange: (settings: Preferences) => void
-  notify: (message: string) => void
+  notify: (message: string, tone?: 'error' | 'info') => void
   initialTab?: string
 }) {
   // With nothing connected yet, opening Accounts can only mean adding one.
@@ -180,7 +180,7 @@ export function SettingsPanel({
         },
     )
     api.updateAccount(account.id, appearance).catch((e) => {
-      notify(friendlyError(e))
+      notify(friendlyError(e), 'error')
       void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     })
   }
@@ -190,7 +190,7 @@ export function SettingsPanel({
       onChange(next)
       return true
     } catch (e) {
-      notify(friendlyError(e))
+      notify(friendlyError(e), 'error')
       return false
     }
   }
@@ -332,18 +332,29 @@ export function SettingsPanel({
                     />
                   </div>
                 </div>
-                <div className="setting-section">
-                  <h4>Default sending account</h4>
-                  <Select
-                    aria-label="Default sending account"
-                    value={bootstrap.settings.defaultAccountId || bootstrap.accounts[0]?.id || ''}
-                    options={bootstrap.accounts.map((a) => ({
-                      value: a.id,
-                      label: a.name + ' · ' + a.email,
-                    }))}
-                    onValueChange={(defaultAccountId) => void update({ defaultAccountId })}
-                  />
-                </div>
+                {bootstrap.accounts.length > 1 && (
+                  <div className="setting-section">
+                    <h4>Writing</h4>
+                    <div className="setting-row">
+                      <div>
+                        <strong>Default sending account</strong>
+                        <p>New messages start from this account unless you’re in another one.</p>
+                      </div>
+                      <Select
+                        aria-label="Default sending account"
+                        className="setting-select"
+                        value={
+                          bootstrap.settings.defaultAccountId || bootstrap.accounts[0]?.id || ''
+                        }
+                        options={bootstrap.accounts.map((a) => ({
+                          value: a.id,
+                          label: a.name + ' · ' + a.email,
+                        }))}
+                        onValueChange={(defaultAccountId) => void update({ defaultAccountId })}
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
             {tab === 'accounts' &&
@@ -391,7 +402,7 @@ export function SettingsPanel({
                               value={{ seed: account.seed, image: account.image }}
                               portalContainer={modalRef}
                               onChange={(appearance) => updateAppearance(account, appearance)}
-                              onError={(e) => notify(friendlyError(e))}
+                              onError={(e) => notify(friendlyError(e), 'error')}
                             />
                             <div className="settings-account-text">
                               <strong>
@@ -482,7 +493,7 @@ export function SettingsPanel({
                                     void api
                                       .reconnect(account.connectionId)
                                       .then(() => notify('Reconnected.'))
-                                      .catch((e) => notify(friendlyError(e)))
+                                      .catch((e) => notify(friendlyError(e), 'error'))
                                   }
                                 >
                                   <RefreshCw size={14} />
@@ -620,7 +631,7 @@ export function SettingsPanel({
                           await navigator.clipboard.writeText(diagnostics)
                           notify('Redacted diagnostics copied.')
                         } catch (e) {
-                          notify(friendlyError(e))
+                          notify(friendlyError(e), 'error')
                         }
                       }}
                     >
@@ -664,7 +675,7 @@ export function SettingsPanel({
                 setRemove(undefined)
                 notify('Account removed from this device.')
               } catch (e) {
-                notify(friendlyError(e))
+                notify(friendlyError(e), 'error')
               }
             }}
           >

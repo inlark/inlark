@@ -36,6 +36,7 @@ import {
   type Message,
   type Settings,
   type MailAction,
+  type View,
 } from '@inlark/core'
 import { api } from './api'
 import { SenderAvatar } from './SenderAvatar'
@@ -46,6 +47,7 @@ import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
 import { emailSanitizeOptions } from './email-html'
+import { offersAction } from './view-actions'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
@@ -482,6 +484,8 @@ interface ReaderProps {
   messages: Message[]
   account: Account
   settings: Settings
+  /** Where the conversation was opened from, which decides the actions worth offering. */
+  view: View
   backLabel: string
   busy: boolean
   onBack: () => void
@@ -491,7 +495,7 @@ interface ReaderProps {
   onAction: (action: MailAction) => void
   onMove: () => void
   onReply: (message: Message, kind: 'reply' | 'replyAll' | 'forward') => void
-  notify: (message: string) => void
+  notify: (message: string, tone?: 'error' | 'info') => void
   onMailto: (url: string) => void
   /** Set when the conversation comes from a mailing list that can be left. */
   unsubscribe?: UnsubscribeState
@@ -562,6 +566,7 @@ export function Reader({
   messages,
   account,
   settings,
+  view,
   backLabel,
   busy,
   onBack,
@@ -598,8 +603,17 @@ export function Reader({
       setExpanded(initiallyExpanded())
     }
   }, [messageIds])
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // Space, Page Up/Down, Home and End scroll the conversation without clicking into it first.
+    // Never take focus from a field or dialog, e.g. when a notification opens a conversation.
+    const active = document.activeElement
+    if (!active?.closest('[role="dialog"], input, textarea, [contenteditable="true"]'))
+      scroller.current?.focus({ preventScroll: true })
+  }, [])
   const starred = messages.some((m) => m.keywords.$flagged)
   const moveLimit = actionLimit(account, 'move')
+  const destroyLimit = actionLimit(account, 'destroy')
   const toggle = (id: string, setter: typeof setExpanded) =>
     setter((current) => {
       const next = new Set(current)
@@ -625,33 +639,37 @@ export function Reader({
           className="reader-back"
           aria-label={'Back to ' + backLabel.toLowerCase()}
           onClick={onBack}
-          title="Back · Esc"
+          title={'Back' + (keys('back') ? ' · ' + keys('back') : '')}
         >
           <ArrowLeft size={16} />
           <span>{backLabel}</span>
         </Button>
         <span className="toolbar-divider" />
-        <HintIconButton
-          disabled={busy}
-          label="Archive"
-          shortcut={keys('archive')}
-          hint={moveLimit}
-          onClick={() => onAction('archive')}
-        >
-          <Archive size={16} />
-        </HintIconButton>
-        <HintIconButton
-          disabled={busy}
-          label="Move to trash"
-          shortcut={keys('trash')}
-          hint={moveLimit}
-          onClick={() => onAction('trash')}
-        >
-          <Trash2 size={16} />
-        </HintIconButton>
+        {offersAction(view, 'archive') && (
+          <HintIconButton
+            disabled={busy}
+            label="Archive"
+            shortcut={keys('archive')}
+            hint={moveLimit}
+            onClick={() => onAction('archive')}
+          >
+            <Archive size={16} />
+          </HintIconButton>
+        )}
+        {offersAction(view, 'trash') && (
+          <HintIconButton
+            disabled={busy}
+            label="Move to trash"
+            shortcut={keys('trash')}
+            hint={moveLimit}
+            onClick={() => onAction('trash')}
+          >
+            <Trash2 size={16} />
+          </HintIconButton>
+        )}
         <IconButton
           disabled={busy}
-          label="Mark unread"
+          label="Mark as unread"
           shortcut={keys('unread')}
           onClick={() => onAction('unread')}
         >
@@ -683,22 +701,40 @@ export function Reader({
             Move to folder
             <ShortcutHint id="move" className="menu-shortcut" />
           </MenuItem>
-          <MenuItem onClick={() => onAction('spam')} disabled={!!moveLimit}>
-            <ShieldX size={14} />
-            Mark as spam
-            <ShortcutHint id="spam" className="menu-shortcut" />
-          </MenuItem>
-          <MenuItem onClick={() => onAction('notSpam')} disabled={!!moveLimit}>
-            <ShieldCheck size={14} />
-            Not spam
-            <ShortcutHint id="notSpam" className="menu-shortcut" />
-          </MenuItem>
-          <MenuItem onClick={() => onAction('restore')} disabled={!!moveLimit}>
-            <Inbox size={14} />
-            Restore to inbox
-            <ShortcutHint id="restore" className="menu-shortcut" />
-          </MenuItem>
-          {moveLimit && <p className="menu-note">{moveLimit}</p>}
+          {offersAction(view, 'spam') && (
+            <MenuItem onClick={() => onAction('spam')} disabled={!!moveLimit}>
+              <ShieldX size={14} />
+              Mark as spam
+              <ShortcutHint id="spam" className="menu-shortcut" />
+            </MenuItem>
+          )}
+          {offersAction(view, 'notSpam') && (
+            <MenuItem onClick={() => onAction('notSpam')} disabled={!!moveLimit}>
+              <ShieldCheck size={14} />
+              Not spam
+              <ShortcutHint id="notSpam" className="menu-shortcut" />
+            </MenuItem>
+          )}
+          {offersAction(view, 'restore') && (
+            <MenuItem onClick={() => onAction('restore')} disabled={!!moveLimit}>
+              <Inbox size={14} />
+              Restore to inbox
+              <ShortcutHint id="restore" className="menu-shortcut" />
+            </MenuItem>
+          )}
+          {offersAction(view, 'destroy') && (
+            <MenuItem danger onClick={() => onAction('destroy')} disabled={!!destroyLimit}>
+              <Trash2 size={14} />
+              Delete permanently
+            </MenuItem>
+          )}
+          {[...new Set([moveLimit, offersAction(view, 'destroy') && destroyLimit])]
+            .filter(Boolean)
+            .map((reason) => (
+              <p className="menu-note" key={String(reason)}>
+                {reason}
+              </p>
+            ))}
         </Dropdown>
         {unsubscribe && (
           <>
@@ -726,7 +762,7 @@ export function Reader({
           </IconButton>
         </div>
       </div>
-      <div className="reader-scroll">
+      <div className="reader-scroll" ref={scroller} tabIndex={-1}>
         <div className="reader-content">
           <div className="reader-eyebrow">
             <AccountMark account={account} size={16} />
@@ -854,7 +890,7 @@ export function Reader({
                                   onClick={() =>
                                     void api
                                       .attachment(account.id, attachment, true)
-                                      .catch((e) => notify(friendlyError(e)))
+                                      .catch((e) => notify(friendlyError(e), 'error'))
                                   }
                                 >
                                   <span className="attachment-icon">
@@ -872,7 +908,7 @@ export function Reader({
                                   onClick={() =>
                                     void api
                                       .attachment(account.id, attachment, false)
-                                      .catch((e) => notify(friendlyError(e)))
+                                      .catch((e) => notify(friendlyError(e), 'error'))
                                   }
                                 >
                                   <Download size={14} />

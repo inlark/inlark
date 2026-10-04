@@ -99,6 +99,7 @@ import { targetAccounts, targetLimit } from './account-limits'
 import { SubmissionList } from './SendingStatus'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
+import { offersAction } from './view-actions'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
@@ -500,7 +501,7 @@ export function App() {
         queryFn: () => api.identities(id),
       })
       if (!identities.length) {
-        notify('This account has no permitted sending identities.')
+        notify('This account has no permitted sending identities.', 'error')
         return
       }
       const recipients = message
@@ -1390,7 +1391,20 @@ export function App() {
     hasAttachment: 'Has attachments',
   }
   const filterChips = Object.entries(filters).filter(([key, value]) => key !== 'unread' && value)
+  // Picked days are stored as UTC midnight; reading them in UTC keeps the day that was chosen.
+  const chipDate = (value: string) =>
+    new Date(value).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    })
   const selectedCount = allMatching ? total : selected.size
+  // Search results can come from anywhere, so they offer every action.
+  const listView: View = route.q ? 'all' : view
+  const selectedConversations = conversations.filter((c) => selected.has(c.key))
+  const selectionStarred =
+    !allMatching && !!selectedConversations.length && selectedConversations.every((c) => c.starred)
   const changeFolder = async (name: string) => {
     if (!folderDialog) return
     const accountId = folderDialog.accountId || folderDialog.folder?.accountId || folderAccountId
@@ -1479,6 +1493,7 @@ export function App() {
             <Reader
               key={scopeKey(readerAccount.id, route.thread!)}
               messages={thread.data}
+              view={route.q ? 'all' : view}
               backLabel={title}
               busy={busy}
               account={readerAccount}
@@ -1508,7 +1523,7 @@ export function App() {
               title={thread.isError ? 'This conversation is unavailable' : 'Opening conversation'}
               description={thread.isError ? friendlyError(thread.error) : undefined}
             >
-              <Button onClick={back}>Back to inbox</Button>
+              <Button onClick={back}>Back to {title.toLowerCase()}</Button>
             </EmptyState>
           )
         ) : (
@@ -1582,14 +1597,7 @@ export function App() {
                     className={mail.isFetching && !mail.isFetchingNextPage ? 'spin' : ''}
                   />
                 </IconButton>
-                <IconButton
-                  label="Search mail"
-                  shortcut={keys('search')}
-                  onClick={() => {
-                    setSearchOpen(!searchOpen)
-                    requestAnimationFrame(() => searchInput.current?.focus())
-                  }}
-                >
+                <IconButton label="Search mail" shortcut={keys('search')} onClick={focusSearch}>
                   <Search size={16} />
                 </IconButton>
                 {view !== 'drafts' && (
@@ -1658,7 +1666,7 @@ export function App() {
                     <span>
                       {filterLabels[key] || key}
                       {typeof value === 'string' &&
-                        ': ' + (key === 'after' || key === 'before' ? value.slice(0, 10) : value)}
+                        ': ' + (key === 'after' || key === 'before' ? chipDate(value) : value)}
                     </span>
                     <X size={12} />
                   </button>
@@ -1698,7 +1706,10 @@ export function App() {
                   <button
                     aria-pressed={!!filters.unread}
                     className={filters.unread ? 'active' : ''}
-                    title={keys('toggleUnread')}
+                    title={
+                      'Show only unread conversations' +
+                      (keys('toggleUnread') ? ' · ' + keys('toggleUnread') : '')
+                    }
                     onClick={() => setFilters((f) => ({ ...f, unread: true }))}
                   >
                     Unread
@@ -1708,7 +1719,7 @@ export function App() {
                   <Button
                     variant="ghost"
                     size="small"
-                    title={keys('filter')}
+                    title={'Filter conversations' + (keys('filter') ? ' · ' + keys('filter') : '')}
                     onClick={() => setFilterOpen(true)}
                   >
                     <SlidersHorizontal size={13} />
@@ -1734,32 +1745,36 @@ export function App() {
                   )}
                 </div>
                 <span className="toolbar-divider" />
-                <HintIconButton
-                  label="Archive selected"
-                  shortcut={keys('archive')}
-                  disabled={busy}
-                  hint={unavailable('archive')}
-                  onClick={() => void act('archive')}
-                >
-                  <Archive size={16} />
-                </HintIconButton>
+                {offersAction(listView, 'archive') && (
+                  <HintIconButton
+                    label="Archive selected"
+                    shortcut={keys('archive')}
+                    disabled={busy}
+                    hint={unavailable('archive')}
+                    onClick={() => void act('archive')}
+                  >
+                    <Archive size={16} />
+                  </HintIconButton>
+                )}
                 <IconButton
-                  label="Mark selected read"
+                  label="Mark selected as read"
                   shortcut={keys('read')}
                   disabled={busy}
                   onClick={() => void act('read')}
                 >
-                  <Check size={16} />
+                  <MailOpen size={16} />
                 </IconButton>
-                <HintIconButton
-                  label="Trash selected"
-                  shortcut={keys('trash')}
-                  disabled={busy}
-                  hint={unavailable('trash')}
-                  onClick={() => void act('trash')}
-                >
-                  <Trash2 size={16} />
-                </HintIconButton>
+                {offersAction(listView, 'trash') && (
+                  <HintIconButton
+                    label="Move selected to trash"
+                    shortcut={keys('trash')}
+                    disabled={busy}
+                    hint={unavailable('trash')}
+                    onClick={() => void act('trash')}
+                  >
+                    <Trash2 size={16} />
+                  </HintIconButton>
+                )}
                 <Dropdown
                   trigger={
                     <Button
@@ -1773,42 +1788,66 @@ export function App() {
                   }
                 >
                   <MenuItem onClick={() => void act('unread')}>
-                    Mark unread
+                    <Mail size={14} />
+                    Mark as unread
                     <ShortcutHint id="unread" className="menu-shortcut" />
                   </MenuItem>
-                  <MenuItem onClick={() => void act('star')}>
-                    Star
+                  <MenuItem onClick={() => void act(selectionStarred ? 'unstar' : 'star')}>
+                    <Star size={14} />
+                    {selectionStarred ? 'Remove star' : 'Star'}
                     <ShortcutHint id="star" className="menu-shortcut" />
                   </MenuItem>
                   <MenuItem
                     onClick={() => openMove(targets())}
                     disabled={allMatching || !!unavailable('move')}
                   >
+                    <FolderInput size={14} />
                     Move to folder
                     <ShortcutHint id="move" className="menu-shortcut" />
                   </MenuItem>
-                  <MenuItem onClick={() => void act('spam')} disabled={!!unavailable('spam')}>
-                    Mark spam
-                    <ShortcutHint id="spam" className="menu-shortcut" />
-                  </MenuItem>
-                  <MenuItem onClick={() => void act('notSpam')} disabled={!!unavailable('notSpam')}>
-                    Not spam
-                    <ShortcutHint id="notSpam" className="menu-shortcut" />
-                  </MenuItem>
-                  <MenuItem onClick={() => void act('restore')} disabled={!!unavailable('restore')}>
-                    Restore to inbox
-                    <ShortcutHint id="restore" className="menu-shortcut" />
-                  </MenuItem>
-                  {view === 'trash' && (
+                  {offersAction(listView, 'spam') && (
+                    <MenuItem onClick={() => void act('spam')} disabled={!!unavailable('spam')}>
+                      <ShieldX size={14} />
+                      Mark as spam
+                      <ShortcutHint id="spam" className="menu-shortcut" />
+                    </MenuItem>
+                  )}
+                  {offersAction(listView, 'notSpam') && (
+                    <MenuItem
+                      onClick={() => void act('notSpam')}
+                      disabled={!!unavailable('notSpam')}
+                    >
+                      <ShieldCheck size={14} />
+                      Not spam
+                      <ShortcutHint id="notSpam" className="menu-shortcut" />
+                    </MenuItem>
+                  )}
+                  {offersAction(listView, 'restore') && (
+                    <MenuItem
+                      onClick={() => void act('restore')}
+                      disabled={!!unavailable('restore')}
+                    >
+                      <Inbox size={14} />
+                      Restore to inbox
+                      <ShortcutHint id="restore" className="menu-shortcut" />
+                    </MenuItem>
+                  )}
+                  {offersAction(listView, 'destroy') && (
                     <MenuItem
                       danger
                       onClick={() => void act('destroy')}
                       disabled={!!unavailable('destroy')}
                     >
+                      <Trash2 size={14} />
                       Delete permanently
                     </MenuItem>
                   )}
-                  {[...new Set([unavailable('move'), view === 'trash' && unavailable('destroy')])]
+                  {[
+                    ...new Set([
+                      unavailable('move'),
+                      offersAction(listView, 'destroy') && unavailable('destroy'),
+                    ]),
+                  ]
                     .filter(Boolean)
                     .map((reason) => (
                       <p className="menu-note" key={String(reason)}>
@@ -1934,6 +1973,7 @@ export function App() {
                   {...emptyListState(view, {
                     searching: !!route.q || hasSearchFilters,
                     unreadOnly: !!filters.unread,
+                    keys,
                   })}
                 >
                   {hasSearchFilters && (
@@ -1958,7 +1998,7 @@ export function App() {
                 focused={focused}
                 busy={busy}
                 remoteImages={settings.remoteImages}
-                view={view}
+                view={listView}
                 hasNextPage={!!mail.hasNextPage}
                 isFetchingNextPage={mail.isFetchingNextPage}
                 listRef={listRef}
@@ -2127,7 +2167,7 @@ export function App() {
       />
       <ConfirmActionDialog
         action={confirmAction}
-        total={total}
+        count={allMatching ? total : targets().length}
         onClose={() => setConfirmAction(undefined)}
         onConfirm={(action) => {
           setConfirmAction(undefined)
