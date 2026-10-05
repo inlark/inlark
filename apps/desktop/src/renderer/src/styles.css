@@ -3068,6 +3068,65 @@ fieldset.compose-format:disabled {
 .details-chevron.open {
   transform: rotate(180deg);
 }
+/* An unsent draft must never pass for sent mail. A dashed outline marks it as unfinished, and
+   the small amber label is its only colour. The card bleeds past the column so its mark still
+   lines up with the senders above. */
+.draft-message {
+  margin: 6px -20px 0;
+  padding: 18px 20px 20px;
+  border: 1px dashed color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 10px;
+}
+.draft-message + .draft-message {
+  margin-top: 10px;
+}
+.draft-message.collapsed-message {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.draft-message.collapsed-message .message-heading {
+  opacity: 1;
+}
+.draft-mark {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  flex-shrink: 0;
+  border: 1px dashed color-mix(in srgb, var(--text) 28%, transparent);
+  border-radius: 50%;
+  color: var(--muted);
+}
+.draft-message .sender-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--secondary);
+  font-weight: 500;
+}
+.draft-badge {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--draft) 14%, transparent);
+  color: var(--draft);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 18px;
+}
+.draft-message .message-content {
+  padding-top: 18px;
+}
+.draft-message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.row-draft {
+  flex-shrink: 0;
+  color: var(--draft);
+  font-size: 11px;
+  font-weight: 600;
+}
 .attachment-card {
   padding: 6px 6px 6px 8px;
   gap: 4px;

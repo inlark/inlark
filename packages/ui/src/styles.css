@@ -42,6 +42,8 @@
   --green: #76bc9a;
   --red: #ea9198;
   --star: #d4b36e;
+  /* The label on unsent drafts, so they never pass for sent mail. */
+  --draft: #d4b36e;
   --skeleton: #ffffff0d;
   --shadow: 0 24px 80px #0005, 0 4px 16px #0003;
   font-family:
@@ -80,6 +82,7 @@
   --green: #3d9066;
   --red: #b94d55;
   --star: #b8892c;
+  --draft: #8f661a;
   --skeleton: #17191f0e;
   --shadow: 0 18px 70px #10121a1a;
 }

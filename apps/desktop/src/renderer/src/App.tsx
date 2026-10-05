@@ -51,6 +51,7 @@ import {
   identitySignature,
   mailtoDraft,
   replyRecipients,
+  replyTarget,
   type Address,
   type Bootstrap,
   type Conversation,
@@ -702,9 +703,21 @@ export function App() {
         'error',
       )
   }
+  /** A draft filed in the open conversation, preferring the local copy the composer edits. */
+  const threadDraft = (message: Message): DraftItem => {
+    const local = drafts.data?.find(
+      (d) => d.accountId === message.accountId && d.serverId === message.id,
+    )
+    return local
+      ? { kind: 'local', key: 'local:' + local.id, draft: local }
+      : { kind: 'server', key: 'server:' + scopeKey(message.accountId, message.id), message }
+  }
   const discardDrafts = (keys: Iterable<string>) => {
     const chosen = new Set(keys)
-    const items = draftItems.filter((item) => chosen.has(item.key) && deletable(item))
+    discardDraftItems(draftItems.filter((item) => chosen.has(item.key)))
+  }
+  const discardDraftItems = (candidates: DraftItem[]) => {
+    const items = candidates.filter(deletable)
     if (!items.length) return
     // Only one deletion waits for undo at a time; an earlier one is committed right away.
     if (pendingDiscard.current) void commitDiscard(pendingDiscard.current.items)
@@ -871,7 +884,7 @@ export function App() {
     setSearchOpen(true)
     requestAnimationFrame(() => searchInput.current?.select())
   }
-  const latest = thread.data?.at(-1)
+  const latest = thread.data && replyTarget(thread.data)
   // The newest mailing-list message carries the sender's current unsubscribe address.
   const listMessage = thread.data && [...thread.data].reverse().find((m) => m.unsubscribe)
   const listKey = listMessage && scopeKey(listMessage.accountId, listMessage.id)
@@ -1492,7 +1505,9 @@ export function App() {
           thread.data ? (
             <Reader
               key={scopeKey(readerAccount.id, route.thread!)}
-              messages={thread.data}
+              messages={thread.data.filter(
+                (m) => !discarding.has('server:' + scopeKey(m.accountId, m.id)),
+              )}
               view={route.q ? 'all' : view}
               backLabel={title}
               busy={busy}
@@ -1512,6 +1527,12 @@ export function App() {
               onAction={(action) => void act(action)}
               onMove={() => openMove(targets())}
               onReply={(message, kind) => void compose(message, kind)}
+              onEditDraft={(message) => void openDraft(threadDraft(message))}
+              onDiscardDraft={(message) => {
+                const item = threadDraft(message)
+                if (deletable(item)) discardDraftItems([item])
+                else notify('Check this message’s delivery status before deleting the draft.')
+              }}
               notify={notify}
               onMailto={onMailto}
               unsubscribe={unsubscribeState}

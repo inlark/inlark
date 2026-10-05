@@ -1,6 +1,6 @@
 import { Archive, Mail, MailOpen, Paperclip, Star, Trash2 } from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
-import type { Account, Conversation } from '@inlark/core'
+import { isDraft, type Account, type Conversation } from '@inlark/core'
 import { shortDate } from './mail-date'
 import { SenderAvatar } from './SenderAvatar'
 import { AccountMark } from './AccountMark'
@@ -44,6 +44,9 @@ export function ConversationRow({
   const keys = useShortcutText()
   const moveLimit = actionLimit(a, 'move')
   const subject = c.subject || '(No subject)'
+  // An unsent reply is flagged rather than counted, so it never reads as sent.
+  const drafts = c.messages.filter(isDraft).length
+  const count = c.count - drafts
   return (
     <div
       className={
@@ -76,7 +79,8 @@ export function ConversationRow({
           remoteImages={remoteImages}
         />
         <span title={c.from.map((sender) => sender.email).join(', ')}>{senderLabel(c)}</span>
-        {c.count > 1 && <small>{c.count}</small>}
+        {count > 1 && <small>{count}</small>}
+        {drafts > 0 && <span className="row-draft">Draft</span>}
       </div>
       <div className="row-content" role="gridcell">
         <span className="row-subject">{subject}</span>

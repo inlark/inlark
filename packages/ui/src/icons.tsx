@@ -53,6 +53,7 @@ import {
   ParagraphBulletsPoint02Icon as BulletListGlyph,
   Paperclip as PaperclipGlyph,
   PenLine as PenLineGlyph,
+  PencilEdit02Icon as PencilEditGlyph,
   Plus as PlusGlyph,
   RefreshCw as RefreshCwGlyph,
   Reply as ReplyGlyph,
@@ -137,6 +138,7 @@ export const PanelLeftOpen = icon(PanelLeftOpenGlyph)
 export const BulletList = icon(BulletListGlyph)
 export const Paperclip = icon(PaperclipGlyph)
 export const PenLine = icon(PenLineGlyph)
+export const PencilEdit = icon(PencilEditGlyph)
 export const Plus = icon(PlusGlyph)
 export const RefreshCw = icon(RefreshCwGlyph)
 export const Reply = icon(ReplyGlyph)
