@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { X } from '@inlark/ui/icons'
 import { parseAddresses, type Address } from '@inlark/core'
@@ -73,15 +74,39 @@ export function RecipientField({
   const highlighted = Math.min(active, matches.length - 1)
   return (
     <div
-      className="compose-field recipient-field relative cursor-text py-1 px-0"
+      className={cn(
+        'compose-field flex items-center min-h-10.5 border-b border-solid border-b-border gap-2.75 [&>label]:w-10.75',
+        '[&>label]:shrink-0 [&>label]:text-[11px] [&>label]:text-muted [&>span]:w-10.75 [&>span]:shrink-0',
+        '[&>span]:text-[11px] [&>span]:text-muted [&_input]:flex-1 [&_input]:border-0 [&_input]:py-1.75 [&_input]:px-0',
+        '[&_input]:bg-none [&_input]:bg-transparent [&_input]:text-[12px] [&_input]:min-w-0 [&>.select-trigger]:flex-1',
+        '[&>.select-trigger]:h-8 [&>.select-trigger]:py-0 [&>.select-trigger]:pr-1 [&>.select-trigger]:pl-0',
+        '[&>.select-trigger]:border-0 [&>.select-trigger]:bg-none [&>.select-trigger]:bg-transparent',
+        '[&>.select-trigger]:text-foreground [&>.select-trigger]:text-[12px] [&>.select-trigger]:whitespace-normal',
+        '[&>.select-trigger:hover:not([data-disabled])]:bg-none',
+        '[&>.select-trigger:hover:not([data-disabled])]:bg-transparent [&>button]:text-[11px] [&>button]:bg-none',
+        '[&>button]:bg-transparent [&>button]:border-0 [&>button]:text-muted [&>button]:whitespace-nowrap',
+        '[&_.subject-input]:font-medium [&_input:focus-visible]:outline-none',
+        '[&>.select-trigger:focus-visible]:outline-none focus-within:border-b-primary-solid',
+        '[&>.compose-cc-toggle]:self-start [&>.compose-cc-toggle]:mt-2.25 [&>.compose-cc-toggle]:py-0',
+        '[&>.compose-cc-toggle]:px-[2px] [&>.compose-cc-toggle:hover]:text-foreground recipient-field relative',
+        'cursor-text py-1 px-0',
+      )}
       onClick={() => input.current?.focus()}
     >
       <label htmlFor={id}>{label}</label>
-      <div className="recipient-chips flex-1 min-w-0 flex flex-wrap items-center gap-1">
+      <div className="recipient-chips [&_input]:flex-1 [&_input]:min-w-30 [&_input]:py-1.25 [&_input]:px-0 flex-1 min-w-0 flex flex-wrap items-center gap-1">
         {chips.map((chip, i) => (
           <span
             key={chip.email + i}
-            className={'recipient-chip' + (valid(chip.email) ? '' : ' invalid')}
+            className={cn(
+              'recipient-chip inline-flex items-center gap-[3px] h-6 max-w-65 py-0 pr-1 pl-2 overflow-hidden text-[12px]',
+              'whitespace-nowrap text-ellipsis text-foreground bg-hover border border-solid border-border-strong rounded-2xl',
+              'cursor-default [&.invalid]:text-danger [&.invalid]:border-danger/45 [&.invalid]:bg-danger/8 [&_button]:grid',
+              '[&_button]:place-items-center [&_button]:w-4 [&_button]:h-4 [&_button]:p-0 [&_button]:border-0',
+              '[&_button]:rounded-full [&_button]:bg-none [&_button]:bg-transparent [&_button]:text-muted',
+              '[&_button:hover]:text-strong [&_button:hover]:bg-border-strong',
+              valid(chip.email) ? '' : ' invalid',
+            )}
             title={valid(chip.email) ? chip.email : chip.email + ' is not a valid address'}
             onDoubleClick={() => {
               if (disabled) return
@@ -172,7 +197,16 @@ export function RecipientField({
       {children}
       {showing && (
         <div
-          className="recipient-suggestions absolute z-5 top-[calc(100%_+_4px)] left-10.75 w-[min(360px,_calc(100%_-_43px))] p-1 bg-raised border border-solid border-border-strong rounded-lg shadow-popup"
+          className={cn(
+            'recipient-suggestions [&_button]:flex [&_button]:items-center [&_button]:gap-2.5 [&_button]:w-full',
+            '[&_button]:py-1.5 [&_button]:px-2 [&_button]:text-left [&_button]:border-0 [&_button]:rounded-sm',
+            '[&_button]:bg-none [&_button]:bg-transparent [&_button.active]:bg-hover [&_span:not(.avatar)]:min-w-0',
+            '[&_strong]:block [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap',
+            '[&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap',
+            '[&_strong]:text-[12px] [&_strong]:font-medium [&_small]:text-[11px] [&_small]:text-muted absolute z-5',
+            'top-[calc(100%+4px)] left-10.75 w-[min(360px,_calc(100%_-_43px))] p-1 bg-raised border border-solid',
+            'border-border-strong rounded-lg shadow-popup',
+          )}
           role="listbox"
           id={listId}
         >
@@ -183,7 +217,7 @@ export function RecipientField({
               id={listId + '-' + i}
               role="option"
               aria-selected={i === highlighted}
-              className={i === highlighted ? 'active' : ''}
+              className={cn(i === highlighted && 'active')}
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
               onMouseMove={() => setActive(i)}

@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useRef, useState } from 'react'
 import { Wordmark } from '@inlark/ui/components/wordmark'
 import appIcon from '../../../resources/icon.svg?no-inline'
@@ -38,22 +39,27 @@ import { ShortcutEditor } from './ShortcutEditor'
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
   return (
     <span
-      className={
-        'mini-window absolute grid grid-cols-[30%_1fr] bg-[var(--w-sidebar)] mini-window-' +
-        theme +
-        (className ? ' ' + className : '')
-      }
+      className={cn(
+        'mini-window [--w-bg:#171718] [--w-sidebar:#111112] [--w-border:#ffffff12] [--w-line:#ffffff17]',
+        '[--w-nav:#ffffff12] [--w-accent:#aaa6ec] inset-0 absolute grid grid-cols-[30%_1fr] bg-[var(--w-sidebar)]',
+        theme === 'light' &&
+          'mini-window-light [--w-bg:#ffffff] [--w-sidebar:#f2f3f5] [--w-border:#17191f14] [--w-line:#17191f17] [--w-nav:#17191f12] [--w-accent:#6962c1]',
+        className,
+      )}
     >
       <span className="mini-sidebar flex flex-col gap-[7%] py-[18%] px-[14%]">
-        <span className="mini-nav active" />
-        <span className="mini-nav" />
-        <span className="mini-nav" />
+        <span className="mini-nav h-1.25 rounded-[2px] bg-[var(--w-nav)] [&.active]:bg-[color-mix(in_srgb,_var(--w-accent)_45%,_transparent)] last:w-[70%] active" />
+        <span className="mini-nav h-1.25 rounded-[2px] bg-[var(--w-nav)] [&.active]:bg-[color-mix(in_srgb,_var(--w-accent)_45%,_transparent)] last:w-[70%]" />
+        <span className="mini-nav h-1.25 rounded-[2px] bg-[var(--w-nav)] [&.active]:bg-[color-mix(in_srgb,_var(--w-accent)_45%,_transparent)] last:w-[70%]" />
       </span>
-      <span className="mini-list flex flex-col gap-[12%] mt-[10%] pt-[12%] pb-0 px-[12%] rounded-tl-[6px] bg-[var(--w-bg)]">
+      <span className="mini-list shadow-[0_0_0_1px_var(--w-border)] flex flex-col gap-[12%] mt-[10%] pt-[12%] pb-0 px-[12%] rounded-tl-[6px] bg-[var(--w-bg)]">
         {[0, 1, 2].map((row) => (
-          <span className="mini-row flex items-center gap-[8%]" key={row}>
+          <span
+            className="mini-row [&:nth-child(2)_.mini-line]:flex-[0_1_70%] [&:nth-child(3)_.mini-line]:flex-[0_1_85%] flex items-center gap-[8%]"
+            key={row}
+          >
             <span className="mini-avatar w-2.25 h-2.25 shrink-0 rounded-full bg-[color-mix(in_srgb,_var(--w-accent)_60%,_transparent)]" />
-            <span className="mini-line" />
+            <span className="mini-line flex-1 h-1.25 rounded-[2px] bg-[var(--w-line)]" />
           </span>
         ))}
       </span>
@@ -76,7 +82,7 @@ function AccountDetailsForm({
   const [saving, setSaving] = useState(false)
   return (
     <form
-      className="account-details-form grid grid-cols-[1fr_1fr] gap-[0_14px] -mt-1 mb-0 mx-0 pt-0 pb-4.5 pr-0 pl-11.5"
+      className="account-details-form [&_.form-field]:mt-0 grid grid-cols-[1fr_1fr] gap-[0_14px] -mt-1 mb-0 mx-0 pt-0 pb-4.5 pr-0 pl-11.5"
       onSubmit={async (e) => {
         e.preventDefault()
         setSaving(true)
@@ -95,7 +101,7 @@ function AccountDetailsForm({
         }
       }}
     >
-      <label className="form-field">
+      <label className="form-field mt-3.75 [&_input]:mt-1.5 [&_input]:text-[12px] [&_input[aria-invalid='true']]:border-danger/70">
         Label
         <input
           autoFocus
@@ -106,7 +112,7 @@ function AccountDetailsForm({
         />
         <span className="field-hint text-muted text-[11px] block mt-1.25">Only you see this.</span>
       </label>
-      <label className="form-field">
+      <label className="form-field mt-3.75 [&_input]:mt-1.5 [&_input]:text-[12px] [&_input[aria-invalid='true']]:border-danger/70">
         Your name
         <input
           value={senderName}
@@ -117,12 +123,12 @@ function AccountDetailsForm({
         />
         <span className="field-hint text-muted text-[11px] block mt-1.25">
           Recipients see{' '}
-          <span className="sender-preview text-secondary">
+          <span className="sender-preview [overflow-wrap:anywhere] text-secondary">
             {(senderName.trim() || 'Your server’s name') + ' <' + account.email + '>'}
           </span>
         </span>
       </label>
-      <div className="account-details-actions flex justify-end gap-2 mt-3.5">
+      <div className="account-details-actions col-span-full flex justify-end gap-2 mt-3.5">
         <Button size="small" onClick={onDone}>
           Cancel
         </Button>
@@ -208,11 +214,25 @@ export function SettingsPanel({
           if (!value) onClose()
         }}
         title="Settings"
-        className="settings-modal w-[min(880px,_calc(100vw_-_40px))] p-0 overflow-visible"
+        className={cn(
+          'settings-modal [&>.modal-heading]:absolute [&>.modal-heading]:inset-x-0 [&>.modal-heading]:top-0',
+          '[&>.modal-heading]:z-1 [&>.modal-heading]:items-center [&>.modal-heading]:m-0 [&>.modal-heading]:pt-3.5',
+          '[&>.modal-heading]:pb-0 [&>.modal-heading]:pr-3.5 [&>.modal-heading]:pl-5',
+          '[&>.modal-heading]:pointer-events-none [&>.modal-heading>*]:pointer-events-auto [&_.modal-title]:text-[12px]',
+          '[&_.modal-title]:font-medium [&_.modal-title]:tracking-[0] [&_.modal-title]:text-muted',
+          '[&>.modal-heading>.button]:text-muted max-[700px]:[&>.modal-heading]:pl-4 w-[min(880px,_calc(100vw_-_40px))]',
+          'p-0 overflow-visible',
+        )}
         popupRef={modalRef}
       >
         <div className="settings-layout flex min-h-0 h-[min(620px,_calc(100dvh_-_80px))] overflow-hidden rounded-[inherit]">
-          <nav className="settings-nav" aria-label="Settings sections">
+          <nav
+            className={cn(
+              'settings-nav w-50 shrink-0 bg-sidebar pt-12.5 pb-3 px-2.5 flex flex-col gap-[2px] border-r border-solid',
+              'border-r-border max-[700px]:w-34 max-[700px]:pt-12.5 max-[700px]:pb-3 max-[700px]:px-2',
+            )}
+            aria-label="Settings sections"
+          >
             {[
               ['general', 'General', SlidersHorizontal],
               ['accounts', 'Accounts', Mail],
@@ -225,25 +245,42 @@ export function SettingsPanel({
                 <button
                   key={String(id)}
                   aria-current={tab === id ? 'page' : undefined}
-                  className={tab === id ? 'active' : ''}
+                  className={cn(
+                    'flex gap-2.5 items-center h-8 bg-transparent border-0 py-0 px-2.5 text-left text-secondary rounded-md',
+                    'transition-[color,background] duration-120 ease-[ease] text-[13px] hover:bg-hover hover:text-foreground',
+                    'max-[700px]:px-2 max-[700px]:text-[12px] max-[700px]:gap-1.75',
+                    tab === id &&
+                      'active bg-selected hover:bg-selected text-strong hover:text-strong font-medium',
+                  )}
                   onClick={() => {
                     setTab(String(id))
                     setSetup(undefined)
                   }}
                 >
-                  <Component size={15} />
+                  <Component className={cn('text-muted', tab === id && 'text-strong')} size={15} />
                   {String(name)}
                 </button>
               )
             })}
           </nav>
-          <div className="settings-content">
+          <div
+            className={cn(
+              'settings-content flex-1 overflow-auto pt-12 pb-10 px-12 min-w-0',
+              'max-[700px]:pt-12 max-[700px]:pb-5 max-[700px]:px-5',
+            )}
+          >
             {tab === 'general' && (
               <>
-                <h3>General</h3>
-                <div className="setting-section">
+                <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">General</h3>
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Appearance</h4>
-                  <div className="theme-options">
+                  <div className="theme-options grid grid-cols-[repeat(3,_1fr)] gap-3.5 max-[700px]:gap-2.5">
                     {(
                       [
                         ['dark', 'Dark'],
@@ -253,33 +290,56 @@ export function SettingsPanel({
                     ).map(([id, label]) => (
                       <button
                         key={id}
-                        className={
-                          'theme-option' + (bootstrap.settings.theme === id ? ' chosen' : '')
-                        }
+                        className={cn(
+                          'theme-option flex flex-col gap-2.5 min-w-0 p-0 border-0 bg-none bg-transparent text-secondary text-[12px]',
+                          'text-left focus-visible:outline-none [&:hover:not(.chosen):not(:focus-visible)_.theme-preview]:shadow-[0_0_0_1px_var(--faint)]',
+                          '[&.chosen_.theme-preview]:shadow-[0_0_0_2px_var(--surface),_0_0_0_4px_var(--accent-solid)]',
+                          '[&:focus-visible_.theme-preview]:shadow-[0_0_0_2px_var(--surface),_0_0_0_4px_var(--accent-solid)]',
+                          '[&.chosen_.theme-option-label]:text-strong [&.chosen_.theme-radio]:shadow-[inset_0_0_0_4px_var(--accent-solid)]',
+                          bootstrap.settings.theme === id && 'chosen',
+                        )}
                         aria-pressed={bootstrap.settings.theme === id}
                         onClick={() => void update({ theme: id })}
                       >
-                        <span className="theme-preview" aria-hidden="true">
+                        <span
+                          className="theme-preview relative block aspect-[16_/_10] rounded-lg overflow-hidden shadow-[0_0_0_1px_var(--border-strong)] transition-[box-shadow] duration-120 ease-[ease]"
+                          aria-hidden="true"
+                        >
                           {id === 'system' ? (
                             <>
                               <ThemePreview theme="dark" />
-                              <ThemePreview theme="light" className="theme-split" />
+                              <ThemePreview
+                                theme="light"
+                                className="theme-split [clip-path:inset(0_0_0_50%)]"
+                              />
                             </>
                           ) : (
                             <ThemePreview theme={id} />
                           )}
                         </span>
-                        <span className="theme-option-label">
-                          <span className="theme-radio" />
+                        <span className="theme-option-label flex items-center gap-2 pl-[2px]">
+                          <span className="theme-radio w-3.5 h-3.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--faint)] transition-[box-shadow] duration-120 ease-[ease]" />
                           {label}
                         </span>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="setting-section">
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Reading</h4>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>After archiving or deleting</strong>
                       <p>Where to go when a conversation leaves the list you’re reading.</p>
@@ -293,9 +353,21 @@ export function SettingsPanel({
                     />
                   </div>
                 </div>
-                <div className="setting-section">
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Privacy</h4>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>Load remote images</strong>
                       <p>Display images in incoming email and sender pictures automatically.</p>
@@ -306,16 +378,28 @@ export function SettingsPanel({
                       onCheckedChange={(remoteImages) => void update({ remoteImages })}
                     />
                   </div>
-                  <p className="setting-footnote">
+                  <p className="setting-footnote text-faint text-[12px] leading-[1.6]">
                     Email images are requested directly, so senders may know when you read a
                     message. Gravatar receives a hash of each sender’s address; sender websites or
                     their icon hosts receive icon requests. If those fail, Twenty Icons receives the
                     sender’s root domain. DuckDuckGo receives it only if Twenty has no icon.
                   </p>
                 </div>
-                <div className="setting-section">
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Desktop</h4>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>New mail notifications</strong>
                       <p>Get notified when new conversations arrive.</p>
@@ -326,7 +410,13 @@ export function SettingsPanel({
                       onCheckedChange={(notifications) => void update({ notifications })}
                     />
                   </div>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>Keep running in the tray</strong>
                       <p>Keep checking for new mail after the window is closed.</p>
@@ -339,9 +429,21 @@ export function SettingsPanel({
                   </div>
                 </div>
                 {bootstrap.accounts.length > 1 && (
-                  <div className="setting-section">
+                  <div
+                    className={cn(
+                      'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                      '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                      '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                    )}
+                  >
                     <h4>Writing</h4>
-                    <div className="setting-row">
+                    <div
+                      className={cn(
+                        'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                        '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                        '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                      )}
+                    >
                       <div>
                         <strong>Default sending account</strong>
                         <p>New messages start from this account unless you’re in another one.</p>
@@ -380,7 +482,7 @@ export function SettingsPanel({
                 <>
                   <div className="settings-section-heading flex justify-between items-start gap-2.5">
                     <div>
-                      <h3>Accounts</h3>
+                      <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Accounts</h3>
                     </div>
                     {!!bootstrap.accounts.length && (
                       <Button
@@ -404,7 +506,16 @@ export function SettingsPanel({
                           className="settings-account-entry border-b border-solid border-b-border"
                           key={account.id}
                         >
-                          <div className="settings-account flex items-center gap-2.5 py-4.5 px-0">
+                          <div
+                            className={cn(
+                              'settings-account [&_strong]:block [&_strong]:font-medium [&_small]:flex [&_small]:gap-1.25',
+                              '[&_small]:items-center [&_small]:text-[11px] [&_small]:mt-1 [&_strong]:text-[13px]',
+                              '[&_strong_.protocol-tag]:ml-2 [&_strong_.protocol-tag]:[vertical-align:1px] [&_strong_.protocol-tag]:h-4',
+                              '[&_strong_.protocol-tag]:text-[9px] [&_small.outgoing-error]:items-start [&_small.outgoing-error]:mt-[3px]',
+                              '[&_small.outgoing-error_svg]:shrink-0 [&_small.outgoing-error_svg]:mt-[2px] flex items-center gap-2.5 py-4.5',
+                              'px-0',
+                            )}
+                          >
                             <AccountAvatarPicker
                               name={account.name}
                               email={account.email}
@@ -417,7 +528,10 @@ export function SettingsPanel({
                               <strong>
                                 {account.name}
                                 <span
-                                  className="protocol-tag"
+                                  className={cn(
+                                    'protocol-tag inline-flex items-center h-4.5 py-0 px-1.5 border border-solid border-border-strong rounded-xs',
+                                    'text-[10px] font-medium tracking-[0.3px] text-muted whitespace-nowrap shrink-0',
+                                  )}
                                   title={
                                     protocol === 'imap'
                                       ? 'Connected with IMAP and SMTP'
@@ -427,15 +541,17 @@ export function SettingsPanel({
                                   {protocol.toUpperCase()}
                                 </span>
                               </strong>
-                              <span className="settings-account-email">{account.email}</span>
+                              <span className="settings-account-email block text-muted text-[12px] leading-[1.6]">
+                                {account.email}
+                              </span>
                               <small
-                                className={
+                                className={cn(
                                   account.status === 'connected'
                                     ? 'connected text-success'
-                                    : 'connection-error text-danger'
-                                }
+                                    : 'connection-error [&_.connection-dot]:bg-danger text-danger',
+                                )}
                               >
-                                <span className="connection-dot" />
+                                <span className="connection-dot w-1.25 h-1.25 rounded-full bg-success inline-block shrink-0" />
                                 {account.status === 'connected'
                                   ? account.outgoingError
                                     ? 'Receiving mail'
@@ -447,7 +563,7 @@ export function SettingsPanel({
                                     : account.error || 'Disconnected'}
                               </small>
                               {account.outgoingError && (
-                                <small className="connection-error text-danger outgoing-error">
+                                <small className="connection-error [&_.connection-dot]:bg-danger text-danger outgoing-error">
                                   <Send size={11} />
                                   <span>Sending unavailable: {account.outgoingError}</span>
                                 </small>
@@ -469,11 +585,11 @@ export function SettingsPanel({
                               )}
                               <Dropdown
                                 container={modalRef}
-                                className="settings-account-menu w-55"
+                                className="settings-account-menu [&_.menu-item]:min-h-7.75 w-55"
                                 trigger={
                                   <Button
                                     size="small"
-                                    className="account-manage-trigger"
+                                    className="account-manage-trigger data-popup-open:bg-hover data-popup-open:text-strong [&[data-popup-open]_svg]:transform-[rotate(180deg)]"
                                     aria-label={'Manage ' + account.name + ' account'}
                                   >
                                     Manage
@@ -530,7 +646,7 @@ export function SettingsPanel({
                     })}
                   </div>
                   {!bootstrap.accounts.length && (
-                    <div className="no-accounts flex min-h-90">
+                    <div className="no-accounts [&_.empty-state]:pb-12 flex min-h-90">
                       <EmptyState
                         icon={Mail}
                         title="No accounts yet"
@@ -547,10 +663,10 @@ export function SettingsPanel({
               ))}
             {tab === 'signatures' && (
               <>
-                <h3>Signatures</h3>
+                <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Signatures</h3>
                 {bootstrap.accounts.length ? (
                   <>
-                    <p className="settings-lead">
+                    <p className="settings-lead text-muted mt-1.5 mb-6 mx-0 text-[12px] leading-[1.6]">
                       Added to new messages, replies and forwards. Write plain text or HTML. Changes
                       save as you type.
                     </p>
@@ -565,7 +681,7 @@ export function SettingsPanel({
                     />
                   </>
                 ) : (
-                  <div className="no-accounts flex min-h-90">
+                  <div className="no-accounts [&_.empty-state]:pb-12 flex min-h-90">
                     <EmptyState
                       icon={PenLine}
                       title="No signatures yet"
@@ -588,8 +704,8 @@ export function SettingsPanel({
             )}
             {tab === 'shortcuts' && (
               <>
-                <h3>Keyboard shortcuts</h3>
-                <p className="settings-lead">
+                <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Keyboard shortcuts</h3>
+                <p className="settings-lead text-muted mt-1.5 mb-6 mx-0 text-[12px] leading-[1.6]">
                   Click any keys to change them, or + to add another. Changes save right away.
                 </p>
                 <ShortcutEditor />
@@ -597,7 +713,12 @@ export function SettingsPanel({
             )}
             {tab === 'about' && (
               <>
-                <div className="about-hero flex items-center gap-4 pb-6.5 border-b border-solid border-b-border">
+                <div
+                  className={cn(
+                    'about-hero [&>div]:flex-1 [&>div]:min-w-0 [&_p]:text-muted [&_p]:text-[12px] [&_p]:mt-[3px] [&_p]:mb-0',
+                    '[&_p]:mx-0 flex items-center gap-4 pb-6.5 border-b border-solid border-b-border',
+                  )}
+                >
                   <img
                     className="about-mark w-13 h-13 block shrink-0"
                     src={appIcon}
@@ -606,7 +727,7 @@ export function SettingsPanel({
                     height={52}
                   />
                   <div>
-                    <h3>
+                    <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">
                       <Wordmark height={24} />
                     </h3>
                     <p>A desktop email client for JMAP and IMAP servers.</p>
@@ -615,9 +736,21 @@ export function SettingsPanel({
                     Version {bootstrap.version}
                   </span>
                 </div>
-                <div className="setting-section">
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Privacy</h4>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>Direct connection</strong>
                       <p>
@@ -626,16 +759,34 @@ export function SettingsPanel({
                       </p>
                     </div>
                   </div>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>No telemetry</strong>
                       <p>Inlark collects no usage data or analytics.</p>
                     </div>
                   </div>
                 </div>
-                <div className="setting-section">
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
                   <h4>Troubleshooting</h4>
-                  <div className="setting-row">
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
                     <div>
                       <strong>Diagnostics</strong>
                       <p>
@@ -678,7 +829,12 @@ export function SettingsPanel({
         title="Remove this account?"
         description="This removes the connection, local cached mail, and local drafts for this connection. Mail on the server stays where it is."
       >
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={() => setRemove(undefined)}>Keep account</Button>
           <Button
             variant="danger"

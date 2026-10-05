@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -66,10 +67,18 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
   render() {
     return this.state.error ? (
-      <div className="startup-error max-w-130 my-[20vh] mx-auto p-6.25">
+      <div className="startup-error [&_h1]:text-[23px] [&_p]:text-muted [&_p]:leading-[1.8] max-w-130 my-[20vh] mx-auto p-6.25">
         <h1>Something went wrong</h1>
         <p>Inlark ran into an unexpected problem. Your saved drafts are safe on this device.</p>
-        <button className="button" onClick={() => location.reload()}>
+        <button
+          className={cn(
+            'button inline-flex items-center justify-center gap-1.75 border border-solid border-border-strong bg-surface',
+            'rounded-md py-1.5 px-2.75 text-[12px] font-medium whitespace-nowrap transition-[background,color] duration-120',
+            'ease-[ease] min-h-8 [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:border-foreground/24',
+            "[&[aria-disabled='true']]:opacity-40 [&[aria-disabled='true']]:cursor-default",
+          )}
+          onClick={() => location.reload()}
+        >
           Reload Inlark
         </button>
       </div>

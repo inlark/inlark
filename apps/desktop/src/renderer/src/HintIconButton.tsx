@@ -41,7 +41,7 @@ export function HintIconButton({
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Positioner sideOffset={7}>
-          <Tooltip.Popup className="tooltip tooltip-with-hint items-start max-w-70">
+          <Tooltip.Popup className="tooltip flex gap-3 py-1.5 px-2.25 bg-raised border border-solid border-border-strong rounded-md text-[11px] shadow-popup z-200 tooltip-with-hint items-start max-w-70">
             <span className="tooltip-text flex flex-col gap-[2px]">
               {label}
               <span className="tooltip-hint text-muted leading-[1.5]">{hint}</span>

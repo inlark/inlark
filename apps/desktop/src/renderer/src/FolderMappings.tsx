@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Check } from '@inlark/ui/icons'
@@ -108,12 +109,29 @@ export function FolderMappingEditor({
                   : { text: 'Not found on the server · check this', tone: 'uncertain' }
         const id = 'folder-role-' + role
         return (
-          <div className="folder-role" key={role}>
-            <div className="folder-role-text flex flex-wrap items-baseline gap-[2px_10px] min-w-0">
+          <div
+            className={cn(
+              'folder-role grid grid-cols-[minmax(0,_1fr)_220px] gap-4 items-center py-3 px-0 [&+.folder-role]:border-t',
+              '[&+.folder-role]:border-solid [&+.folder-role]:border-t-border max-[700px]:grid-cols-[minmax(0,_1fr)_180px]',
+            )}
+            key={role}
+          >
+            <div
+              className={cn(
+                'folder-role-text [&_label]:text-foreground [&_strong]:text-[13px] [&_strong]:font-medium [&_p]:basis-full',
+                '[&_p]:m-0 [&_p]:text-[11px] [&_p]:text-muted flex flex-wrap items-baseline gap-[2px_10px] min-w-0',
+              )}
+            >
               <label htmlFor={id}>
                 <strong>{info.label}</strong>
               </label>
-              <span className={'folder-role-status ' + status.tone}>
+              <span
+                className={cn(
+                  'folder-role-status inline-flex items-center gap-1.25 text-[11px] text-muted [&.confirmed_svg]:text-success',
+                  '[&.uncertain]:text-primary',
+                  status.tone,
+                )}
+              >
                 {status.tone === 'confirmed' ? (
                   <Check size={11} />
                 ) : status.tone === 'uncertain' ? (
@@ -206,7 +224,10 @@ export function FolderMappingsDialog({
         }}
       >
         {review.isError ? (
-          <div role="alert" className="form-error">
+          <div
+            role="alert"
+            className="form-error flex gap-2 text-[11px] leading-[1.6] my-3.75 mx-0 text-danger [&_svg]:shrink-0 [&_svg]:mt-[3px]"
+          >
             <AlertCircle size={14} />
             {friendlyError(review.error)}
           </div>
@@ -227,12 +248,20 @@ export function FolderMappingsDialog({
           </div>
         )}
         {error && (
-          <div role="alert" className="form-error">
+          <div
+            role="alert"
+            className="form-error flex gap-2 text-[11px] leading-[1.6] my-3.75 mx-0 text-danger [&_svg]:shrink-0 [&_svg]:mt-[3px]"
+          >
             <AlertCircle size={14} />
             {error}
           </div>
         )}
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={onClose} disabled={saving}>
             Cancel
           </Button>

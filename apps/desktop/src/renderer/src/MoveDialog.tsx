@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Folder, Search } from '@inlark/ui/icons'
@@ -82,7 +83,15 @@ export function MoveDialog({
       )}
       {choosable && (
         <>
-          <div className="folder-search">
+          <div
+            className={cn(
+              'folder-search flex items-center gap-2 h-9 mb-2 py-0 px-2.75 text-muted bg-field border border-solid',
+              'border-border-strong rounded-[7px] transition-[border-color,box-shadow] duration-120 ease-[ease]',
+              'focus-within:border-primary-solid focus-within:shadow-[0_0_0_3px_var(--accent-tint)] [&_input]:h-full',
+              '[&_input]:p-0 [&_input]:text-[12px] [&_input]:bg-none [&_input]:bg-transparent [&_input]:border-0',
+              '[&_input:focus-visible]:outline-none',
+            )}
+          >
             <Search size={14} />
             <input
               autoFocus
@@ -117,7 +126,15 @@ export function MoveDialog({
             />
           </div>
           <div
-            className="folder-picker max-h-[min(340px,_calc(100vh_-_280px))] overflow-y-auto my-0 -mx-1.5 py-0 px-1.5"
+            className={cn(
+              'folder-picker [&_button]:w-full [&_button]:flex [&_button]:items-center [&_button]:gap-3 [&_button]:bg-none',
+              '[&_button]:bg-transparent [&_button]:border-0 [&_button]:py-2.5 [&_button]:px-3 [&_button]:rounded-md',
+              '[&_button]:text-[12px] [&_button]:text-left [&_button]:text-secondary [&_button>span]:flex-1',
+              '[&_button>span]:min-w-0 [&_button>span]:overflow-hidden [&_button>span]:text-ellipsis',
+              '[&_button>span]:whitespace-nowrap [&_button_svg]:text-muted [&_button.active]:bg-hover',
+              '[&_button.active]:text-strong [&_button.active_svg]:text-strong max-h-[min(340px,_calc(100vh_-_280px))]',
+              'overflow-y-auto my-0 -mx-1.5 py-0 px-1.5',
+            )}
             role="listbox"
             id={listId}
             aria-label="Folders"
@@ -130,7 +147,7 @@ export function MoveDialog({
                 role="option"
                 aria-selected={i === highlighted}
                 tabIndex={-1}
-                className={i === highlighted ? 'active' : ''}
+                className={cn(i === highlighted && 'active')}
                 onMouseMove={() => i !== highlighted && setActive(i)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onMove(b.id)}

@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import {
   useEffect,
   useId,
@@ -143,7 +144,12 @@ function TextField({
 }) {
   const id = useId()
   return (
-    <label className={'form-field' + (className ? ' ' + className : '')}>
+    <label
+      className={cn(
+        "form-field mt-3.75 [&_input]:mt-1.5 [&_input]:text-[12px] [&_input[aria-invalid='true']]:border-danger/70",
+        className,
+      )}
+    >
       {label}
       <input
         aria-invalid={error ? true : undefined}
@@ -177,8 +183,17 @@ function CheckRow({
   pending: boolean
 }) {
   return (
-    <li className={'connection-check ' + (check ? (check.ok ? 'ok' : 'failed') : 'pending')}>
-      <span className="connection-check-icon">
+    <li
+      className={cn(
+        'connection-check grid grid-cols-[16px_64px_minmax(0,_auto)_minmax(0,_1fr)] gap-2.5 items-baseline py-2.5 px-3.5',
+        'text-[12px] [&+.connection-check]:border-t [&+.connection-check]:border-solid',
+        '[&+.connection-check]:border-t-border [&_strong]:font-medium [&.ok_.connection-check-icon]:text-success',
+        '[&.ok_.connection-check-result]:text-success [&.failed_.connection-check-icon]:text-danger',
+        '[&.failed_.connection-check-result]:text-danger',
+        check ? (check.ok ? 'ok' : 'failed') : 'pending',
+      )}
+    >
+      <span className="connection-check-icon flex self-center text-muted">
         {check ? (
           check.ok ? (
             <Check size={13} />
@@ -193,7 +208,7 @@ function CheckRow({
       <span className="connection-check-host text-muted overflow-hidden text-ellipsis whitespace-nowrap">
         {host}
       </span>
-      <span className="connection-check-result">
+      <span className="connection-check-result text-muted leading-[1.5]">
         {check
           ? check.ok
             ? 'Signed in'
@@ -209,7 +224,14 @@ function CheckRow({
 /** The server settings of a discovered or saved configuration, shown before any password is sent. */
 function ServerSummary({ fields }: { fields: Fields }) {
   return fields.protocol === 'jmap' ? (
-    <dl className="server-summary m-0 text-[12px]">
+    <dl
+      className={cn(
+        'server-summary [&>div]:grid [&>div]:grid-cols-[118px_minmax(0,_1fr)] [&>div]:gap-3 [&>div]:py-2 [&>div]:px-0',
+        '[&>div+div]:border-t [&>div+div]:border-solid [&>div+div]:border-t-border [&_dt]:text-muted [&_dd]:flex',
+        '[&_dd]:flex-wrap [&_dd]:gap-[4px_14px] [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:text-foreground',
+        '[&_dd]:[overflow-wrap:anywhere] m-0 text-[12px]',
+      )}
+    >
       <div>
         <dt>Server · JMAP</dt>
         <dd>
@@ -218,7 +240,14 @@ function ServerSummary({ fields }: { fields: Fields }) {
       </div>
     </dl>
   ) : (
-    <dl className="server-summary m-0 text-[12px]">
+    <dl
+      className={cn(
+        'server-summary [&>div]:grid [&>div]:grid-cols-[118px_minmax(0,_1fr)] [&>div]:gap-3 [&>div]:py-2 [&>div]:px-0',
+        '[&>div+div]:border-t [&>div+div]:border-solid [&>div+div]:border-t-border [&_dt]:text-muted [&_dd]:flex',
+        '[&_dd]:flex-wrap [&_dd]:gap-[4px_14px] [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:text-foreground',
+        '[&_dd]:[overflow-wrap:anywhere] m-0 text-[12px]',
+      )}
+    >
       {(['incoming', 'outgoing'] as const).map((kind) => (
         <div key={kind}>
           <dt>{kind === 'incoming' ? 'Incoming · IMAP' : 'Outgoing · SMTP'}</dt>
@@ -581,8 +610,10 @@ export function AccountSetup({
         <ArrowLeft size={13} />
         Back to accounts
       </Button>
-      <header className="account-form-title mt-4.5 mb-2 mx-0">
-        <h3>{phase === 'folders' ? 'Check folders' : title}</h3>
+      <header className="account-form-title [&_p]:text-muted [&_p]:text-[12px] [&_p]:leading-[1.6] [&_p]:mt-1.5 [&_p]:mb-0 [&_p]:mx-0 mt-4.5 mb-2 mx-0">
+        <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">
+          {phase === 'folders' ? 'Check folders' : title}
+        </h3>
         {phase === 'email' ? (
           <p>
             Enter your email address and Inlark looks up your server settings. You’ll see them
@@ -595,12 +626,12 @@ export function AccountSetup({
             conversations. You can change this later.
           </p>
         ) : (
-          <p className="account-form-address flex items-baseline gap-2.5">
+          <p className="account-form-address [&>span]:text-secondary [&>span]:[overflow-wrap:anywhere] [&_.text-action]:text-[12px] flex items-baseline gap-2.5">
             <span>{email}</span>
             {mode === 'add' && (
               <button
                 type="button"
-                className="text-action"
+                className="border-0 bg-none bg-transparent text-primary text-[11px] p-0 text-left hover:underline"
                 onClick={() => {
                   setPhase('email')
                   setError('')
@@ -613,14 +644,20 @@ export function AccountSetup({
         )}
       </header>
       {accountProblem && phase === 'server' && (
-        <div className="form-error account-form-problem mt-3.5 mb-0 mx-0">
+        <div className="form-error flex gap-2 text-[11px] leading-[1.6] my-3.75 text-danger [&_svg]:shrink-0 [&_svg]:mt-[3px] account-form-problem mt-3.5 mb-0 mx-0">
           <AlertCircle size={14} />
           <span>{accountProblem}</span>
         </div>
       )}
 
       {phase === 'email' && (
-        <section className="account-form-section">
+        <section
+          className={cn(
+            'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+            '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+            '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+          )}
+        >
           <TextField
             label="Email address"
             type="email"
@@ -660,8 +697,14 @@ export function AccountSetup({
           </div>
         ) : (
           <>
-            <section className="account-form-section">
-              <div className="account-form-section-heading flex items-center justify-between gap-3 min-h-6.5">
+            <section
+              className={cn(
+                'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+                '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+                '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+              )}
+            >
+              <div className="account-form-section-heading [&_h4]:m-0 [&_.button]:-mr-2 [&_.button]:text-muted flex items-center justify-between gap-3 min-h-6.5">
                 <h4>Server</h4>
                 {editing ? (
                   (candidates.length > 0 || savedSettings) &&
@@ -692,7 +735,10 @@ export function AccountSetup({
                 )}
               </div>
               {notice && (
-                <div className="form-notice setup-notice mt-2.5 mb-1 mx-0" role="status">
+                <div
+                  className="form-notice flex gap-2 text-[11px] leading-[1.6] my-3.75 text-muted [&_svg]:shrink-0 [&_svg]:mt-[3px] setup-notice mt-2.5 mb-1 mx-0"
+                  role="status"
+                >
                   <AlertCircle size={14} />
                   <span>{notice}</span>
                 </div>
@@ -706,10 +752,15 @@ export function AccountSetup({
                   {candidates.map((candidate, index) => (
                     <label
                       key={index}
-                      className={
-                        'server-option' +
-                        (origin.kind === 'candidate' && origin.index === index ? ' chosen' : '')
-                      }
+                      className={cn(
+                        'server-option flex items-center gap-2.5 min-w-0 py-2.25 px-3 border border-solid border-border-strong',
+                        'rounded-lg text-[12px] text-secondary cursor-pointer transition-[border-color,background] duration-120',
+                        'ease-[ease] hover:bg-hover [&.chosen]:border-primary-solid/60 [&.chosen]:bg-primary-tint [&.chosen]:text-strong',
+                        '[&.chosen_.theme-radio]:shadow-[inset_0_0_0_4px_var(--accent-solid)] [&:has(input:focus-visible)]:outline-2',
+                        '[&:has(input:focus-visible)]:outline-solid [&:has(input:focus-visible)]:outline-primary',
+                        '[&:has(input:focus-visible)]:outline-offset-[2px]',
+                        origin.kind === 'candidate' && origin.index === index && 'chosen',
+                      )}
                     >
                       <input
                         type="radio"
@@ -718,12 +769,24 @@ export function AccountSetup({
                         checked={origin.kind === 'candidate' && origin.index === index}
                         onChange={() => choose(index)}
                       />
-                      <span className="theme-radio" aria-hidden="true" />
-                      <span className="protocol-tag">{candidate.protocol.toUpperCase()}</span>
+                      <span
+                        className="theme-radio w-3.5 h-3.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--faint)] transition-[box-shadow] duration-120 ease-[ease]"
+                        aria-hidden="true"
+                      />
+                      <span
+                        className={cn(
+                          'protocol-tag inline-flex items-center h-4.5 py-0 px-1.5 border border-solid border-border-strong rounded-xs',
+                          'text-[10px] font-medium tracking-[0.3px] text-muted whitespace-nowrap shrink-0',
+                        )}
+                      >
+                        {candidate.protocol.toUpperCase()}
+                      </span>
                       <span className="server-option-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                         {candidateTitle(candidate)}
                       </span>
-                      <span className="server-option-source">{sourceLabel(candidate)}</span>
+                      <span className="server-option-source ml-auto shrink-0 text-[11px] text-muted max-[700px]:hidden">
+                        {sourceLabel(candidate)}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -732,7 +795,12 @@ export function AccountSetup({
                 <div className="server-card mt-3 pt-3 pb-1 px-3.5 border border-solid border-border-strong rounded-lg bg-field">
                   {candidates.length < 2 && (
                     <div className="server-card-heading flex items-center gap-2.5 mb-1">
-                      <span className="protocol-tag">
+                      <span
+                        className={cn(
+                          'protocol-tag inline-flex items-center h-4.5 py-0 px-1.5 border border-solid border-border-strong rounded-xs',
+                          'text-[10px] font-medium tracking-[0.3px] text-muted whitespace-nowrap shrink-0',
+                        )}
+                      >
                         {fields.protocol === 'jmap' ? 'JMAP' : 'IMAP · SMTP'}
                       </span>
                       <span className="server-card-source text-[11px] text-muted">
@@ -748,8 +816,8 @@ export function AccountSetup({
                 </div>
               )}
               {editing && (
-                <div className="server-fields">
-                  <div className="form-field">
+                <div className="server-fields [&_.form-field]:mt-3.5">
+                  <div className="form-field mt-3.75 [&_input]:mt-1.5 [&_input]:text-[12px] [&_input[aria-invalid='true']]:border-danger/70">
                     <span className="form-label block mb-1.5 text-[12px] text-secondary">
                       Protocol
                     </span>
@@ -775,13 +843,18 @@ export function AccountSetup({
                   ) : (
                     (['incoming', 'outgoing'] as const).map((kind) => (
                       <fieldset
-                        className="server-group mt-4.5 mb-0 mx-0 p-0 border-0 min-w-0"
+                        className="server-group [&_legend]:p-0 [&_legend]:text-[11px] [&_legend]:font-medium [&_legend]:text-secondary mt-4.5 mb-0 mx-0 p-0 border-0 min-w-0"
                         key={kind}
                       >
                         <legend>
                           {kind === 'incoming' ? 'Incoming mail · IMAP' : 'Outgoing mail · SMTP'}
                         </legend>
-                        <div className="server-row">
+                        <div
+                          className={cn(
+                            'server-row grid grid-cols-[minmax(0,_1fr)_76px_auto] gap-[0_12px] items-start [&_.form-field]:mt-2',
+                            'max-[700px]:grid-cols-[minmax(0,_1fr)_76px] max-[700px]:[&>:last-child]:col-span-full',
+                          )}
+                        >
                           <TextField
                             label="Server"
                             autoFocus={kind === 'incoming' && mode !== 'edit'}
@@ -806,7 +879,7 @@ export function AccountSetup({
                               )
                             }
                           />
-                          <div className="form-field">
+                          <div className="form-field mt-3.75 [&_input]:mt-1.5 [&_input]:text-[12px] [&_input[aria-invalid='true']]:border-danger/70">
                             <span className="form-label block mb-1.5 text-[12px] text-secondary">
                               Security
                             </span>
@@ -830,7 +903,13 @@ export function AccountSetup({
               )}
             </section>
 
-            <section className="account-form-section">
+            <section
+              className={cn(
+                'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+                '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+                '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+              )}
+            >
               <h4>Sign in</h4>
               <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                 <TextField
@@ -869,7 +948,7 @@ export function AccountSetup({
               </div>
               {fields.protocol === 'imap' && (
                 <>
-                  <label className="checkbox-label">
+                  <label className="checkbox-label flex items-center gap-2.25 text-[12px]">
                     <Checkbox
                       checked={fields.sameLogin}
                       onCheckedChange={(sameLogin) =>
@@ -907,7 +986,7 @@ export function AccountSetup({
                   )}
                 </>
               )}
-              <label className="checkbox-label">
+              <label className="checkbox-label flex items-center gap-2.25 text-[12px]">
                 <Checkbox
                   checked={remember}
                   disabled={isDemo}
@@ -918,7 +997,7 @@ export function AccountSetup({
                   : 'Remember this login on this device'}
               </label>
               {!bootstrap.secureStorage && (
-                <div className="form-notice">
+                <div className="form-notice flex gap-2 text-[11px] leading-[1.6] my-3.75 mx-0 text-muted [&_svg]:shrink-0 [&_svg]:mt-[3px]">
                   <LockKeyhole size={14} />
                   <span>
                     {isDemo
@@ -930,7 +1009,13 @@ export function AccountSetup({
             </section>
 
             {mode === 'add' && (
-              <section className="account-form-section">
+              <section
+                className={cn(
+                  'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+                  '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+                  '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+                )}
+              >
                 <h4>How it appears</h4>
                 <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                   <TextField
@@ -951,7 +1036,7 @@ export function AccountSetup({
                     hint={
                       <>
                         Recipients see{' '}
-                        <span className="sender-preview text-secondary">
+                        <span className="sender-preview [overflow-wrap:anywhere] text-secondary">
                           {(senderName.trim() || 'your server’s name') + ' <' + email + '>'}
                         </span>
                       </>
@@ -962,7 +1047,14 @@ export function AccountSetup({
             )}
 
             {fields.protocol === 'imap' && (busy === 'testing' || test) && (
-              <section className="account-form-section" aria-live="polite">
+              <section
+                className={cn(
+                  'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+                  '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+                  '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+                )}
+                aria-live="polite"
+              >
                 <h4>Connection check</h4>
                 <ul className="connection-checks list-none mt-2.5 mb-0 mx-0 p-0 border border-solid border-border-strong rounded-lg">
                   <CheckRow
@@ -990,7 +1082,13 @@ export function AccountSetup({
         ))}
 
       {phase === 'folders' && review && (
-        <section className="account-form-section">
+        <section
+          className={cn(
+            'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
+            '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
+            '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+          )}
+        >
           <FolderMappingEditor
             review={review}
             value={choices}
@@ -1001,7 +1099,10 @@ export function AccountSetup({
       )}
 
       {error && (
-        <div role="alert" className="form-error">
+        <div
+          role="alert"
+          className="form-error flex gap-2 text-[11px] leading-[1.6] my-3.75 mx-0 text-danger [&_svg]:shrink-0 [&_svg]:mt-[3px]"
+        >
           <AlertCircle size={14} />
           <span>{error}</span>
         </div>

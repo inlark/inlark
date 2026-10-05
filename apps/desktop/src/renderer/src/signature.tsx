@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import {
@@ -114,13 +115,23 @@ export function SignaturePreview({ html }: { html: string }) {
 function SignatureView({ node, selected, deleteNode }: ReactNodeViewProps) {
   return (
     <NodeViewWrapper
-      className={'compose-signature' + (selected ? ' selected' : '')}
+      className={cn(
+        'compose-signature relative mt-1 mb-4 mx-0 rounded-[7px] [outline:1px_solid_transparent] outline-offset-[4px]',
+        'transition-[outline-color] duration-120 ease-[ease] hover:outline-[var(--border)] [&.selected]:outline-2',
+        '[&.selected]:outline-solid [&.selected]:outline-primary [&:hover_.compose-signature-remove]:opacity-100',
+        '[&.selected_.compose-signature-remove]:opacity-100',
+        selected && 'selected',
+      )}
       contentEditable={false}
     >
       <SignaturePreview html={node.attrs.html} />
       <button
         type="button"
-        className="compose-signature-remove"
+        className={cn(
+          'compose-signature-remove absolute top-[-2px] right-[-2px] grid place-items-center w-5.5 h-5.5 border',
+          'border-solid border-border-strong rounded-md bg-raised text-muted opacity-0 transition-[opacity] duration-120',
+          'ease-[ease] focus-visible:opacity-100 hover:text-foreground',
+        )}
         aria-label="Remove signature"
         title="Remove signature"
         onClick={deleteNode}

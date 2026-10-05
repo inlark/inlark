@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import type { IndexingProgress } from '@inlark/core'
 
 /** “Indexing mail · 12,340 of 50,000” with a slim bar; quiet, since indexing needs no action. */
@@ -16,7 +17,11 @@ export function IndexingMeter({
         {label} · {indexing.indexed.toLocaleString()} of {total.toLocaleString()}
       </span>
       <span
-        className="indexing-bar relative w-18 h-[3px] shrink-0 rounded-[2px] bg-border-strong overflow-hidden"
+        className={cn(
+          'indexing-bar [&>span]:absolute [&>span]:inset-y-0 [&>span]:left-0 [&>span]:rounded-[inherit]',
+          '[&>span]:bg-primary [&>span]:transition-[width] [&>span]:duration-400 [&>span]:ease-[ease] relative w-18',
+          'h-[3px] shrink-0 rounded-[2px] bg-border-strong overflow-hidden',
+        )}
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}

@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useForm } from '@tanstack/react-form'
@@ -177,7 +178,8 @@ export function Composer({
         '</p>',
     editorProps: {
       attributes: {
-        class: 'compose-editor min-h-45 outline-none text-[15px] leading-[1.8] text-foreground',
+        class:
+          "compose-editor [&[contenteditable='false']_.compose-signature-remove]:hidden min-h-45 outline-none text-[15px] leading-[1.8] text-foreground",
         'aria-label': 'Message body',
         spellcheck: 'true',
       },
@@ -430,9 +432,17 @@ export function Composer({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="compose-backdrop" />
+        <Dialog.Backdrop className="compose-backdrop fixed inset-0 bg-[#0004] z-70 transition-[opacity] duration-160 ease-[ease] data-starting-style:opacity-0 data-ending-style:opacity-0" />
         <Dialog.Popup
-          className={'composer ' + (expanded ? 'composer-expanded' : '')}
+          className={cn(
+            'composer fixed right-6 bottom-6 w-[min(660px,_calc(100vw_-_48px))] h-[min(700px,_calc(100vh_-_48px))]',
+            'bg-surface border border-solid border-border-strong rounded-2xl shadow-popup z-71 flex flex-col overflow-hidden',
+            'transition-[opacity,transform] duration-160 ease-[ease] data-starting-style:opacity-0',
+            'data-starting-style:transform-[translateY(10px)_scale(0.99)] data-ending-style:opacity-0',
+            'data-ending-style:transform-[translateY(10px)_scale(0.99)]',
+            expanded &&
+              'composer-expanded top-[50%] left-[50%] right-auto bottom-auto transform-[translate(-50%,_-50%)] h-[85vh] w-[min(900px,_90vw)] rounded-[11px] data-starting-style:transform-[translate(-50%,_-48%)_scale(0.99)] data-ending-style:transform-[translate(-50%,_-48%)_scale(0.99)]',
+          )}
           initialFocus={() =>
             initial.to.length && initial.subject && !locked
               ? document.querySelector<HTMLElement>('.compose-editor')
@@ -440,7 +450,13 @@ export function Composer({
           }
         >
           <Dialog.Title className="sr-only">Compose email</Dialog.Title>
-          <div className="compose-heading flex items-center justify-between h-12 py-0 pr-4.25 pl-6 bg-raised border-b border-solid border-b-border shrink-0">
+          <div
+            className={cn(
+              'compose-heading [&>span]:text-[12px] [&>span]:font-medium [&>div]:flex [&>div]:items-center [&>div]:gap-1.25',
+              'flex items-center justify-between h-12 py-0 pr-4.25 pl-6 bg-raised border-b border-solid border-b-border',
+              'shrink-0',
+            )}
+          >
             <span>
               <span className="compose-dot w-1.25 h-1.25 rounded-full inline-block bg-primary mr-1.5" />{' '}
               {initial.replyThreadId
@@ -489,8 +505,25 @@ export function Composer({
               </Dialog.Close>
             </div>
           </div>
-          <div className="compose-addresses">
-            <div className="compose-field">
+          <div className="compose-addresses py-1.25 px-6 shrink-0">
+            <div
+              className={cn(
+                'compose-field flex items-center min-h-10.5 border-b border-solid border-b-border gap-2.75 [&>label]:w-10.75',
+                '[&>label]:shrink-0 [&>label]:text-[11px] [&>label]:text-muted [&>span]:w-10.75 [&>span]:shrink-0',
+                '[&>span]:text-[11px] [&>span]:text-muted [&_input]:flex-1 [&_input]:border-0 [&_input]:py-1.75 [&_input]:px-0',
+                '[&_input]:bg-none [&_input]:bg-transparent [&_input]:text-[12px] [&_input]:min-w-0 [&>.select-trigger]:flex-1',
+                '[&>.select-trigger]:h-8 [&>.select-trigger]:py-0 [&>.select-trigger]:pr-1 [&>.select-trigger]:pl-0',
+                '[&>.select-trigger]:border-0 [&>.select-trigger]:bg-none [&>.select-trigger]:bg-transparent',
+                '[&>.select-trigger]:text-foreground [&>.select-trigger]:text-[12px] [&>.select-trigger]:whitespace-normal',
+                '[&>.select-trigger:hover:not([data-disabled])]:bg-none',
+                '[&>.select-trigger:hover:not([data-disabled])]:bg-transparent [&>button]:text-[11px] [&>button]:bg-none',
+                '[&>button]:bg-transparent [&>button]:border-0 [&>button]:text-muted [&>button]:whitespace-nowrap',
+                '[&_.subject-input]:font-medium [&_input:focus-visible]:outline-none',
+                '[&>.select-trigger:focus-visible]:outline-none focus-within:border-b-primary-solid',
+                '[&>.compose-cc-toggle]:self-start [&>.compose-cc-toggle]:mt-2.25 [&>.compose-cc-toggle]:py-0',
+                '[&>.compose-cc-toggle]:px-[2px] [&>.compose-cc-toggle:hover]:text-foreground',
+              )}
+            >
               <label htmlFor="compose-from">From</label>
               <Select
                 id="compose-from"
@@ -513,7 +546,24 @@ export function Composer({
               />
             </div>
             {(identities.data?.length || 0) > 1 && (
-              <div className="compose-field">
+              <div
+                className={cn(
+                  'compose-field flex items-center min-h-10.5 border-b border-solid border-b-border gap-2.75 [&>label]:w-10.75',
+                  '[&>label]:shrink-0 [&>label]:text-[11px] [&>label]:text-muted [&>span]:w-10.75 [&>span]:shrink-0',
+                  '[&>span]:text-[11px] [&>span]:text-muted [&_input]:flex-1 [&_input]:border-0 [&_input]:py-1.75 [&_input]:px-0',
+                  '[&_input]:bg-none [&_input]:bg-transparent [&_input]:text-[12px] [&_input]:min-w-0 [&>.select-trigger]:flex-1',
+                  '[&>.select-trigger]:h-8 [&>.select-trigger]:py-0 [&>.select-trigger]:pr-1 [&>.select-trigger]:pl-0',
+                  '[&>.select-trigger]:border-0 [&>.select-trigger]:bg-none [&>.select-trigger]:bg-transparent',
+                  '[&>.select-trigger]:text-foreground [&>.select-trigger]:text-[12px] [&>.select-trigger]:whitespace-normal',
+                  '[&>.select-trigger:hover:not([data-disabled])]:bg-none',
+                  '[&>.select-trigger:hover:not([data-disabled])]:bg-transparent [&>button]:text-[11px] [&>button]:bg-none',
+                  '[&>button]:bg-transparent [&>button]:border-0 [&>button]:text-muted [&>button]:whitespace-nowrap',
+                  '[&_.subject-input]:font-medium [&_input:focus-visible]:outline-none',
+                  '[&>.select-trigger:focus-visible]:outline-none focus-within:border-b-primary-solid',
+                  '[&>.compose-cc-toggle]:self-start [&>.compose-cc-toggle]:mt-2.25 [&>.compose-cc-toggle]:py-0',
+                  '[&>.compose-cc-toggle]:px-[2px] [&>.compose-cc-toggle:hover]:text-foreground',
+                )}
+              >
                 <label htmlFor="compose-identity">Identity</label>
                 <Select
                   disabled={locked}
@@ -536,7 +586,24 @@ export function Composer({
             )}
             <form.Field name="subject">
               {(field) => (
-                <div className="compose-field compose-subject">
+                <div
+                  className={cn(
+                    'compose-field flex items-center min-h-10.5 border-b border-solid border-b-border gap-2.75 [&>label]:w-10.75',
+                    '[&>label]:shrink-0 [&>label]:text-[11px] [&>label]:text-muted [&>span]:w-10.75 [&>span]:shrink-0',
+                    '[&>span]:text-[11px] [&>span]:text-muted [&_input]:flex-1 [&_input]:border-0 [&_input]:py-1.75 [&_input]:px-0',
+                    '[&_input]:bg-none [&_input]:bg-transparent [&_input]:text-[12px] [&_input]:min-w-0 [&>.select-trigger]:flex-1',
+                    '[&>.select-trigger]:h-8 [&>.select-trigger]:py-0 [&>.select-trigger]:pr-1 [&>.select-trigger]:pl-0',
+                    '[&>.select-trigger]:border-0 [&>.select-trigger]:bg-none [&>.select-trigger]:bg-transparent',
+                    '[&>.select-trigger]:text-foreground [&>.select-trigger]:text-[12px] [&>.select-trigger]:whitespace-normal',
+                    '[&>.select-trigger:hover:not([data-disabled])]:bg-none',
+                    '[&>.select-trigger:hover:not([data-disabled])]:bg-transparent [&>button]:text-[11px] [&>button]:bg-none',
+                    '[&>button]:bg-transparent [&>button]:border-0 [&>button]:text-muted [&>button]:whitespace-nowrap',
+                    '[&_.subject-input]:font-medium [&_input:focus-visible]:outline-none',
+                    '[&>.select-trigger:focus-visible]:outline-none focus-within:border-b-primary-solid',
+                    '[&>.compose-cc-toggle]:self-start [&>.compose-cc-toggle]:mt-2.25 [&>.compose-cc-toggle]:py-0',
+                    '[&>.compose-cc-toggle]:px-[2px] [&>.compose-cc-toggle:hover]:text-foreground compose-subject',
+                  )}
+                >
                   <label htmlFor="compose-subject">Subject</label>
                   <input
                     disabled={locked}
@@ -558,7 +625,11 @@ export function Composer({
               <div className="compose-attachments flex gap-1.75 flex-wrap mt-3.75">
                 {draft.attachments.map((a) => (
                   <div
-                    className="compose-attachment flex gap-1.75 items-center py-1.75 px-2.25 border border-solid border-border-strong rounded-md text-[11px]"
+                    className={cn(
+                      'compose-attachment [&_small]:text-muted [&_button]:border-0 [&_button]:bg-none [&_button]:bg-transparent',
+                      '[&_button]:p-0 [&_button]:text-muted flex gap-1.75 items-center py-1.75 px-2.25 border border-solid',
+                      'border-border-strong rounded-md text-[11px]',
+                    )}
                     key={a.id}
                   >
                     <FileText size={14} />
@@ -584,7 +655,7 @@ export function Composer({
           </div>
           {problem && draft.status !== 'uncertain' && (
             <div
-              className="compose-warning flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8"
+              className="compose-warning [&_span]:flex-1 [&_.button]:shrink-0 flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8"
               role="status"
             >
               <AlertCircle size={15} />
@@ -618,24 +689,32 @@ export function Composer({
             </div>
           )}
           {draft.status === 'uncertain' && (
-            <div className="compose-warning flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8">
+            <div className="compose-warning [&_span]:flex-1 [&_.button]:shrink-0 flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8">
               <AlertCircle size={15} />
               The server may have accepted this message. Check delivery to avoid sending it twice.
             </div>
           )}
-          <fieldset className="compose-format" disabled={locked}>
+          <fieldset
+            className={cn(
+              'compose-format flex gap-1.25 items-center py-1.75 px-4.5 border-t border-solid border-t-border',
+              '[&:is(fieldset)]:m-0 [&:is(fieldset)]:min-w-0 [&:is(fieldset)]:border-l-0 [&:is(fieldset)]:border-r-0',
+              '[&:is(fieldset)]:border-b-0 [&:is(fieldset):disabled]:opacity-50 m-0 border-r-0 border-l-0 border-b-0 min-w-0',
+              '[&_.active-format]:bg-primary-tint [&_.active-format]:text-primary',
+            )}
+            disabled={locked}
+          >
             <IconButton
               label="Bold"
               shortcut={boldKeys}
               onClick={() => editor?.chain().focus().toggleBold().run()}
-              className={formatting?.bold ? 'active-format' : ''}
+              className={cn(formatting?.bold && 'active-format bg-hover text-primary')}
               aria-pressed={formatting?.bold || false}
             >
               <Bold size={14} />
             </IconButton>
             <IconButton
               label="Italic"
-              className={formatting?.italic ? 'active-format' : ''}
+              className={cn(formatting?.italic && 'active-format bg-hover text-primary')}
               aria-pressed={formatting?.italic || false}
               shortcut={italicKeys}
               onClick={() => editor?.chain().focus().toggleItalic().run()}
@@ -644,7 +723,7 @@ export function Composer({
             </IconButton>
             <IconButton
               label="Bulleted list"
-              className={formatting?.bulletList ? 'active-format' : ''}
+              className={cn(formatting?.bulletList && 'active-format bg-hover text-primary')}
               aria-pressed={formatting?.bulletList || false}
               onClick={() => editor?.chain().focus().toggleBulletList().run()}
             >
@@ -652,7 +731,7 @@ export function Composer({
             </IconButton>
             <IconButton
               label={formatting?.link ? 'Edit link' : 'Add link'}
-              className={formatting?.link ? 'active-format' : ''}
+              className={cn(formatting?.link && 'active-format bg-hover text-primary')}
               aria-pressed={formatting?.link || false}
               onClick={() => {
                 const href: string = editor?.getAttributes('link').href || ''
@@ -664,7 +743,7 @@ export function Composer({
             >
               <Link2 size={15} />
             </IconButton>
-            <span className="toolbar-divider" />
+            <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
             <IconButton
               label="Attach files"
               shortcut={keys('attachFiles')}
@@ -695,7 +774,9 @@ export function Composer({
                 </span>
               )}
             </Button>
-            <span className="compose-account">{account.email}</span>
+            <span className="compose-account flex-1 text-right text-muted text-[11px] max-[700px]:text-[10px]">
+              {account.email}
+            </span>
             <IconButton
               label="Discard draft"
               shortcut={keys('discardDraft')}
@@ -713,7 +794,12 @@ export function Composer({
         title="Discard this draft?"
         description="This deletes the saved draft and its attachments."
       >
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={() => setDiscardOpen(false)}>Keep writing</Button>
           <Button
             variant="danger"
@@ -744,7 +830,7 @@ export function Composer({
             insertLink()
           }}
         >
-          <label className="modal-field">
+          <label className="modal-field [&_input]:mt-1.5">
             Web or email address
             <input
               autoFocus
@@ -768,7 +854,12 @@ export function Composer({
               {linkError}
             </span>
           )}
-          <div className="modal-actions">
+          <div
+            className={cn(
+              'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+              '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+            )}
+          >
             {editingLink && (
               <Button
                 variant="ghost"

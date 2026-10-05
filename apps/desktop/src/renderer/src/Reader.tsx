@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import {
@@ -431,10 +432,12 @@ export function EmailBody({
           ref={frame}
           title={'Message from ' + (message.from[0]?.name || message.from[0]?.email || 'sender')}
           sandbox="allow-same-origin"
-          className={
-            'email-frame w-full border-0 block min-h-10 ' +
-            (adaptive ? 'email-frame-adaptive bg-transparent rounded-none' : 'bg-white rounded-lg')
-          }
+          className={cn(
+            'email-frame [color-scheme:light] w-full border-0 block min-h-10',
+            adaptive
+              ? 'email-frame-adaptive [color-scheme:inherit] bg-transparent rounded-none'
+              : 'bg-white rounded-lg',
+          )}
           referrerPolicy="no-referrer"
           onLoad={onFrameLoad}
           onError={() => {
@@ -446,7 +449,13 @@ export function EmailBody({
       )}
       {loading && (
         <div
-          className="body-skeleton grid gap-3 pt-1.5 pb-2.5 px-0"
+          className={cn(
+            'body-skeleton [&_span]:block [&_span]:h-2.5 [&_span]:rounded-sm',
+            '[&_span]:bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+            '[&_span]:[background-size:200%_100%] [&_span]:animate-[shimmer_1.4s_ease-in-out_infinite]',
+            '[&_span:nth-child(1)]:w-[32%] [&_span:nth-child(2)]:w-[92%] [&_span:nth-child(3)]:w-[84%]',
+            '[&_span:nth-child(4)]:w-[58%] grid gap-3 pt-1.5 pb-2.5 px-0',
+          )}
           aria-label="Loading message"
           role="status"
         >
@@ -458,12 +467,20 @@ export function EmailBody({
       )}
       {!frameReady && !loading && (
         <>
-          <div className="email-fallback pt-[2px] pb-1 px-0 text-foreground whitespace-pre-wrap">
+          <div className="email-fallback font-sans text-[15px] leading-[1.7] [overflow-wrap:anywhere] pt-[2px] pb-1 px-0 text-foreground whitespace-pre-wrap">
             {(message.text?.trim() ? message.text : message.preview?.trim()) ||
               'No readable message body is available.'}
           </div>
           {renderIssue && (
-            <details className="email-render-details mt-3 text-muted text-[12px]">
+            <details
+              className={cn(
+                'email-render-details [&_summary]:cursor-pointer [&_p]:my-2 [&_p]:mx-0 [&_pre]:max-h-55 [&_pre]:p-3',
+                '[&_pre]:overflow-auto [&_pre]:border [&_pre]:border-solid [&_pre]:border-border [&_pre]:rounded-md',
+                '[&_pre]:select-text [&_pre]:whitespace-pre-wrap [&_button]:mr-2.5 [&_button]:py-1.25 [&_button]:px-2',
+                '[&_button]:border [&_button]:border-solid [&_button]:border-border [&_button]:rounded-sm',
+                '[&_button]:bg-transparent [&_button]:text-inherit [&_button]:cursor-pointer mt-3 text-muted text-[12px]',
+              )}
+            >
               <summary>HTML rendering details</summary>
               <p>
                 Review these details before sharing them. Error text can contain message
@@ -527,11 +544,11 @@ function UnsubscribeButton({ state, onClick }: { state: UnsubscribeState; onClic
         render={
           <Button
             variant="ghost"
-            className={
-              'unsubscribe-button unsubscribe-' +
-              state +
-              (state === 'pending' ? ' text-muted' : state === 'done' ? ' text-success' : '')
-            }
+            className={cn(
+              'unsubscribe-button min-h-7.25 h-7.25 py-0 pr-2.5 pl-2 gap-1.5 [&_svg]:shrink-0 disabled:opacity-100 @max-[440px]/mail:w-7.25 @max-[440px]/mail:p-1.25 @max-[440px]/mail:[&_span]:hidden unsubscribe-' +
+                state,
+              state === 'pending' ? ' text-muted' : state === 'done' ? ' text-success' : '',
+            )}
             aria-label={
               state === 'available'
                 ? 'Unsubscribe from this mailing list'
@@ -554,7 +571,7 @@ function UnsubscribeButton({ state, onClick }: { state: UnsubscribeState; onClic
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Positioner sideOffset={7}>
-          <Tooltip.Popup className="tooltip">
+          <Tooltip.Popup className="tooltip flex gap-3 items-center py-1.5 px-2.25 bg-raised border border-solid border-border-strong rounded-md text-[11px] shadow-popup z-200">
             Unsubscribe from this mailing list
             <ShortcutHint id="unsubscribe" />
           </Tooltip.Popup>
@@ -653,11 +670,18 @@ export function Reader({
     ...new Set(history.flatMap((m) => m.from.map((a) => a.name || a.email.split('@')[0]))),
   ]
   return (
-    <div className="reader-page">
-      <div className="reader-toolbar">
+    <div className="reader-page flex-1 flex flex-col min-h-0 relative">
+      <div
+        className={cn(
+          'reader-toolbar h-14.25 border-b border-solid border-b-border flex items-center py-0 px-5 gap-1.25 shrink-0',
+          '@max-[680px]/mail:py-0 @max-[680px]/mail:px-4 @max-[680px]/mail:gap-[2px] @max-[440px]/mail:py-0',
+          '@max-[440px]/mail:px-2.5 @max-[440px]/mail:[&>.toolbar-divider]:my-0',
+          '@max-[440px]/mail:[&>.toolbar-divider]:mx-[2px]',
+        )}
+      >
         <Button
           variant="ghost"
-          className="reader-back max-w-45 -ml-1.5"
+          className="reader-back [&_span]:overflow-hidden [&_span]:text-ellipsis @max-[680px]/mail:[&_span]:hidden max-w-45 -ml-1.5"
           aria-label={'Back to ' + backLabel.toLowerCase()}
           onClick={onBack}
           title={'Back' + (keys('back') ? ' · ' + keys('back') : '')}
@@ -665,7 +689,7 @@ export function Reader({
           <ArrowLeft size={16} />
           <span>{backLabel}</span>
         </Button>
-        <span className="toolbar-divider" />
+        <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
         {offersAction(view, 'archive') && (
           <HintIconButton
             disabled={busy}
@@ -703,7 +727,7 @@ export function Reader({
           shortcut={keys('star')}
           onClick={() => onAction(starred ? 'unstar' : 'star')}
         >
-          <Star size={16} className={starred ? 'starred' : ''} />
+          <Star size={16} className={cn(starred && 'starred [&:is(svg)]:fill-current text-star')} />
         </IconButton>
         <Dropdown
           trigger={
@@ -720,27 +744,27 @@ export function Reader({
           <MenuItem onClick={onMove} disabled={!!moveLimit}>
             <FolderInput size={14} />
             Move to folder
-            <ShortcutHint id="move" className="menu-shortcut" />
+            <ShortcutHint id="move" className="menu-shortcut ml-auto" />
           </MenuItem>
           {offersAction(view, 'spam') && (
             <MenuItem onClick={() => onAction('spam')} disabled={!!moveLimit}>
               <ShieldX size={14} />
               Mark as spam
-              <ShortcutHint id="spam" className="menu-shortcut" />
+              <ShortcutHint id="spam" className="menu-shortcut ml-auto" />
             </MenuItem>
           )}
           {offersAction(view, 'notSpam') && (
             <MenuItem onClick={() => onAction('notSpam')} disabled={!!moveLimit}>
               <ShieldCheck size={14} />
               Not spam
-              <ShortcutHint id="notSpam" className="menu-shortcut" />
+              <ShortcutHint id="notSpam" className="menu-shortcut ml-auto" />
             </MenuItem>
           )}
           {offersAction(view, 'restore') && (
             <MenuItem onClick={() => onAction('restore')} disabled={!!moveLimit}>
               <Inbox size={14} />
               Restore to inbox
-              <ShortcutHint id="restore" className="menu-shortcut" />
+              <ShortcutHint id="restore" className="menu-shortcut ml-auto" />
             </MenuItem>
           )}
           {offersAction(view, 'destroy') && (
@@ -762,11 +786,17 @@ export function Reader({
         </Dropdown>
         {unsubscribe && (
           <>
-            <span className="toolbar-divider" />
+            <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
             <UnsubscribeButton state={unsubscribe} onClick={onUnsubscribe} />
           </>
         )}
-        <div className="reader-navigation">
+        <div
+          className={cn(
+            'reader-navigation ml-auto flex gap-1.5 items-center [&>span]:text-[11px] [&>span]:text-muted [&>span]:mr-2.5',
+            '[&>span]:tabular-nums [&>span]:whitespace-nowrap @max-[680px]/mail:gap-[2px] @max-[680px]/mail:[&>span]:mr-1',
+            '@max-[440px]/mail:[&>span]:text-[10px]',
+          )}
+        >
           <span role="status">{busy ? 'Updating…' : position}</span>
           <IconButton
             label="Previous conversation"
@@ -786,9 +816,21 @@ export function Reader({
           </IconButton>
         </div>
       </div>
-      <div className="reader-scroll" ref={scroller} tabIndex={-1}>
-        <div className="reader-content">
-          <div className="reader-eyebrow flex gap-2.25 items-center text-[11px] text-secondary">
+      <div
+        className="reader-scroll flex-1 overflow-auto focus-visible:outline-none"
+        ref={scroller}
+        tabIndex={-1}
+      >
+        <div
+          className={cn(
+            'reader-content w-[min(840px,_100%)] my-0 mx-auto pt-10 pb-12 px-10 [&_h1]:text-[27px] [&_h1]:font-[550]',
+            '[&_h1]:tracking-[-0.7px] [&_h1]:leading-[1.4] [&_h1]:mt-3.5 [&_h1]:mb-7.5 [&_h1]:mx-0',
+            '[&_h1]:[overflow-wrap:anywhere] @max-[680px]/mail:py-7 @max-[680px]/mail:px-6.5',
+            '@max-[680px]/mail:[&_h1]:text-[24px] @max-[680px]/mail:[&_h1]:mb-6 @max-[440px]/mail:py-6.5',
+            '@max-[440px]/mail:px-5',
+          )}
+        >
+          <div className="reader-eyebrow [&>span:last-child]:text-muted flex gap-2.25 items-center text-[11px] text-secondary">
             <AccountMark account={account} size={16} />
             <span title={account.email}>{account.name}</span>
             <ChevronRight size={11} />
@@ -808,7 +850,14 @@ export function Reader({
                 return message.id === folded[0].id ? (
                   <button
                     key="folded"
-                    className="folded-messages relative flex justify-center w-full h-8.5 m-0 p-0 border-0 border-t border-solid border-t-border-strong bg-none bg-transparent"
+                    className={cn(
+                      'folded-messages [&_span]:absolute [&_span]:-top-2.75 [&_span]:py-[2px] [&_span]:px-2.5 [&_span]:text-[11px]',
+                      '[&_span]:text-muted [&_span]:bg-background [&_span]:border [&_span]:border-solid [&_span]:border-border-strong',
+                      '[&_span]:rounded-[11px] [&_span]:transition-[color,border-color] [&_span]:duration-120 [&_span]:ease-[ease]',
+                      '[&:hover_span]:text-foreground [&:hover_span]:border-foreground/30 [&+.message-card]:border-t-0',
+                      '[&+.message-card]:pt-0 relative flex justify-center w-full h-8.5 m-0 p-0 border-0 border-t border-solid',
+                      'border-t-border-strong bg-none bg-transparent',
+                    )}
                     onClick={() => setShowAll(true)}
                   >
                     <span>{folded.length} earlier messages</span>
@@ -823,15 +872,17 @@ export function Reader({
                 message.attachments?.filter((a) => !a.cid || a.disposition === 'attachment') || []
               return (
                 <article
-                  className={
-                    'message-card' +
-                    (draft ? ' draft-message' : '') +
-                    (!open ? ' collapsed-message' : '')
-                  }
+                  className={cn(
+                    'message-card py-6 px-0 border-t border-solid border-t-border-strong',
+                    draft &&
+                      'draft-message mt-1.5 mb-0 -mx-5 pt-4.5 pb-5 px-5 border border-dashed border-foreground/22 rounded-xl [&+.draft-message]:mt-2.5 [&.collapsed-message]:pt-3.5 [&.collapsed-message]:pb-3.5 [&.collapsed-message_.message-heading]:opacity-100 [&_.sender-name]:flex [&_.sender-name]:items-center [&_.sender-name]:gap-2 [&_.sender-name]:text-secondary [&_.sender-name]:font-medium [&_.message-content]:pt-4.5',
+                    !open &&
+                      'collapsed-message [&_.message-heading]:opacity-70 py-4.5 px-0 [&:hover_.message-heading]:opacity-100',
+                  )}
                   aria-label={draft ? 'Draft, not sent' : undefined}
                   key={message.id}
                 >
-                  <div className="message-heading">
+                  <div className="message-heading flex gap-3 items-center [&_time]:text-muted [&_time]:text-[11px] [&_time]:whitespace-nowrap @max-[680px]/mail:gap-2.25 @max-[680px]/mail:[&_time_span]:hidden">
                     {draft ? (
                       <span
                         className="draft-mark grid place-items-center w-8.75 h-8.75 shrink-0 border border-dashed border-foreground/28 rounded-full text-muted"
@@ -849,22 +900,24 @@ export function Reader({
                       />
                     )}
                     <button
-                      className="message-person"
+                      className="message-person flex flex-col min-w-0 flex-1 items-start text-left bg-none bg-transparent border-0 p-0 disabled:cursor-default disabled:opacity-100"
                       onClick={() => toggle(message.id, setExpanded)}
                       aria-expanded={open}
                       disabled={messages.length === 1}
                     >
                       {draft ? (
-                        <span className="sender-name">
+                        <span className="sender-name text-[13px] font-[550] max-w-full overflow-hidden text-ellipsis">
                           <span className="draft-badge py-0 px-1.5 rounded-xs bg-draft/14 text-draft text-[11px] font-[550] leading-[18px]">
                             Draft
                           </span>
                           Not sent yet
                         </span>
                       ) : (
-                        <span className="sender-name">
+                        <span className="sender-name text-[13px] font-[550] max-w-full overflow-hidden text-ellipsis">
                           {sender?.name || sender?.email}
-                          <span className="sender-address">{sender?.name ? sender.email : ''}</span>
+                          <span className="sender-address font-normal text-[11px] text-muted ml-2 @max-[900px]/mail:hidden">
+                            {sender?.name ? sender.email : ''}
+                          </span>
                         </span>
                       )}
                       <span className="message-to text-muted text-[11px] mt-[3px] whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
@@ -896,13 +949,22 @@ export function Reader({
                       >
                         <ChevronDown
                           size={13}
-                          className={'details-chevron' + (details.has(message.id) ? ' open' : '')}
+                          className={cn(
+                            'details-chevron transition-[transform] duration-140 ease-[ease] [&.open]:transform-[rotate(180deg)]',
+                            details.has(message.id) && 'open',
+                          )}
                         />
                       </IconButton>
                     )}
                   </div>
                   {details.has(message.id) && (
-                    <dl className="message-details">
+                    <dl
+                      className={cn(
+                        'message-details grid grid-cols-[70px_1fr] gap-1.5 py-3.5 px-4 mt-4 mb-0 mr-0 ml-11.75 bg-surface rounded-[7px]',
+                        'text-[11px] [&_dt]:text-muted [&_dd]:m-0 [&_dd]:[overflow-wrap:anywhere] [&+.message-content]:pt-4.5',
+                        '@max-[680px]/mail:ml-0',
+                      )}
+                    >
                       <dt>From</dt>
                       <dd>{message.from.map(formatAddress).join(', ')}</dd>
                       {message.replyTo.length > 0 && (
@@ -930,7 +992,7 @@ export function Reader({
                     </dl>
                   )}
                   {open && (
-                    <div className="message-content">
+                    <div className="message-content pt-6 pb-[2px] pr-0 pl-11.75 @max-[680px]/mail:pl-0">
                       <EmailBody
                         message={message}
                         remoteImages={settings.remoteImages}
@@ -943,7 +1005,18 @@ export function Reader({
                           {attachments.map((attachment) => {
                             const Icon = attachmentIcon(attachment.type, attachment.name)
                             return (
-                              <div className="attachment-card" key={attachment.blobId}>
+                              <div
+                                className={cn(
+                                  'attachment-card flex items-center border border-solid border-border-strong rounded-lg p-2.75 max-w-full',
+                                  'bg-surface [&>button:not(.button)]:border-0 [&>button:not(.button)]:bg-none',
+                                  '[&>button:not(.button)]:bg-transparent [&>button:not(.button)]:text-left [&>button:not(.button)]:p-0',
+                                  '[&>button:not(.button)]:min-w-0 [&_strong]:block [&_strong]:overflow-hidden [&_strong]:text-ellipsis',
+                                  '[&_strong]:whitespace-nowrap [&_strong]:text-[11px] [&_strong]:font-medium [&_span]:text-muted',
+                                  '[&_span]:text-[11px] py-1.5 pr-1.5 pl-2 gap-1 transition-[border-color] duration-120 ease-[ease]',
+                                  'hover:border-foreground/22',
+                                )}
+                                key={attachment.blobId}
+                              >
                                 <button
                                   className="attachment-open flex items-center gap-2.5 min-w-0 max-w-65 py-[3px] pr-1 pl-0 border-0 bg-none bg-transparent text-left"
                                   title={'Open ' + attachment.name}
@@ -953,10 +1026,10 @@ export function Reader({
                                       .catch((e) => notify(friendlyError(e), 'error'))
                                   }
                                 >
-                                  <span className="attachment-icon">
+                                  <span className="attachment-icon grid place-items-center w-8.5 h-8.5 shrink-0 p-0 rounded-[7px] text-primary bg-primary-tint">
                                     <Icon size={18} strokeWidth={1.6} />
                                   </span>
-                                  <span className="attachment-label min-w-0">
+                                  <span className="attachment-label [&>span]:block [&>span]:mt-[1px] min-w-0">
                                     <strong>{attachment.name}</strong>
                                     <span>
                                       {extension(attachment.name)} · {formatBytes(attachment.size)}
@@ -997,15 +1070,29 @@ export function Reader({
             })}
           </div>
           {last && (
-            <div className="reply-panel">
-              <button className="reply-prompt" onClick={() => onReply(last, 'reply')}>
+            <div
+              className={cn(
+                'reply-panel mt-3 mb-0 mr-0 ml-11.75 border border-solid border-border-strong rounded-xl',
+                'bg-[color-mix(in_srgb,_var(--surface)_45%,_var(--bg))] overflow-hidden @max-[680px]/mail:ml-0',
+              )}
+            >
+              <button
+                className={cn(
+                  'reply-prompt flex items-center gap-3.25 w-full bg-none bg-transparent border-0 text-left p-5 text-muted',
+                  'hover:bg-hover [&>span:not(.shortcut-keys)]:flex-1 [&>span:not(.shortcut-keys)]:min-w-0 [&_strong]:block',
+                  '[&_strong]:text-foreground [&_strong]:text-[13px] [&_strong]:font-medium [&_strong]:overflow-hidden',
+                  '[&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_span_span]:block [&_span_span]:text-[12px]',
+                  '[&_span_span]:mt-1',
+                )}
+                onClick={() => onReply(last, 'reply')}
+              >
                 <Reply size={17} />
                 <span>
                   <strong>Reply to {last.from[0]?.name || last.from[0]?.email || 'sender'}</strong>
                 </span>
                 <ShortcutHint id="reply" />
               </button>
-              <div className="reply-bar">
+              <div className="reply-bar flex gap-2.5 pt-0 pb-3 pr-3.5 pl-11.25 [&_.button]:text-[11px] @max-[680px]/mail:pl-11 [&_kbd]:ml-[2px] [&_kbd]:h-4 [&_kbd]:min-w-4 [&_kbd]:text-[9px]">
                 <Button variant="ghost" onClick={() => onReply(last, 'replyAll')}>
                   <ReplyAll size={14} />
                   Reply all
@@ -1023,7 +1110,11 @@ export function Reader({
       </div>
       {link && (
         <div
-          className="link-status absolute left-3 bottom-3 max-w-[min(640px,_calc(100%_-_24px))] py-1.25 px-2.25 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-secondary bg-raised border border-solid border-border-strong rounded-md pointer-events-none z-5"
+          className={cn(
+            'link-status shadow-[0_4px_14px_#0003] absolute left-3 bottom-3 max-w-[min(640px,_calc(100%_-_24px))] py-1.25',
+            'px-2.25 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-secondary bg-raised border',
+            'border-solid border-border-strong rounded-md pointer-events-none z-5',
+          )}
           aria-hidden="true"
         >
           {link}
