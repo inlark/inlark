@@ -37,7 +37,12 @@ export function AccountAvatarPicker({
           render={
             <button
               type="button"
-              className={cn('account-tile-button', dragging && 'dragging')}
+              className={cn(
+                'account-tile-button inline-flex p-0 border-0 rounded-full bg-none bg-transparent transition-[box-shadow]',
+                'duration-120 ease-[ease] hover:shadow-[0_0_0_1px_var(--border-strong)]',
+                'data-popup-open:shadow-[0_0_0_1px_var(--border-strong)] [&.dragging]:shadow-[0_0_0_2px_var(--accent-solid)]',
+                dragging && 'dragging',
+              )}
               aria-label={'Change avatar for ' + name}
               title="Change avatar"
               onDragOver={(e) => {
@@ -58,8 +63,15 @@ export function AccountAvatarPicker({
           <AccountTile account={{ ...value, email }} />
         </Menu.Trigger>
         <Menu.Portal container={portalContainer}>
-          <Menu.Positioner sideOffset={6} align="start" className="account-avatar-menu">
-            <Menu.Popup className="dropdown">
+          <Menu.Positioner sideOffset={6} align="start" className="account-avatar-menu z-130">
+            <Menu.Popup
+              className={cn(
+                'dropdown min-w-45 bg-raised border border-solid border-border-strong rounded-lg shadow-popup p-1.25 z-120',
+                'origin-[var(--transform-origin)] transition-[opacity,transform] duration-100 ease-[ease]',
+                'data-starting-style:opacity-0 data-starting-style:transform-[scale(0.98)] data-ending-style:opacity-0',
+                'data-ending-style:transform-[scale(0.98)]',
+              )}
+            >
               <MenuItem onClick={() => input.current?.click()}>
                 <ImageUpload size={15} />
                 {value.image ? 'Replace picture…' : 'Upload picture…'}

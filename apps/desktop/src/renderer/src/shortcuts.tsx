@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { Fragment, createContext, useContext } from 'react'
 import {
   detectPlatform,
@@ -318,10 +319,12 @@ export function useShortcutHandlers(
 /** The keys of a binding, with “then” between the steps of a sequence. */
 export function ShortcutKeys({ binding, className }: { binding: Binding; className?: string }) {
   return (
-    <span className={'shortcut-keys' + (className ? ' ' + className : '')}>
+    <span className={cn('shortcut-keys inline-flex items-center gap-[3px]', className)}>
       {binding.map((chord, step) => (
         <Fragment key={step}>
-          {step > 0 && <span className="shortcut-then">then</span>}
+          {step > 0 && (
+            <span className="shortcut-then my-0 mx-[1px] text-[10px] text-faint">then</span>
+          )}
           {chordKeys(chord).map((key, index) => (
             <kbd key={index}>{key}</kbd>
           ))}

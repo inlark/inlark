@@ -18,7 +18,7 @@ describe('email body fallback', () => {
       const markup = renderToStaticMarkup(
         createElement(EmailBody, { message, remoteImages: false }),
       )
-      expect(markup).toContain('class="email-fallback"')
+      expect(markup).toMatch(/class="[^"]*\bemail-fallback\b[^"]*"/)
       expect(markup).toContain('The message body remains readable.')
     } finally {
       vi.unstubAllGlobals()

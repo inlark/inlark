@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import {
   useCallback,
   useEffect,
@@ -240,7 +241,11 @@ export function ConversationList({
 
   return (
     <div
-      className="mail-list"
+      className={cn(
+        'mail-list flex-1 overflow-auto min-h-0 outline-none [overflow-anchor:none] [scrollbar-gutter:stable] pb-4',
+        'focus-visible:shadow-[inset_0_0_0_1px_var(--border-strong)] focus-visible:rounded-none [&:has(.selected)]:pb-22',
+        '[&:has(.selected)_.row-selector_.checkbox]:opacity-100 [&:has(.selected)_.unread-dot]:opacity-0',
+      )}
       ref={listRef}
       tabIndex={0}
       role="grid"
@@ -281,7 +286,15 @@ export function ConversationList({
               }}
             >
               {'group' in row ? (
-                <div className="date-group">{row.group}</div>
+                <div
+                  className={cn(
+                    'date-group h-9 flex items-center py-0 px-7 text-muted text-[11px] font-medium bg-background border-b',
+                    'border-solid border-b-border @max-[900px]/mail:pl-5.5 @max-[900px]/mail:pr-5.5 @max-[680px]/mail:py-0',
+                    '@max-[680px]/mail:px-5',
+                  )}
+                >
+                  {row.group}
+                </div>
               ) : (
                 <ListConversationRow
                   conversation={row.conversation}
@@ -302,7 +315,7 @@ export function ConversationList({
         })}
       </div>
       {isFetchingNextPage && (
-        <div className="load-more">
+        <div className="load-more flex items-center justify-center gap-2 text-[12px] text-muted p-3.75">
           <Spinner size={14} />
           Loading more conversations…
         </div>

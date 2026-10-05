@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useRef, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { Check } from '@inlark/ui/icons'
@@ -110,7 +111,7 @@ export function SignatureSettings({
 
   const formatSwitch = (identity: Identity, address?: string) => (
     <SegmentedControl
-      className="signature-format"
+      className="signature-format ml-auto [&_.segmented-option]:h-6 [&_.segmented-option]:py-0 [&_.segmented-option]:px-2.25 [&_.segmented-option]:text-[11px]"
       label={'Signature format' + (address ? ' for ' + address : '')}
       value={identitySignature(values, identity).format}
       options={formats}
@@ -128,7 +129,16 @@ export function SignatureSettings({
             ? query.data[0]
             : undefined
         return (
-          <section className="signature-account" key={account.id}>
+          <section
+            className={cn(
+              'signature-account [&>header]:flex [&>header]:items-center [&>header]:gap-2.5 [&>header]:mb-3 [&>header]:min-w-0',
+              '[&>header_strong]:text-[13px] [&>header_strong]:font-medium [&>header_strong]:text-strong',
+              '[&>header_strong]:whitespace-nowrap [&>header_span]:text-[12px] [&>header_span]:text-muted',
+              '[&>header_span]:overflow-hidden [&>header_span]:text-ellipsis [&>header_span]:whitespace-nowrap',
+              '[&>header_.signature-format]:shrink-0 py-5 px-0 border-t border-solid border-t-border',
+            )}
+            key={account.id}
+          >
             <header>
               <AccountMark account={account} size={20} />
               <strong>{account.name}</strong>
@@ -136,13 +146,17 @@ export function SignatureSettings({
               {lone && account.status === 'connected' && formatSwitch(lone)}
             </header>
             {account.status !== 'connected' ? (
-              <p className="signature-note">Reconnect this account to edit its signatures.</p>
+              <p className="signature-note flex items-center gap-2 m-0 text-[12px] text-muted">
+                Reconnect this account to edit its signatures.
+              </p>
             ) : query.isPending ? (
-              <p className="signature-note">
+              <p className="signature-note flex items-center gap-2 m-0 text-[12px] text-muted">
                 <Spinner size={12} /> Loading addresses…
               </p>
             ) : query.isError ? (
-              <p className="signature-note">Couldn’t load this account’s addresses.</p>
+              <p className="signature-note flex items-center gap-2 m-0 text-[12px] text-muted">
+                Couldn’t load this account’s addresses.
+              </p>
             ) : (
               query.data.map((identity) => {
                 const key = identityKey(account.id, identity.id)
@@ -151,9 +165,22 @@ export function SignatureSettings({
                 const html = signature.format === 'html'
                 const name = identity === lone ? account.name + ' signature' : undefined
                 return (
-                  <div className="signature-identity" key={key}>
+                  <div
+                    className={cn(
+                      'signature-identity [&+.signature-identity]:mt-4.5 [&_textarea]:block [&_textarea]:min-h-19',
+                      '[&_textarea]:text-[12px] [&_textarea]:leading-[1.6] [&_textarea]:resize-y [&_textarea.signature-code]:min-h-30',
+                      '[&_textarea.signature-code]:font-mono [&_textarea.signature-code]:text-[11.5px]',
+                      '[&_textarea.signature-code]:[tab-size:2] [&_textarea.signature-code]:[overflow-wrap:anywhere]',
+                    )}
+                    key={key}
+                  >
                     {identity !== lone && (
-                      <div className="signature-identity-heading">
+                      <div
+                        className={cn(
+                          'signature-identity-heading [&_label]:flex-1 [&_label]:min-w-0 [&_label]:m-0 [&_label]:text-secondary',
+                          '[&_label]:overflow-hidden [&_label]:text-ellipsis [&_label]:whitespace-nowrap flex items-center gap-3 mb-2',
+                        )}
+                      >
                         <label htmlFor={id}>
                           {identity.name ? identity.name + ' · ' : ''}
                           {identity.email}
@@ -161,11 +188,11 @@ export function SignatureSettings({
                         {formatSwitch(identity, identity.email)}
                       </div>
                     )}
-                    <div className="signature-editor">
+                    <div className="signature-editor relative">
                       <textarea
                         id={id}
                         rows={html ? 6 : 3}
-                        className={html ? 'signature-code' : undefined}
+                        className={cn(html ? 'signature-code' : undefined)}
                         aria-label={name && (html ? name + ' HTML' : name)}
                         value={signature.value}
                         placeholder={html ? 'Paste or write HTML…' : 'No signature'}
@@ -176,7 +203,11 @@ export function SignatureSettings({
                         onBlur={() => void save(latest.current)}
                       />
                       <span
-                        className={'signature-saved' + (savedKey === key ? ' visible' : '')}
+                        className={cn(
+                          'signature-saved absolute right-2.5 bottom-2 inline-flex items-center gap-1 text-[11px] text-muted opacity-0',
+                          'transition-[opacity] duration-160 ease-[ease] pointer-events-none [&.visible]:opacity-100',
+                          savedKey === key && 'visible',
+                        )}
                         aria-live="polite"
                       >
                         {savedKey === key && (
@@ -187,12 +218,12 @@ export function SignatureSettings({
                       </span>
                     </div>
                     {html && signature.value.trim() && (
-                      <div className="signature-preview">
+                      <div className="signature-preview [&>span]:block [&>span]:mb-1.5 [&>span]:text-[11px] [&>span]:text-muted [&>div]:max-h-65 [&>div]:overflow-auto [&_.signature-note]:mt-2 mt-2.5">
                         <span>Preview</span>
                         <SignaturePreview html={signature.value} />
                         {!remoteImages &&
                           /<img[^>]+src\s*=\s*["']?https?:/i.test(signature.value) && (
-                            <p className="signature-note">
+                            <p className="signature-note flex items-center gap-2 m-0 text-[12px] text-muted">
                               Turn on Load remote images in General to preview linked images.
                               Recipients still see them.
                             </p>

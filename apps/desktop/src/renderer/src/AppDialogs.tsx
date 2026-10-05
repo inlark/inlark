@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { Fragment, useState } from 'react'
 import { Button, DatePicker, Modal, Switch } from '@inlark/ui'
 import type { MailAction, Mailbox, MailQuery } from '@inlark/core'
@@ -12,7 +13,12 @@ export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () =
       }}
       title="Keyboard shortcuts"
       description="Click any keys to change them, or + to add another. Letter shortcuts are paused while you type in a field."
-      className="shortcut-modal"
+      className={cn(
+        'shortcut-modal [&_.shortcut-toolbar]:sticky [&_.shortcut-toolbar]:-top-5.75 [&_.shortcut-toolbar]:z-2',
+        '[&_.shortcut-toolbar]:-mt-2.5 [&_.shortcut-toolbar]:-mb-1.5 [&_.shortcut-toolbar]:mx-0',
+        '[&_.shortcut-toolbar]:py-2.5 [&_.shortcut-toolbar]:px-0 [&_.shortcut-toolbar]:bg-surface',
+        'w-[min(760px,_calc(100vw_-_40px))]',
+      )}
     >
       <ShortcutEditor />
     </Modal>
@@ -41,7 +47,7 @@ export function FilterDialog({
       }}
       title="Filter conversations"
       description="Searches your whole mailbox on the server, not just what’s loaded."
-      className="filter-modal"
+      className="filter-modal w-[min(520px,_calc(100vw_-_40px))]"
     >
       <form
         onSubmit={(event) => {
@@ -49,7 +55,7 @@ export function FilterDialog({
           onApply(values)
         }}
       >
-        <div className="filter-fields">
+        <div className="filter-fields [&_input]:mt-1.5 [&_input]:text-[12px] grid grid-cols-[1fr_1fr] gap-[16px_12px]">
           {(['from', 'to'] as const).map((key) => (
             <label key={key}>
               {{ from: 'From', to: 'To' }[key]}
@@ -62,7 +68,7 @@ export function FilterDialog({
               />
             </label>
           ))}
-          <label className="filter-wide">
+          <label className="filter-wide col-span-full">
             Subject
             <input
               value={values.subject || ''}
@@ -72,12 +78,14 @@ export function FilterDialog({
               }
             />
           </label>
-          <div className="filter-field filter-wide">
+          <div className="filter-field [&_.filter-date-range]:mt-1.5 [&_.filter-date-range]:text-[12px] [&>span]:block [&>span]:text-[12px] [&>span]:text-secondary filter-wide col-span-full">
             <span>Date</span>
-            <div className="filter-date-range">
+            <div className="filter-date-range grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               {(['after', 'before'] as const).map((key, index) => (
                 <Fragment key={key}>
-                  {index > 0 && <span className="filter-date-separator">to</span>}
+                  {index > 0 && (
+                    <span className="filter-date-separator text-[12px] text-faint">to</span>
+                  )}
                   <DatePicker
                     aria-label={{ after: 'After', before: 'Before' }[key]}
                     placeholder={{ after: 'Start date', before: 'End date' }[key]}
@@ -93,7 +101,13 @@ export function FilterDialog({
               ))}
             </div>
           </div>
-          <div className="filter-switch filter-wide">
+          <div
+            className={cn(
+              'filter-switch flex items-center justify-between gap-4 pt-4 border-t border-solid border-t-border',
+              '[&_strong]:block [&_strong]:text-[12px] [&_strong]:font-normal [&_strong]:text-foreground [&_small]:block',
+              '[&_small]:mt-[2px] [&_small]:text-[11px] [&_small]:text-muted filter-wide col-span-full',
+            )}
+          >
             <span>
               <strong>Has attachments</strong>
               <small>Only show conversations with files attached.</small>
@@ -107,7 +121,13 @@ export function FilterDialog({
             />
           </div>
         </div>
-        <div className="modal-actions filter-actions">
+        <div
+          className={cn(
+            'modal-actions flex gap-2 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger filter-actions',
+            'justify-between mt-5.5 [&>.button-ghost]:-ml-2.5 [&>.button-ghost]:text-muted',
+          )}
+        >
           <Button
             variant="ghost"
             disabled={!filterKeys.some((key) => values[key])}
@@ -174,12 +194,17 @@ export function FolderDialog({
         }}
       >
         {operation !== 'delete' && (
-          <label className="modal-field">
+          <label className="modal-field [&_input]:mt-1.5">
             Folder name
             <input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
           </label>
         )}
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={onClose}>Cancel</Button>
           <Button
             type="submit"
@@ -259,7 +284,12 @@ export function ConfirmActionDialog({
       title={copy ? copy.title : ''}
       description={copy?.description}
     >
-      <div className="modal-actions">
+      <div
+        className={cn(
+          'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+          '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+        )}
+      >
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant={shown.action === 'destroy' ? 'danger' : 'primary'}

@@ -21,7 +21,15 @@ export function AccountMark({
   useEffect(() => setImageFailed(false), [account.image])
   return (
     <span
-      className={cn('account-mark', className)}
+      className={cn(
+        'account-mark [--mark-size:16px] [--mark-ring:rgb(255_255_255_/_0.08)] relative w-[var(--mark-size)]',
+        'h-[var(--mark-size)] shrink-0 inline-flex rounded-full overflow-hidden light:[--mark-ring:rgb(0_0_0_/_0.08)]',
+        "after:content-[''] after:absolute after:inset-0 after:rounded-[inherit]",
+        'after:shadow-[inset_0_0_0_1px_var(--mark-ring)] after:pointer-events-none [&>svg]:block [&>svg]:w-full',
+        '[&>svg]:h-full [&>svg]:object-cover [&>img]:block [&>img]:w-full [&>img]:h-full [&>img]:object-cover',
+        '[&.disconnected]:opacity-40',
+        className,
+      )}
       title={title}
       style={{ '--mark-size': size + 'px' } as CSSProperties}
     >

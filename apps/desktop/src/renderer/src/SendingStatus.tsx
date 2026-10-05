@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useState } from 'react'
 import { AlertCircle, Check, RefreshCw, Send } from '@inlark/ui/icons'
 import { Button, Modal, Spinner } from '@inlark/ui'
@@ -182,16 +183,30 @@ export function SubmissionList({
     )
   }
   return (
-    <section className="submissions" aria-labelledby="submissions-title">
-      <h2 className="draft-section-label" id="submissions-title">
+    <section
+      className="submissions border-b border-solid border-b-border pb-1.5"
+      aria-labelledby="submissions-title"
+    >
+      <h2
+        className="draft-section-label m-0 pt-4.5 pb-1.5 px-8 text-[11px] font-medium text-muted @max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5"
+        id="submissions-title"
+      >
         Needs attention
       </h2>
       {submissions.map((s) => {
         const account = accounts.find((a) => a.id === s.accountId)
         const text = describe(s)
         return (
-          <div className={'submission submission-' + text.tone} key={s.draftId}>
-            <span className="submission-icon" aria-hidden="true">
+          <div
+            className={cn(
+              'submission flex gap-4 items-start py-3.5 px-8 [&+.submission]:border-t [&+.submission]:border-solid',
+              '[&+.submission]:border-t-border [&_time]:shrink-0 [&_time]:text-[11px] [&_time]:text-muted',
+              '@max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5 submission-',
+              text.tone,
+            )}
+            key={s.draftId}
+          >
+            <span className="submission-icon flex mt-[1px] text-muted" aria-hidden="true">
               {s.state === 'uncertain' ? (
                 <AlertCircle size={16} />
               ) : s.state === 'partial' ? (
@@ -202,19 +217,21 @@ export function SubmissionList({
                 <Check size={16} />
               )}
             </span>
-            <div className="submission-text">
+            <div className="submission-text [&_strong]:block [&_strong]:text-[13px] [&_strong]:font-medium [&_strong]:text-foreground flex-1 min-w-0">
               <strong>{s.subject || '(No subject)'}</strong>
-              <span className="submission-state">
+              <span className="submission-state flex flex-wrap items-center gap-[4px_12px] mt-[3px] text-[12px] text-secondary">
                 {text.state}
                 {account && (
-                  <span className="submission-account">
+                  <span className="submission-account inline-flex items-center gap-1.5 text-[11px] text-muted">
                     <AccountMark account={account} size={14} />
                     {account.name}
                   </span>
                 )}
               </span>
-              <span className="submission-detail">{text.detail}</span>
-              <div className="submission-actions">{actions(s)}</div>
+              <span className="submission-detail [overflow-wrap:anywhere] block mt-1 max-w-140 text-[11px] leading-[1.6] text-muted">
+                {text.detail}
+              </span>
+              <div className="submission-actions flex flex-wrap gap-1.5 mt-2.5">{actions(s)}</div>
             </div>
             <time dateTime={s.at} title={new Date(s.at).toLocaleString()}>
               {shortDate(s.at)}
@@ -234,11 +251,16 @@ export function SubmissionList({
           '” was delivered. If it was, recipients will receive it twice.'
         }
       >
-        <p className="modal-body-text">
+        <p className="modal-body-text m-0 text-[12px] leading-[1.6] text-secondary">
           The replacement opens as a new draft for you to review. Nothing is sent until you choose
           Send. The unconfirmed message stays listed here, so you can still check it.
         </p>
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={() => setReplace(undefined)}>Cancel</Button>
           <Button
             variant="primary"
@@ -267,7 +289,12 @@ export function SubmissionList({
           '” was delivered and remove its unconfirmed draft from this device. Look in Sent first if you’re unsure.'
         }
       >
-        <div className="modal-actions">
+        <div
+          className={cn(
+            'modal-actions flex justify-end gap-2 mt-6 [&>.modal-action-start]:mr-auto [&>.modal-action-start]:-ml-2.5',
+            '[&>.modal-action-start]:text-muted [&>.modal-action-start:hover:not(:disabled)]:text-danger',
+          )}
+        >
           <Button onClick={() => setDismiss(undefined)}>Keep tracking</Button>
           <Button
             variant="danger"

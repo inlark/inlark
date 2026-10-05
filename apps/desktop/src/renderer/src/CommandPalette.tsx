@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, CornerDownLeft, Inbox, Search } from '@inlark/ui/icons'
 import { Modal } from '@inlark/ui'
@@ -110,9 +111,21 @@ export function CommandPalette({
         if (!open) onClose()
       }}
       title="Search & commands"
-      className="command-modal"
+      className={cn(
+        'command-modal p-0 w-152.5 [&>.modal-heading]:absolute [&>.modal-heading]:w-[1px] [&>.modal-heading]:h-[1px]',
+        '[&>.modal-heading]:overflow-hidden [&>.modal-heading]:[clip-path:inset(50%)] [&>.modal-heading_.button]:hidden',
+        'top-[min(16vh,_140px)] transform-[translate(-50%,_0)]',
+        'data-starting-style:transform-[translate(-50%,_-6px)_scale(0.985)]',
+        'data-ending-style:transform-[translate(-50%,_-6px)_scale(0.985)]',
+      )}
     >
-      <div className="command-input">
+      <div
+        className={cn(
+          'command-input flex gap-3.25 items-center py-4.5 px-5.25 border-b border-solid border-b-border-strong text-muted',
+          '[&_input]:border-0 [&_input]:py-[3px] [&_input]:px-0 [&_input]:bg-none [&_input]:bg-transparent',
+          '[&_input]:text-[14px] [&_input:focus-visible]:outline-none focus-within:border-b-primary-solid',
+        )}
+      >
         <Search size={18} />
         <input
           autoFocus
@@ -147,12 +160,25 @@ export function CommandPalette({
             }
           }}
         />
-        <button className="command-dismiss" onClick={onClose} aria-label="Close search">
+        <button
+          className="command-dismiss border-0 bg-none bg-transparent p-0"
+          onClick={onClose}
+          aria-label="Close search"
+        >
           <kbd>Esc</kbd>
         </button>
       </div>
       <div
-        className="command-results"
+        className={cn(
+          'command-results p-2.25 max-h-[min(430px,_calc(100vh_-_260px))] overflow-auto [&_button]:w-full [&_button]:flex',
+          '[&_button]:items-center [&_button]:bg-none [&_button]:bg-transparent [&_button]:border-0 [&_button]:rounded-md',
+          '[&_button]:text-secondary [&_button]:text-left [&_button.active]:bg-hover [&_button.active]:text-foreground',
+          '[&_button:hover]:bg-hover [&_button:hover]:text-foreground [&_button.active_svg]:text-primary',
+          '[&_button]:text-[13px] pt-1 pb-2 px-2 [&_button]:gap-2.75 [&_button]:py-1.75 [&_button]:px-2.5',
+          '[&_button.active_.command-icon]:text-strong [&_button.active_.command-icon]:border-foreground/22',
+          '[&_button.unavailable_.command-text>:first-child]:opacity-55 [&_button.unavailable_.command-icon]:opacity-55',
+          '[&_button.unavailable_.command-keys]:opacity-55',
+        )}
         id={listId}
         role="listbox"
         aria-label="Commands and mail search"
@@ -161,12 +187,18 @@ export function CommandPalette({
         {options.map((c, i) => (
           <Fragment key={c.id}>
             {(query ? i === 0 && c.id !== 'search' : options[i - 1]?.group !== c.group) && (
-              <div className="command-label" role="presentation">
+              <div
+                className="command-label text-[11px] text-muted pt-3 pb-1.25 px-3"
+                role="presentation"
+              >
                 {query ? 'Best matches' : c.group}
               </div>
             )}
             {query && c.id === 'search' && i > 0 && (
-              <div className="command-label" role="presentation">
+              <div
+                className="command-label text-[11px] text-muted pt-3 pb-1.25 px-3"
+                role="presentation"
+              >
                 Mail
               </div>
             )}
@@ -176,22 +208,34 @@ export function CommandPalette({
               aria-selected={activeIndex === i}
               aria-disabled={c.disabled || undefined}
               tabIndex={-1}
-              className={(activeIndex === i ? 'active' : '') + (c.disabled ? ' unavailable' : '')}
+              className={cn(activeIndex === i && 'active', c.disabled && 'unavailable')}
               onMouseMove={() => activeIndex !== i && setIndex(i)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => run(i)}
             >
-              <span className="command-icon">
+              <span
+                className={cn(
+                  'command-icon grid place-items-center border border-solid border-border-strong rounded-md bg-surface w-6.5 h-6.5',
+                  'text-muted [&:has(>_.account-mark)]:border-0 [&:has(>_.account-mark)]:bg-none',
+                  '[&:has(>_.account-mark)]:bg-transparent',
+                )}
+              >
                 {c.account ? <AccountMark account={c.account} size={26} /> : <c.icon size={15} />}
               </span>
-              <span className="command-text">
+              <span className="command-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
                 {c.label}
-                {c.description && <small className="command-description">{c.description}</small>}
+                {c.description && (
+                  <small className="command-description block mt-[2px] text-[11px] text-muted whitespace-normal">
+                    {c.description}
+                  </small>
+                )}
               </span>
-              {query && c.id !== 'search' && <span className="command-group">{c.group}</span>}
-              {c.checked && <Check size={14} className="command-check" />}
+              {query && c.id !== 'search' && (
+                <span className="command-group text-[11px] text-faint">{c.group}</span>
+              )}
+              {c.checked && <Check size={14} className="command-check text-primary" />}
               {c.key && (
-                <span className="command-keys">
+                <span className="command-keys flex gap-[3px]">
                   {c.key.split(' ').map((k) => (
                     <kbd key={k}>{k}</kbd>
                   ))}
@@ -200,9 +244,13 @@ export function CommandPalette({
             </button>
           </Fragment>
         ))}
-        {!options.length && <div className="command-empty">No commands</div>}
+        {!options.length && (
+          <div className="command-empty py-5.5 px-3 text-center text-[12px] text-muted">
+            No commands
+          </div>
+        )}
       </div>
-      <div className="command-footer">
+      <div className="command-footer border-t border-solid border-t-border py-3 px-5.25 flex gap-2 items-center text-[11px] text-muted">
         <kbd>
           <ArrowUp size={11} />
         </kbd>
@@ -210,13 +258,13 @@ export function CommandPalette({
           <ArrowDown size={11} />
         </kbd>{' '}
         Navigate
-        <span className="command-enter">
+        <span className="command-enter flex items-center gap-1.75 ml-3">
           <kbd>
             <CornerDownLeft size={11} />
           </kbd>{' '}
           Run
         </span>
-        <Wordmark className="command-footer-brand" height={12} />
+        <Wordmark className="command-footer-brand ml-auto text-faint" height={12} />
       </div>
     </Modal>
   )

@@ -1,3 +1,4 @@
+import { cn } from '@inlark/ui'
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
@@ -1450,7 +1451,15 @@ export function App() {
     }
   }
   return (
-    <div className={'app-shell ' + (collapsed ? 'sidebar-collapsed ' : '') + 'density-' + density}>
+    <div
+      className={cn(
+        'app-shell flex h-full min-w-0 py-2 pr-2 pl-0 bg-sidebar [--row-height:64px] [--rail:224px]',
+        '[&.sidebar-collapsed]:[--rail:64px] [&.density-compact]:[--row-height:44px]',
+        'max-[1100px]:[&:not(.sidebar-collapsed)]:[--rail:204px] max-[700px]:[&:not(.sidebar-collapsed)]:[--rail:188px]',
+        collapsed && 'sidebar-collapsed',
+        'density-' + density,
+      )}
+    >
       <Sidebar
         accounts={accounts}
         boxesByAccount={mailboxCounts.boxesByAccount}
@@ -1474,7 +1483,7 @@ export function App() {
           setFolderDialog({ operation, accountId, folder })
         }
       />
-      <main className="main-content">
+      <main className="main-content @container/mail shadow-[0_2px_8px_#0000000a] relative flex-1 min-w-0 flex flex-col bg-background border border-solid border-border-strong rounded-xl overflow-hidden">
         <UpdateNotice status={updateStatus} />
         {!boot.data ? (
           <EmptyState
@@ -1549,42 +1558,79 @@ export function App() {
           )
         ) : (
           <>
-            <div className="list-heading">
-              <div className="list-title">
-                <div className="list-eyebrow">
+            <div
+              className={cn(
+                'list-heading flex items-center justify-between pt-5.25 pb-4.75 px-7 shrink-0 gap-4 [&_h1]:m-0 [&_h1]:flex',
+                '[&_h1]:items-center [&_h1]:gap-2.5 [&_h1]:text-[22px] [&_h1]:tracking-[-0.65px] [&_h1]:leading-[1.3]',
+                '[&_h1]:font-semibold [&_h1>span]:text-[12px] [&_h1>span]:tracking-[0] [&_h1>span]:font-medium',
+                '[&_h1>span]:text-muted [&_h1>span]:bg-surface [&_h1>span]:border [&_h1>span]:border-solid',
+                '[&_h1>span]:border-border [&_h1>span]:py-[2px] [&_h1>span]:px-1.75 [&_h1>span]:rounded-md',
+                '[&_h1>span]:tabular-nums [&_p]:text-muted [&_p]:text-[12px] [&_p]:mt-1.75 [&_p]:mb-0 [&_p]:mx-0',
+                '@max-[900px]/mail:pl-5.5 @max-[900px]/mail:pr-5.5 @max-[680px]/mail:pt-5 @max-[680px]/mail:pb-4.25',
+                '@max-[680px]/mail:px-5 @max-[440px]/mail:[&_h1]:text-[21px]',
+              )}
+            >
+              <div className="list-title min-w-0">
+                <div className="list-eyebrow [&_svg]:text-faint flex items-center gap-1.75 text-[11px] text-muted mb-1.5">
                   Mail <ChevronRight size={10} />
                   <Dropdown
                     trigger={
-                      <button className="account-switcher" aria-label="Switch account">
+                      <button
+                        className={cn(
+                          'account-switcher inline-flex items-center gap-1.5 py-[2px] px-1.25 my-[-2px] -mx-1.25 border-0 rounded-xs',
+                          'bg-none bg-transparent text-[inherit] min-w-0 [&>span:not(.account-mark)]:overflow-hidden',
+                          '[&>span:not(.account-mark)]:text-ellipsis [&>span:not(.account-mark)]:whitespace-nowrap hover:text-foreground',
+                          'hover:bg-hover data-popup-open:text-foreground data-popup-open:bg-hover',
+                        )}
+                        aria-label="Switch account"
+                      >
                         {account && <AccountMark account={account} size={16} />}
                         <span>{account?.name || 'All accounts'}</span>
                         <ChevronDown size={11} />
                       </button>
                     }
                   >
-                    <div className="account-menu">
-                      <div className="menu-label">Mail accounts</div>
+                    <div className="account-menu [&_.menu-item]:min-h-12 [&_.menu-item]:gap-3 w-62.5 max-w-[calc(100vw_-_40px)] max-h-[min(420px,_65vh)] overflow-y-auto">
+                      <div className="menu-label py-1.75 px-2.5 text-[11px] text-muted">
+                        Mail accounts
+                      </div>
                       <MenuItem onClick={() => go({ view, q: route.q })}>
                         <Inbox size={15} />
-                        <span className="account-menu-label">
+                        <span
+                          className={cn(
+                            'account-menu-label [&_strong]:block [&_strong]:overflow-hidden [&_strong]:text-ellipsis',
+                            '[&_strong]:whitespace-nowrap [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis',
+                            '[&_small]:whitespace-nowrap [&_strong]:font-medium [&_small]:text-muted [&_small]:text-[10px]',
+                            '[&_small]:mt-[2px] flex-1 min-w-0',
+                          )}
+                        >
                           <strong>All accounts</strong>
                           <small>Unified inbox</small>
                         </span>
-                        {!account && <Check size={14} className="account-menu-check" />}
+                        {!account && (
+                          <Check size={14} className="account-menu-check text-primary" />
+                        )}
                       </MenuItem>
-                      <div className="account-menu-divider" />
+                      <div className="account-menu-divider h-[1px] m-1.25 bg-border" />
                       {accounts.map((item) => (
                         <MenuItem
                           key={item.id}
                           onClick={() => go({ view, q: route.q, account: item.id })}
                         >
                           <AccountMark account={item} size={28} />
-                          <span className="account-menu-label">
+                          <span
+                            className={cn(
+                              'account-menu-label [&_strong]:block [&_strong]:overflow-hidden [&_strong]:text-ellipsis',
+                              '[&_strong]:whitespace-nowrap [&_small]:block [&_small]:overflow-hidden [&_small]:text-ellipsis',
+                              '[&_small]:whitespace-nowrap [&_strong]:font-medium [&_small]:text-muted [&_small]:text-[10px]',
+                              '[&_small]:mt-[2px] flex-1 min-w-0',
+                            )}
+                          >
                             <strong>{item.name}</strong>
                             <small>{item.email}</small>
                           </span>
                           {item.id === account?.id && (
-                            <Check size={14} className="account-menu-check" />
+                            <Check size={14} className="account-menu-check text-primary" />
                           )}
                         </MenuItem>
                       ))}
@@ -1607,7 +1653,7 @@ export function App() {
                 </h1>
                 {route.q && <p>Results for “{route.q}”</p>}
               </div>
-              <div className="list-heading-actions">
+              <div className="list-heading-actions flex items-center gap-1.25 @max-[680px]/mail:gap-[2px]">
                 <IconButton
                   label="Refresh mail"
                   shortcut={keys('refresh')}
@@ -1615,7 +1661,9 @@ export function App() {
                 >
                   <RefreshCw
                     size={15}
-                    className={mail.isFetching && !mail.isFetchingNextPage ? 'spin' : ''}
+                    className={cn(
+                      mail.isFetching && !mail.isFetchingNextPage && 'spin animate-spin',
+                    )}
                   />
                 </IconButton>
                 <IconButton label="Search mail" shortcut={keys('search')} onClick={focusSearch}>
@@ -1629,15 +1677,17 @@ export function App() {
                       </IconButton>
                     }
                   >
-                    <div className="menu-label">Message density</div>
+                    <div className="menu-label py-1.75 px-2.5 text-[11px] text-muted">
+                      Message density
+                    </div>
                     <MenuItem onClick={() => setDensity('comfortable')}>
-                      <span className="menu-check">
+                      <span className="menu-check w-3.75 inline-flex text-primary">
                         {density === 'comfortable' && <Check size={14} />}
                       </span>
                       Comfortable
                     </MenuItem>
                     <MenuItem onClick={() => setDensity('compact')}>
-                      <span className="menu-check">
+                      <span className="menu-check w-3.75 inline-flex text-primary">
                         {density === 'compact' && <Check size={14} />}
                       </span>
                       Compact
@@ -1648,7 +1698,13 @@ export function App() {
             </div>
             {searchOpen && (
               <form
-                className="mail-search"
+                className={cn(
+                  'mail-search mt-0 mb-4 mx-7 flex items-center gap-2.5 border border-solid border-border-strong bg-surface',
+                  'py-[3px] pr-2 pl-3.25 rounded-[7px] text-muted [&_input]:border-0 [&_input]:bg-none [&_input]:bg-transparent',
+                  '[&_input]:py-1.75 [&_input]:px-0 [&_input]:text-[13px] focus-within:border-primary-solid',
+                  'focus-within:shadow-[0_0_0_3px_var(--accent-tint)] [&_input:focus-visible]:outline-none @max-[680px]/mail:ml-5',
+                  '@max-[680px]/mail:mr-5',
+                )}
                 onSubmit={(e) => {
                   e.preventDefault()
                   go({ q: search || undefined, ...(search ? { view: 'all' } : {}) }, false)
@@ -1676,11 +1732,18 @@ export function App() {
               </form>
             )}
             {!!filterChips.length && (
-              <div className="active-filters" aria-label="Active filters">
+              <div
+                className="active-filters flex flex-wrap items-center gap-1.5 pt-0 pb-3.5 px-7 @max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5"
+                aria-label="Active filters"
+              >
                 {filterChips.map(([key, value]) => (
                   <button
                     key={key}
-                    className="filter-chip"
+                    className={cn(
+                      'filter-chip [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap inline-flex items-center',
+                      'gap-2 max-w-65 py-1 px-2 text-[11px] text-primary border border-solid border-primary/25 bg-primary-tint',
+                      'rounded-sm',
+                    )}
                     aria-label={'Remove ' + (filterLabels[key] || key) + ' filter'}
                     onClick={() => setFilters((current) => ({ ...current, [key]: undefined }))}
                   >
@@ -1692,13 +1755,22 @@ export function App() {
                     <X size={12} />
                   </button>
                 ))}
-                <button className="clear-filters" onClick={() => setFilters({})}>
+                <button
+                  className="clear-filters border-0 bg-none bg-transparent text-muted text-[11px] py-1 px-2 hover:text-foreground"
+                  onClick={() => setFilters({})}
+                >
                   Clear all
                 </button>
               </div>
             )}
             {view !== 'drafts' && (
-              <div className="list-toolbar">
+              <div
+                className={cn(
+                  'list-toolbar flex items-center gap-4 h-11.5 py-0 px-7 border-b border-solid border-b-border shrink-0',
+                  '@max-[900px]/mail:pl-5.5 @max-[900px]/mail:pr-5.5 @max-[680px]/mail:py-0 @max-[680px]/mail:px-5',
+                  '@max-[680px]/mail:gap-3.5',
+                )}
+              >
                 <Checkbox
                   aria-label={selected.size ? 'Deselect all' : 'Select loaded conversations'}
                   checked={
@@ -1716,17 +1788,25 @@ export function App() {
                     setAllMatching(false)
                   }}
                 />
-                <div className="list-tabs">
+                <div
+                  className={cn(
+                    'list-tabs flex gap-5 h-full [&_button]:bg-none [&_button]:bg-transparent [&_button]:border-0',
+                    '[&_button]:border-b-2 [&_button]:border-solid [&_button]:border-b-transparent [&_button]:py-0',
+                    '[&_button]:px-[1px] [&_button]:text-[12px] [&_button]:text-muted [&_button:hover]:text-foreground',
+                    '[&_button.active]:text-foreground [&_button.active]:border-b-primary [&_button.active]:font-medium',
+                    '@max-[440px]/mail:gap-4',
+                  )}
+                >
                   <button
                     aria-pressed={!filters.unread}
-                    className={!filters.unread ? 'active' : ''}
+                    className={cn(!filters.unread && 'active')}
                     onClick={() => setFilters((f) => ({ ...f, unread: undefined }))}
                   >
                     All messages
                   </button>
                   <button
                     aria-pressed={!!filters.unread}
-                    className={filters.unread ? 'active' : ''}
+                    className={cn(filters.unread && 'active')}
                     title={
                       'Show only unread conversations' +
                       (keys('toggleUnread') ? ' · ' + keys('toggleUnread') : '')
@@ -1736,7 +1816,7 @@ export function App() {
                     Unread
                   </button>
                 </div>
-                <div className="list-toolbar-actions">
+                <div className="list-toolbar-actions flex items-center gap-4.5 ml-auto [&>.button]:font-normal @max-[680px]/mail:gap-2.5">
                   <Button
                     variant="ghost"
                     size="small"
@@ -1744,20 +1824,36 @@ export function App() {
                     onClick={() => setFilterOpen(true)}
                   >
                     <SlidersHorizontal size={13} />
-                    Filter{hasFilters && <span className="filter-dot" />}
+                    Filter
+                    {hasFilters && (
+                      <span className="filter-dot bg-primary w-1.25 h-1.25 rounded-full" />
+                    )}
                   </Button>
                 </div>
               </div>
             )}
             {!!selected.size && view !== 'drafts' && (
-              <div className="selection-bar" role="region" aria-label="Selection actions">
-                <div className="selection-summary">
-                  <span className="selection-count" role="status">
+              <div
+                className={cn(
+                  'selection-bar absolute z-10 bottom-12.5 left-[50%] transform-[translateX(-50%)] flex items-center gap-1.25',
+                  'py-2.5 px-3 max-w-[calc(100%_-_24px)] whitespace-nowrap border border-solid border-border-strong rounded-xl',
+                  'bg-raised shadow-[0_8px_28px_#0003,_0_2px_5px_#0002] animate-[selection-appear_140ms_ease-out]',
+                  '@max-[440px]/mail:gap-[2px] @max-[440px]/mail:p-2 @max-[440px]/mail:[&_.toolbar-divider]:my-0',
+                  '@max-[440px]/mail:[&_.toolbar-divider]:mx-[2px]',
+                )}
+                role="region"
+                aria-label="Selection actions"
+              >
+                <div className="selection-summary flex flex-col gap-[2px] min-w-20.5 py-0 px-1.5 @max-[440px]/mail:min-w-18.5 @max-[440px]/mail:py-0 @max-[440px]/mail:px-1">
+                  <span
+                    className="selection-count text-[12px] text-foreground font-medium tabular-nums"
+                    role="status"
+                  >
                     {selectedCount.toLocaleString()} selected
                   </span>
                   {!allMatching && total > selected.size && (
                     <button
-                      className="text-action"
+                      className="border-0 bg-none bg-transparent text-primary text-[11px] p-0 text-left hover:underline"
                       disabled={busy}
                       onClick={() => setAllMatching(true)}
                     >
@@ -1765,7 +1861,7 @@ export function App() {
                     </button>
                   )}
                 </div>
-                <span className="toolbar-divider" />
+                <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
                 {offersAction(listView, 'archive') && (
                   <HintIconButton
                     label="Archive selected"
@@ -1811,12 +1907,12 @@ export function App() {
                   <MenuItem onClick={() => void act('unread')}>
                     <Mail size={14} />
                     Mark as unread
-                    <ShortcutHint id="unread" className="menu-shortcut" />
+                    <ShortcutHint id="unread" className="menu-shortcut ml-auto" />
                   </MenuItem>
                   <MenuItem onClick={() => void act(selectionStarred ? 'unstar' : 'star')}>
                     <Star size={14} />
                     {selectionStarred ? 'Remove star' : 'Star'}
-                    <ShortcutHint id="star" className="menu-shortcut" />
+                    <ShortcutHint id="star" className="menu-shortcut ml-auto" />
                   </MenuItem>
                   <MenuItem
                     onClick={() => openMove(targets())}
@@ -1824,13 +1920,13 @@ export function App() {
                   >
                     <FolderInput size={14} />
                     Move to folder
-                    <ShortcutHint id="move" className="menu-shortcut" />
+                    <ShortcutHint id="move" className="menu-shortcut ml-auto" />
                   </MenuItem>
                   {offersAction(listView, 'spam') && (
                     <MenuItem onClick={() => void act('spam')} disabled={!!unavailable('spam')}>
                       <ShieldX size={14} />
                       Mark as spam
-                      <ShortcutHint id="spam" className="menu-shortcut" />
+                      <ShortcutHint id="spam" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
                   {offersAction(listView, 'notSpam') && (
@@ -1840,7 +1936,7 @@ export function App() {
                     >
                       <ShieldCheck size={14} />
                       Not spam
-                      <ShortcutHint id="notSpam" className="menu-shortcut" />
+                      <ShortcutHint id="notSpam" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
                   {offersAction(listView, 'restore') && (
@@ -1850,7 +1946,7 @@ export function App() {
                     >
                       <Inbox size={14} />
                       Restore to inbox
-                      <ShortcutHint id="restore" className="menu-shortcut" />
+                      <ShortcutHint id="restore" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
                   {offersAction(listView, 'destroy') && (
@@ -1871,12 +1967,15 @@ export function App() {
                   ]
                     .filter(Boolean)
                     .map((reason) => (
-                      <p className="menu-note" key={String(reason)}>
+                      <p
+                        className="menu-note max-w-60 mt-1 mb-0 mx-0 pt-1.75 pb-1.25 px-2.5 border-t border-solid border-t-border text-[11px] leading-[1.5] text-muted"
+                        key={String(reason)}
+                      >
                         {reason}
                       </p>
                     ))}
                 </Dropdown>
-                <span className="toolbar-divider" />
+                <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
                 <IconButton
                   label="Clear selection"
                   shortcut={keys('back')}
@@ -1903,7 +2002,12 @@ export function App() {
               />
             )}
             {(mail.isError || mail.data?.pages.some((p) => p.failedAccounts.length)) && (
-              <div className="connection-banner">
+              <div
+                className={cn(
+                  'connection-banner [&_button]:ml-auto [&_button]:border-0 [&_button]:bg-none [&_button]:bg-transparent',
+                  '[&_button]:text-primary py-2.25 px-7.5 text-[11px] flex items-center gap-2.25 text-secondary bg-primary-tint',
+                )}
+              >
                 <WifiOff size={13} />
                 {mail.isError
                   ? friendlyError(mail.error)
@@ -1912,7 +2016,13 @@ export function App() {
               </div>
             )}
             {!!incomplete.length && view !== 'drafts' && (
-              <div className="indexing-notice" role="status">
+              <div
+                className={cn(
+                  'indexing-notice flex flex-wrap items-center justify-between gap-[4px_14px] py-2 px-7 border-b border-solid',
+                  'border-b-border text-[11px] text-muted @max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5',
+                )}
+                role="status"
+              >
                 <span>
                   Still indexing {incomplete.map((a) => a.name).join(' and ')} — older mail may be
                   missing
@@ -1923,7 +2033,7 @@ export function App() {
               </div>
             )}
             {view === 'drafts' ? (
-              <div className="draft-list">
+              <div className="draft-list flex-1 overflow-auto">
                 <SubmissionList
                   submissions={pendingSends.filter(
                     (s) => !route.account || s.accountId === route.account,
@@ -1933,7 +2043,9 @@ export function App() {
                   notify={notify}
                 />
                 {!!pendingSends.length && !!draftItems.length && (
-                  <h2 className="draft-section-label">Drafts</h2>
+                  <h2 className="draft-section-label m-0 pt-4.5 pb-1.5 px-8 text-[11px] font-medium text-muted @max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5">
+                    Drafts
+                  </h2>
                 )}
                 <DraftRows
                   items={draftItems}
@@ -1944,7 +2056,7 @@ export function App() {
                   onDelete={discardDrafts}
                 />
                 {mail.hasNextPage && (
-                  <div className="load-more">
+                  <div className="load-more flex items-center justify-center gap-2 text-[12px] text-muted p-3.75">
                     <Button
                       disabled={mail.isFetchingNextPage}
                       onClick={() => void mail.fetchNextPage()}
@@ -1964,23 +2076,96 @@ export function App() {
                 )}
               </div>
             ) : !conversations.length && mail.isLoading ? (
-              <div className="mail-list list-skeleton" aria-busy="true" aria-label="Loading mail">
+              <div
+                className={cn(
+                  'mail-list flex-1 overflow-auto min-h-0 outline-none [overflow-anchor:none] [scrollbar-gutter:stable] pb-4',
+                  'focus-visible:shadow-[inset_0_0_0_1px_var(--border-strong)] focus-visible:rounded-none [&:has(.selected)]:pb-22',
+                  '[&:has(.selected)_.row-selector_.checkbox]:opacity-100 [&:has(.selected)_.unread-dot]:opacity-0 list-skeleton',
+                  '[&_.skeleton-row:nth-child(n+6)]:opacity-60 [&_.skeleton-row:nth-child(n+8)]:opacity-30',
+                )}
+                aria-busy="true"
+                aria-label="Loading mail"
+              >
                 {Array.from({ length: 9 }, (_, i) => (
-                  <div className="mail-row skeleton-row" key={i}>
-                    <span className="row-selector" />
-                    <span className="skeleton-avatar" />
-                    <span className="skeleton-line" style={{ width: 120 + ((i * 37) % 50) }} />
-                    <span className="row-content">
+                  <div
+                    className={cn(
+                      'mail-row flex items-center h-[var(--row-height)] py-0 pr-5 pl-7 gap-4 border-b border-solid border-b-border',
+                      'text-[13px] relative [&.unread]:bg-[color-mix(in_srgb,_var(--surface)_32%,_var(--bg))]',
+                      '[&.focused]:shadow-[inset_2px_0_var(--accent)] [&.focused]:bg-selected [&.selected]:bg-selected',
+                      '[&:hover_.row-selector_.checkbox]:opacity-100 [&.selected_.row-selector_.checkbox]:opacity-100',
+                      '[&:hover_.unread-dot]:opacity-0 [&.selected_.unread-dot]:opacity-0 [&:hover_.row-star]:opacity-100',
+                      '[&:focus-within_.row-star]:opacity-100 [&:hover_.row-quick-actions]:opacity-100',
+                      '[&:hover_.row-quick-actions]:pointer-events-auto [&:focus-within_.row-quick-actions]:opacity-100',
+                      '[&:focus-within_.row-quick-actions]:pointer-events-auto @max-[900px]/mail:gap-3 @max-[900px]/mail:pl-5.5',
+                      '@max-[900px]/mail:pr-3.5 @max-[680px]/mail:py-0 @max-[680px]/mail:pr-4 @max-[680px]/mail:pl-5',
+                      '@max-[680px]/mail:gap-3 @max-[680px]/mail:[.density-comfortable_&]:grid',
+                      '@max-[680px]/mail:[.density-comfortable_&]:grid-cols-[16px_minmax(0,_1fr)_auto]',
+                      '@max-[680px]/mail:[.density-comfortable_&]:grid-rows-[22px_20px]',
+                      '@max-[680px]/mail:[.density-comfortable_&]:gap-[2px_12px]',
+                      '@max-[680px]/mail:[.density-comfortable_&]:content-center skeleton-row cursor-default pointer-events-none',
+                      'hover:bg-none hover:bg-transparent [&>.skeleton-line:first-of-type]:shrink-0',
+                      '[&>.skeleton-line:first-of-type]:w-30 [&_.row-content]:gap-2.25',
+                      '[.density-compact_&_.skeleton-line.faint]:hidden',
+                    )}
+                    key={i}
+                  >
+                    <span
+                      className={cn(
+                        'row-selector relative w-4 shrink-0 h-6 flex items-center justify-center [&_.checkbox]:absolute',
+                        '[&_.checkbox]:opacity-0 [&:focus-within_.checkbox]:opacity-100 [&:focus-within_.unread-dot]:opacity-0',
+                        '@max-[680px]/mail:[.density-comfortable_&]:col-start-1 @max-[680px]/mail:[.density-comfortable_&]:row-start-1',
+                        '@max-[680px]/mail:[.density-comfortable_&]:row-end-3',
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'skeleton-avatar block',
+                        'bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+                        '[background-size:200%_100%] animate-[shimmer_1.4s_ease-in-out_infinite] w-7 h-7 rounded-[7px] shrink-0 -mr-1.5',
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'skeleton-line block h-2.5 rounded-sm',
+                        'bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+                        '[background-size:200%_100%] animate-[shimmer_1.4s_ease-in-out_infinite] [&.faint]:opacity-55',
+                      )}
+                      style={{ width: 120 + ((i * 37) % 50) }}
+                    />
+                    <span
+                      className={cn(
+                        'row-content flex-1 min-w-0 flex flex-col gap-[3px] overflow-hidden whitespace-nowrap',
+                        '[.density-compact_&]:flex-row [.density-compact_&]:gap-3 [.density-compact_&]:items-baseline',
+                        '@max-[680px]/mail:[.density-comfortable_&]:col-start-2 @max-[680px]/mail:[.density-comfortable_&]:col-end-4',
+                        '@max-[680px]/mail:[.density-comfortable_&]:row-start-2 @max-[680px]/mail:[.density-comfortable_&]:flex-row',
+                        '@max-[680px]/mail:[.density-comfortable_&]:gap-2.5 @max-[680px]/mail:[.density-comfortable_&]:items-baseline',
+                      )}
+                    >
                       <span
-                        className="skeleton-line"
+                        className={cn(
+                          'skeleton-line block h-2.5 rounded-sm',
+                          'bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+                          '[background-size:200%_100%] animate-[shimmer_1.4s_ease-in-out_infinite] [&.faint]:opacity-55',
+                        )}
                         style={{ width: 40 + ((i * 23) % 35) + '%' }}
                       />
                       <span
-                        className="skeleton-line faint"
+                        className={cn(
+                          'skeleton-line block h-2.5 rounded-sm',
+                          'bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+                          '[background-size:200%_100%] animate-[shimmer_1.4s_ease-in-out_infinite] [&.faint]:opacity-55 faint',
+                        )}
                         style={{ width: 55 + ((i * 17) % 30) + '%' }}
                       />
                     </span>
-                    <span className="skeleton-line" style={{ width: 44 }} />
+                    <span
+                      className={cn(
+                        'skeleton-line block h-2.5 rounded-sm',
+                        'bg-[linear-gradient(_90deg,_var(--skeleton)_0%,_color-mix(in_srgb,_var(--skeleton)_45%,_transparent)_50%,_var(--skeleton)_100%_)]',
+                        '[background-size:200%_100%] animate-[shimmer_1.4s_ease-in-out_infinite] [&.faint]:opacity-55',
+                      )}
+                      style={{ width: 44 }}
+                    />
                   </div>
                 ))}
               </div>
@@ -2001,7 +2186,7 @@ export function App() {
                     <Button onClick={() => setFilters({})}>Clear filters</Button>
                   )}
                   {view === 'inbox' && !route.q && !hasFilters && keys('compose') && (
-                    <span className="empty-hint">
+                    <span className="empty-hint inline-flex items-center gap-2 text-[12px] text-faint">
                       <ShortcutHint id="compose" /> Write a message
                     </span>
                   )}
@@ -2036,7 +2221,14 @@ export function App() {
                 }
               />
             )}
-            <footer className="list-footer">
+            <footer
+              className={cn(
+                'list-footer flex items-center justify-between border-t border-solid border-t-border min-h-8.25 py-0 px-6',
+                'text-muted text-[10px] gap-4 [&>span]:flex [&>span]:items-center [&>span]:gap-1.5 [&_kbd]:h-4.25',
+                '[&_kbd]:min-w-4.25 [&_kbd]:py-0 [&_kbd]:px-[3px] [&_kbd]:text-[9px] @max-[900px]/mail:py-0',
+                '@max-[900px]/mail:px-5',
+              )}
+            >
               <span role="status">
                 {busy ? (
                   <>
@@ -2046,10 +2238,11 @@ export function App() {
                 ) : (
                   <>
                     <span
-                      className={
-                        'connection-dot ' +
-                        (accounts.some((a) => a.status !== 'connected') ? 'connection-pending' : '')
-                      }
+                      className={cn(
+                        'connection-dot w-1.25 h-1.25 rounded-full bg-success inline-block shrink-0',
+                        accounts.some((a) => a.status !== 'connected') &&
+                          'connection-pending bg-danger',
+                      )}
                     />
                     {accounts.every((a) => a.status === 'connected')
                       ? 'All accounts connected'
@@ -2061,7 +2254,11 @@ export function App() {
                 )}
               </span>
               <button
-                className="footer-shortcuts"
+                className={cn(
+                  'footer-shortcuts flex items-center gap-1.5 bg-none bg-transparent border-0 text-muted text-[10px] py-1 px-0',
+                  'hover:text-foreground [&>span:not(.shortcut-keys)]:mr-2.25 @max-[900px]/mail:[&_span]:hidden',
+                  '@max-[440px]/mail:[&>.shortcut-keys:not(.footer-help-keys)]:hidden',
+                )}
                 onClick={() => setHelp(true)}
                 aria-label="Show keyboard shortcuts"
               >
@@ -2079,7 +2276,21 @@ export function App() {
       </main>
       {toast && (
         <div
-          className={'toast' + (toast.tone === 'error' ? ' toast-error' : '')}
+          className={cn(
+            'toast fixed bottom-5.75 left-[calc(50%+var(--rail)_/_2_-_4px)] transform-[translateX(-50%)] z-150 flex gap-3.25',
+            'items-center max-w-[75vw] bg-raised border border-solid border-border-strong shadow-popup py-2.75 px-3.75',
+            'rounded-lg text-[12px] [&>svg]:text-primary [&>span]:max-w-150 [&_button]:border-0 [&_button]:bg-none',
+            '[&_button]:bg-transparent [&_button]:text-primary [&_button]:text-[11px] [&_button]:p-[3px]',
+            '[&_button:last-child]:text-muted max-[700px]:max-w-[calc(100vw_-_var(--rail)_-_32px)]',
+            'max-[700px]:w-[max-content] overflow-hidden animate-[toast-in_180ms_cubic-bezier(0.2,_0.9,_0.3,_1.2)]',
+            '[&_.toast-undo]:inline-flex [&_.toast-undo]:items-center [&_.toast-undo]:gap-1.5 [&_.toast-undo]:py-[3px]',
+            '[&_.toast-undo]:pr-1 [&_.toast-undo]:pl-2 [&_.toast-undo]:rounded-sm [&_.toast-undo]:font-medium',
+            '[&_.toast-undo:hover]:bg-primary-tint [&_.toast-dismiss]:grid [&_.toast-dismiss]:place-items-center',
+            '[&_.toast-dismiss]:rounded-sm [&_.toast-dismiss]:text-muted [&_.toast-dismiss:hover]:text-foreground',
+            '[&_.toast-dismiss:hover]:bg-hover',
+            toast.tone === 'error' &&
+              'toast-error [&>svg:first-child]:text-danger [&_.toast-timer]:bg-danger/45',
+          )}
           role={toast.tone === 'error' ? 'alert' : 'status'}
           onMouseEnter={() => setToastHeld(true)}
           onMouseLeave={() => setToastHeld(false)}
@@ -2094,7 +2305,10 @@ export function App() {
           )}
           <span>{toast.text}</span>
           {canUndo && (
-            <button className="toast-undo" onClick={() => void undo()}>
+            <button
+              className="toast-undo [&_kbd]:h-4 [&_kbd]:min-w-4 [&_kbd]:text-[9px] [&_kbd]:text-primary [&_kbd]:border-primary/35"
+              onClick={() => void undo()}
+            >
               Undo <ShortcutHint id="undo" />
             </button>
           )}
@@ -2107,7 +2321,7 @@ export function App() {
           </button>
           {!toastHeld && (
             <span
-              className="toast-timer"
+              className="toast-timer absolute left-0 bottom-0 h-[2px] w-full bg-primary/45 origin-left animate-[toast-timer_linear_forwards]"
               style={{ animationDuration: toastDuration + 'ms' }}
               aria-hidden="true"
             />
@@ -2116,7 +2330,22 @@ export function App() {
       )}
       <Suspense
         fallback={
-          <div className="toast" role="status">
+          <div
+            className={cn(
+              'toast fixed bottom-5.75 left-[calc(50%+var(--rail)_/_2_-_4px)] transform-[translateX(-50%)] z-150 flex gap-3.25',
+              'items-center max-w-[75vw] bg-raised border border-solid border-border-strong shadow-popup py-2.75 px-3.75',
+              'rounded-lg text-[12px] [&>svg]:text-primary [&>span]:max-w-150 [&_button]:border-0 [&_button]:bg-none',
+              '[&_button]:bg-transparent [&_button]:text-primary [&_button]:text-[11px] [&_button]:p-[3px]',
+              '[&_button:last-child]:text-muted max-[700px]:max-w-[calc(100vw_-_var(--rail)_-_32px)]',
+              'max-[700px]:w-[max-content] overflow-hidden animate-[toast-in_180ms_cubic-bezier(0.2,_0.9,_0.3,_1.2)]',
+              '[&_.toast-undo]:inline-flex [&_.toast-undo]:items-center [&_.toast-undo]:gap-1.5 [&_.toast-undo]:py-[3px]',
+              '[&_.toast-undo]:pr-1 [&_.toast-undo]:pl-2 [&_.toast-undo]:rounded-sm [&_.toast-undo]:font-medium',
+              '[&_.toast-undo:hover]:bg-primary-tint [&_.toast-dismiss]:grid [&_.toast-dismiss]:place-items-center',
+              '[&_.toast-dismiss]:rounded-sm [&_.toast-dismiss]:text-muted [&_.toast-dismiss:hover]:text-foreground',
+              '[&_.toast-dismiss:hover]:bg-hover',
+            )}
+            role="status"
+          >
             <Spinner />
             Opening…
           </div>
