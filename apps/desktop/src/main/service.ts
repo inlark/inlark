@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, X509Certificate } from 'node:crypto'
 import { mkdir, readFile, writeFile, copyFile, rm, stat, chmod, open } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
 import { app, dialog, shell, Notification } from 'electron'
@@ -10,12 +10,14 @@ import {
   friendlyError,
   draftFingerprint,
   connectionErrorCodes,
+  isProviderError,
   ProviderError,
   type Account,
   type AccountAppearance,
   type Address,
   type Settings,
   type ConnectInput,
+  type ConnectionCheck,
   type ConnectionConfig,
   type ConnectionSettings,
   type ConnectionTest,
@@ -35,6 +37,7 @@ import {
   type DiscoveryResult,
   type OutgoingMessage,
   type SendResult,
+  type ServerSettings,
   type SubmissionSummary,
 } from '@inlark/core'
 import { JmapProvider } from '@inlark/jmap'
@@ -117,7 +120,9 @@ const definiteSubmissionCodes = [
   'authentication',
   'outgoingAuthentication',
   'outgoingNetwork',
+  'outgoingCertificate',
   'tls',
+  'certificate',
   'capability',
   'mailboxes',
   'submission',
@@ -141,17 +146,35 @@ export interface ServiceOptions {
   providers?: ProviderFactory
   discover?: (email: string) => Promise<DiscoveryResult>
 }
+/** Fingerprints shown to the user are computed here from the certificate itself, never taken on trust. */
+function verifiedCertificates(config: ConnectionConfig): ConnectionConfig {
+  if (config.protocol !== 'imap') return config
+  const verified = (server: ServerSettings): ServerSettings => {
+    if (!server.certificate) return server
+    try {
+      const sha256 = new X509Certificate(server.certificate.pem).fingerprint256
+      return { ...server, certificate: { sha256, pem: server.certificate.pem } }
+    } catch {
+      throw new Error(
+        `The trusted certificate for ${server.host} can't be read. Remove it and check the connection again.`,
+      )
+    }
+  }
+  return { ...config, incoming: verified(config.incoming), outgoing: verified(config.outgoing) }
+}
 const errorKind = (error: unknown): DraftErrorKind | undefined =>
   error instanceof ProviderError
     ? error.code === 'outgoingAuthentication'
       ? 'outgoingAuthentication'
-      : error.code === 'submissionRejected'
-        ? 'rejected'
-        : error.code === 'conflict'
-          ? 'conflict'
-          : connectionErrorCodes.includes(error.code) || error.code === 'outgoingNetwork'
-            ? 'connection'
-            : undefined
+      : error.code === 'certificate' || error.code === 'outgoingCertificate'
+        ? 'certificate'
+        : error.code === 'submissionRejected'
+          ? 'rejected'
+          : error.code === 'conflict'
+            ? 'conflict'
+            : connectionErrorCodes.includes(error.code) || error.code === 'outgoingNetwork'
+              ? 'connection'
+              : undefined
     : error instanceof Error && error.message.includes('another client')
       ? 'conflict'
       : undefined
@@ -300,7 +323,8 @@ export class MailService {
           error.code === 'authentication' ? 'authentication' : 'offline',
           friendlyError(error),
         )
-      if (error instanceof ProviderError && error.code === 'outgoingAuthentication')
+      // Neither resolves by retrying, so sending stays marked unavailable until the user acts.
+      if (isProviderError(error, 'outgoingAuthentication', 'outgoingCertificate'))
         this.outgoing(account.connectionId, friendlyError(error))
       this.log('request-failed', error instanceof ProviderError ? error.code : 'local')
       throw error
@@ -338,8 +362,17 @@ export class MailService {
   }
   /** Signs in to each server separately and reports each result. Nothing is saved or sent. */
   testConnection = async (input: ConnectInput): Promise<ConnectionTest> => {
+    input = { ...input, config: verifiedCertificates(input.config) }
     const provider = this.createProvider('test-' + randomUUID(), input, true)
     const result: ConnectionTest = { incoming: { ok: false } }
+    /** A refused certificate is read again without signing in, so the user can review it. */
+    const failed = async (server: 'incoming' | 'outgoing', error: unknown) => {
+      const check: ConnectionCheck = { ok: false, error: friendlyError(error) }
+      const certificate =
+        isProviderError(error, 'certificate', 'outgoingCertificate') &&
+        (await provider.inspectCertificate?.(server).catch(() => undefined))
+      return certificate ? { ...check, certificate } : check
+    }
     try {
       const [accounts] = await Promise.allSettled([provider.connect()])
       if (accounts.status === 'fulfilled') {
@@ -348,11 +381,11 @@ export class MailService {
           : { ok: false, error: 'This login does not provide an accessible mail account.' }
         if (accounts.value[0] && provider.folderMappings)
           result.folders = await provider.folderMappings(accounts.value[0]).catch(() => undefined)
-      } else result.incoming = { ok: false, error: friendlyError(accounts.reason) }
+      } else result.incoming = await failed('incoming', accounts.reason)
       if (provider.verifyOutgoing)
         result.outgoing = await provider.verifyOutgoing().then(
           () => ({ ok: true }),
-          (error) => ({ ok: false, error: friendlyError(error) }),
+          (error) => failed('outgoing', error),
         )
       return result
     } finally {
@@ -362,6 +395,7 @@ export class MailService {
   }
   /** `reconnecting` restores a saved login, so labels and names edited since then are kept. */
   connect = async (input: ConnectInput, reconnecting = false): Promise<Account[]> => {
+    input = { ...input, config: verifiedCertificates(input.config) }
     const id = input.connectionId || randomUUID()
     const previous = this.connections.find((c) => c.id === id)
     if (previous && previous.config.protocol !== input.config.protocol)

@@ -10,13 +10,24 @@ import {
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
-import { AlertCircle, ArrowLeft, Check, LockKeyhole, PenLine, X as Cross } from '@inlark/ui/icons'
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  LockKeyhole,
+  PenLine,
+  ShieldCheck,
+  ShieldX,
+  X as Cross,
+} from '@inlark/ui/icons'
 import { Button, Checkbox, Spinner } from '@inlark/ui'
 import {
   accountSchema,
   friendlyError,
   type Account,
   type Bootstrap,
+  type CertificateDetails,
+  type CertificateProblem,
   type ConnectInput,
   type ConnectionCheck,
   type ConnectionConfig,
@@ -30,6 +41,7 @@ import {
   type Protocol,
   type ServerSettings,
   type TransportSecurity,
+  type TrustedCertificate,
 } from '@inlark/core'
 import { api, isDemo } from './api'
 import { queryClient } from './cache'
@@ -39,7 +51,12 @@ import { FolderMappingEditor, initialFolderChoices, needsFolderReview } from './
 /** `signIn` repeats a saved connection's login; `edit` opens its server settings for changes. */
 export type SetupMode = 'add' | 'signIn' | 'edit'
 type ServerKind = 'incoming' | 'outgoing'
-type ServerFields = { host: string; port: string; security: TransportSecurity }
+type ServerFields = {
+  host: string
+  port: string
+  security: TransportSecurity
+  certificate?: TrustedCertificate
+}
 interface Fields {
   protocol: Protocol
   serverUrl: string
@@ -104,6 +121,7 @@ function fieldsFrom(source: ConnectionConfig | DiscoveryCandidate, email: string
     host: s.host,
     port: String(s.port),
     security: s.security,
+    ...(s.certificate ? { certificate: s.certificate } : {}),
   })
   const username = source.incoming.username || email
   const outgoingUsername = source.outgoing.username || username
@@ -212,13 +230,189 @@ function CheckRow({
         {check
           ? check.ok
             ? 'Signed in'
-            : check.error || 'Sign-in failed'
+            : check.certificate
+              ? 'Stopped before signing in: ' +
+                problemTitles[check.certificate.problem].toLowerCase()
+              : check.error || 'Sign-in failed'
           : pending
             ? 'Checking…'
             : 'Not checked'}
       </span>
     </li>
   )
+}
+
+const problemTitles: Record<CertificateProblem, string> = {
+  selfSigned: 'Self-signed certificate',
+  unknownIssuer: 'Certificate from an unknown authority',
+  otherName: 'Certificate for another server name',
+  changed: 'Certificate changed',
+  expired: 'Certificate expired',
+  notYetValid: 'Certificate not valid yet',
+}
+const certificateDate = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+})
+const isLocal = (host: string) => /^(localhost|127(\.\d{1,3}){3}|\[?::1\]?)$/i.test(host)
+/** Long enough to recognize, short enough for one line. */
+const shortFingerprint = (sha256: string) => sha256.slice(0, 11) + '…' + sha256.slice(-11)
+
+function certificateExplanation(certificate: CertificateDetails, host: string) {
+  const local = isLocal(host)
+  const intercepted = 'but it could also mean someone is intercepting the connection.'
+  switch (certificate.problem) {
+    case 'selfSigned':
+      return (
+        'No certificate authority vouches for it. ' +
+        (local
+          ? 'That’s normal for a bridge on this computer, such as Proton Mail Bridge.'
+          : 'That’s common for self-hosted servers, ' + intercepted)
+      )
+    case 'unknownIssuer':
+      return (
+        'It’s issued by ' +
+        certificate.issuer +
+        ', an authority this computer doesn’t trust. ' +
+        (local
+          ? 'That’s normal for a server on this computer.'
+          : 'That’s common on private networks, ' + intercepted)
+      )
+    case 'otherName':
+      return (
+        'It’s issued for ' +
+        (certificate.names.join(', ') || certificate.subject) +
+        ', not ' +
+        host +
+        '. If one of those names is your server, use it instead.'
+      )
+    case 'changed':
+      return (
+        'It isn’t the certificate you trusted before. ' +
+        (local
+          ? 'That’s expected after the bridge is reinstalled or reset.'
+          : 'That’s expected after the certificate is renewed, ' + intercepted)
+      )
+    case 'expired':
+      return (
+        'It expired on ' +
+        certificateDate.format(new Date(certificate.validTo)) +
+        ', so it can’t be trusted. Renew it on the server, then try again.'
+      )
+    case 'notYetValid':
+      return (
+        'It isn’t valid until ' +
+        certificateDate.format(new Date(certificate.validFrom)) +
+        '. Check that this computer’s date and time are correct.'
+      )
+  }
+}
+
+/** A certificate that stopped the connection check, with what the user needs to judge it. */
+function CertificateReview({
+  certificate,
+  host,
+  servers,
+  action,
+  disabled,
+  onTrust,
+}: {
+  certificate: CertificateDetails
+  host: string
+  servers: ServerKind[]
+  action: string
+  disabled: boolean
+  onTrust: () => void
+}) {
+  const trustable = certificate.problem !== 'expired' && certificate.problem !== 'notYetValid'
+  const names = certificate.names.filter((name) => name !== certificate.subject)
+  return (
+    <div className="certificate-review mt-3 pt-3 pb-3.5 px-3.5 border border-solid border-border-strong rounded-lg bg-field text-[12px]">
+      <div className="flex items-start gap-2.5">
+        <ShieldX size={15} className="shrink-0 mt-[1px] text-danger" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-[2px_10px]">
+            <strong className="font-medium text-strong">
+              {problemTitles[certificate.problem]}
+            </strong>
+            <span className="text-[11px] text-muted">
+              {host} ·{' '}
+              {servers.length > 1
+                ? 'incoming and outgoing'
+                : servers[0] === 'incoming'
+                  ? 'incoming'
+                  : 'outgoing'}
+            </span>
+          </div>
+          <p className="mt-1 mb-0 mx-0 text-secondary leading-[1.6]">
+            {certificateExplanation(certificate, host)}
+          </p>
+        </div>
+      </div>
+      <dl
+        className={cn(
+          'certificate-details [&>div]:grid [&>div]:grid-cols-[92px_minmax(0,_1fr)] [&>div]:gap-3 [&>div]:py-1.5',
+          '[&_dt]:text-muted [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:text-foreground [&_dd]:[overflow-wrap:anywhere]',
+          'mt-2.5 mb-0 ml-6.25 mr-0 text-[11px]',
+        )}
+      >
+        <div>
+          <dt>Issued to</dt>
+          <dd>
+            {certificate.subject}
+            {names.length > 0 && <span className="text-muted"> · {names.join(', ')}</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Issued by</dt>
+          <dd>{certificate.issuer}</dd>
+        </div>
+        <div>
+          <dt>Valid</dt>
+          <dd className="tabular-nums">
+            {certificateDate.format(new Date(certificate.validFrom))} –{' '}
+            {certificateDate.format(new Date(certificate.validTo))}
+          </dd>
+        </div>
+        <div>
+          <dt>SHA-256</dt>
+          <dd className="font-mono text-[10.5px] leading-[1.7] select-all">
+            {/* Breaks after 16 of the 32 pairs when it doesn't fit on one line. */}
+            {certificate.sha256.slice(0, 48)}
+            <wbr />
+            {certificate.sha256.slice(48)}
+          </dd>
+        </div>
+      </dl>
+      {trustable && (
+        <div className="flex items-center gap-3 mt-3 ml-6.25 max-[700px]:flex-col max-[700px]:items-start">
+          <p className="flex-1 m-0 text-[11px] text-muted leading-[1.6]">
+            Trust it only if you expect it, for example by comparing the fingerprint with the one
+            your server or bridge shows. Inlark will accept exactly this certificate and stop if it
+            ever changes.
+          </p>
+          <Button size="small" className="shrink-0" disabled={disabled} onClick={onTrust}>
+            <ShieldCheck size={13} />
+            {action}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Each certificate that stopped a server, once, with the servers that presented it. */
+function certificateReviews(test?: ConnectionTest) {
+  const reviews: { certificate: CertificateDetails; servers: ServerKind[] }[] = []
+  for (const kind of ['incoming', 'outgoing'] as const) {
+    const certificate = test?.[kind]?.certificate
+    if (!certificate) continue
+    const same = reviews.find((r) => r.certificate.sha256 === certificate.sha256)
+    if (same) same.servers.push(kind)
+    else reviews.push({ certificate, servers: [kind] })
+  }
+  return reviews
 }
 
 /** The server settings of a discovered or saved configuration, shown before any password is sent. */
@@ -256,6 +450,15 @@ function ServerSummary({ fields }: { fields: Fields }) {
             <span className="server-meta text-secondary tabular-nums">
               Port {fields[kind].port} · {securityLabel[fields[kind].security]}
             </span>
+            {fields[kind].certificate && (
+              <span
+                className="server-certificate inline-flex items-center gap-1.25 text-secondary"
+                title={'SHA-256 ' + fields[kind].certificate.sha256}
+              >
+                <ShieldCheck size={12} className="text-success" />
+                Trusted certificate
+              </span>
+            )}
           </dd>
         </div>
       ))}
@@ -453,33 +656,39 @@ export function AccountSetup({
   }
 
   /** Builds and validates the request, marking any field the schema rejects. */
-  const validate = (): ConnectInput | undefined => {
+  const validate = (current: Fields): ConnectInput | undefined => {
     const address = email.trim()
     const config =
-      fields.protocol === 'jmap'
+      current.protocol === 'jmap'
         ? {
             protocol: 'jmap' as const,
-            serverUrl: fields.serverUrl.trim(),
-            username: fields.username.trim(),
+            serverUrl: current.serverUrl.trim(),
+            username: current.username.trim(),
           }
         : {
             protocol: 'imap' as const,
             email: address,
             incoming: {
-              host: fields.incoming.host,
-              port: Number(fields.incoming.port.trim()) || 0,
-              security: fields.incoming.security,
-              username: fields.username.trim(),
+              host: current.incoming.host,
+              port: Number(current.incoming.port.trim()) || 0,
+              security: current.incoming.security,
+              username: current.username.trim(),
+              ...(current.incoming.certificate
+                ? { certificate: current.incoming.certificate }
+                : {}),
             },
             outgoing: {
-              host: fields.outgoing.host,
-              port: Number(fields.outgoing.port.trim()) || 0,
-              security: fields.outgoing.security,
-              username: (fields.sameLogin ? fields.username : fields.outgoingUsername).trim(),
+              host: current.outgoing.host,
+              port: Number(current.outgoing.port.trim()) || 0,
+              security: current.outgoing.security,
+              username: (current.sameLogin ? current.username : current.outgoingUsername).trim(),
+              ...(current.outgoing.certificate
+                ? { certificate: current.outgoing.certificate }
+                : {}),
             },
-            outgoingSameCredentials: fields.sameLogin,
+            outgoingSameCredentials: current.sameLogin,
           }
-    const separate = fields.protocol === 'imap' && !fields.sameLogin
+    const separate = current.protocol === 'imap' && !current.sameLogin
     const parsed = accountSchema.safeParse({
       config,
       password,
@@ -533,10 +742,13 @@ export function AccountSetup({
       if (pending.current) await connect({ ...pending.current, folders: choices })
       return
     }
-    const input = validate()
+    const input = validate(fields)
     if (!input) return
     if (input.config.protocol === 'jmap') return connect(input)
-    // IMAP checks both servers first, so a failure names the server that needs attention.
+    await check(input)
+  }
+  /** IMAP checks both servers first, so a failure names the server that needs attention. */
+  const check = async (input: ConnectInput) => {
     setBusy('testing')
     setError('')
     setTest(undefined)
@@ -573,6 +785,19 @@ export function AccountSetup({
       setBusy(undefined)
     }
   }
+  /** Trusts a certificate for each server that presented it, then checks again. */
+  const trust = (certificate: CertificateDetails, servers: ServerKind[]) => {
+    if (busy) return
+    const next = { ...fields }
+    for (const kind of servers)
+      next[kind] = {
+        ...next[kind],
+        certificate: { sha256: certificate.sha256, pem: certificate.pem },
+      }
+    setFields(next)
+    const input = validate(next)
+    if (input) void check(input)
+  }
 
   const title =
     mode === 'edit' ? 'Edit connection' : mode === 'signIn' ? 'Sign in again' : 'Connect an account'
@@ -598,6 +823,9 @@ export function AccountSetup({
   const isBusy = discovering || !!busy
   const selected = origin.kind === 'candidate' ? candidates[origin.index] : undefined
   const failed = test && (!test.incoming.ok || (test.outgoing && !test.outgoing.ok))
+  const reviews = certificateReviews(test)
+  const trustLabel =
+    mode === 'add' ? 'Trust and connect' : mode === 'edit' ? 'Trust and save' : 'Trust and sign in'
 
   return (
     <form className="account-form max-w-140" ref={form} onSubmit={(e) => void submit(e)} noValidate>
@@ -896,6 +1124,27 @@ export function AccountSetup({
                             />
                           </div>
                         </div>
+                        {fields[kind].certificate && (
+                          <div className="trusted-certificate flex items-center gap-2 mt-2.5 text-[11px] text-muted">
+                            <ShieldCheck size={13} className="shrink-0 text-success" />
+                            <span
+                              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                              title={'SHA-256 ' + fields[kind].certificate.sha256}
+                            >
+                              Trusted certificate{' '}
+                              <span className="font-mono text-[10.5px]">
+                                {shortFingerprint(fields[kind].certificate.sha256)}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 border-0 bg-none bg-transparent text-primary text-[11px] p-0 hover:underline"
+                              onClick={() => updateServer(kind, { certificate: undefined })}
+                            >
+                              Stop trusting
+                            </button>
+                          </div>
+                        )}
                       </fieldset>
                     ))
                   )}
@@ -1070,10 +1319,22 @@ export function AccountSetup({
                     pending={busy === 'testing'}
                   />
                 </ul>
+                {reviews.map(({ certificate, servers }) => (
+                  <CertificateReview
+                    key={certificate.sha256}
+                    certificate={certificate}
+                    host={fields[servers[0]].host}
+                    servers={servers}
+                    action={trustLabel}
+                    disabled={isBusy}
+                    onTrust={() => trust(certificate, servers)}
+                  />
+                ))}
                 {failed && (
                   <p className="connection-check-hint mt-2.5 mb-0 mx-0 text-[11px] text-muted">
-                    Nothing was saved. Check the password or the server settings above, then try
-                    again.
+                    {reviews.length
+                      ? 'Nothing was saved. No password is sent to a server until its certificate is accepted.'
+                      : 'Nothing was saved. Check the password or the server settings above, then try again.'}
                   </p>
                 )}
               </section>

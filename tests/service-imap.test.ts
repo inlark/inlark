@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { X509Certificate } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,8 +21,10 @@ import { ImapProvider } from '../packages/imap/src'
 import { JmapProvider } from '../packages/jmap/src'
 import {
   ProviderError,
+  type CertificateDetails,
   type ConnectInput,
   type Draft,
+  type ImapConnectionConfig,
   type SubmissionOutcome,
 } from '../packages/core/src'
 import { FakeImapServer } from './support/fake-imap'
@@ -38,6 +42,8 @@ const input: ConnectInput = {
   remember: true,
   connectionId: 'imap-connection',
 }
+const pem = readFileSync(new URL('./fixtures/tls/untrusted.crt', import.meta.url), 'utf8')
+const fingerprint = new X509Certificate(pem).fingerprint256
 const draftId = 'fb4c0a00-254f-4fb1-965e-96d56ca9ef17'
 const accountId = JSON.stringify(['imap-connection', 'imap'])
 const draft: Draft = {
@@ -60,6 +66,7 @@ let service: MailService
 let store: JsonStore
 let submit: ReturnType<typeof vi.fn<(...args: any[]) => Promise<SubmissionOutcome>>>
 let verify: ReturnType<typeof vi.fn<(...args: any[]) => Promise<void>>>
+let inspect: ReturnType<typeof vi.fn<(...args: any[]) => Promise<CertificateDetails | undefined>>>
 const factory: ProviderFactory = (options) =>
   new ImapProvider({
     connectionId: options.connectionId,
@@ -75,6 +82,7 @@ const factory: ProviderFactory = (options) =>
     background: false,
     ports: server.port,
     smtp: { submit, verify },
+    inspect,
     timing: { sentCopyGraceMs: 0, previews: 0 },
   })
 async function start() {
@@ -87,6 +95,7 @@ beforeEach(async () => {
   server = new FakeImapServer()
   submit = vi.fn(async () => ({ accepted: ['alex@example.org', 'sam@example.org'], rejected: [] }))
   verify = vi.fn(async () => {})
+  inspect = vi.fn(async () => undefined)
   await start()
 })
 afterEach(async () => {
@@ -114,6 +123,50 @@ describe('IMAP account setup', () => {
     expect(test.folders?.mappings.sent).toEqual({ path: 'Sent', source: 'server' })
     expect(submit).not.toHaveBeenCalled()
     await expect(stat(join(directory, 'connections.json'))).rejects.toThrow()
+  })
+  it('offers a refused certificate for review, without signing in again', async () => {
+    const certificate: CertificateDetails = {
+      problem: 'selfSigned',
+      sha256: fingerprint,
+      pem,
+      subject: 'localhost',
+      issuer: 'localhost',
+      names: ['localhost', '127.0.0.1'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validTo: '2046-01-01T00:00:00.000Z',
+    }
+    const refused = "The certificate of smtp.example.com couldn't be verified."
+    verify.mockRejectedValueOnce(new ProviderError('outgoingCertificate', refused))
+    inspect.mockResolvedValueOnce(certificate)
+    const test = await service.testConnection({ ...input, connectionId: undefined })
+    expect(test.incoming).toEqual({ ok: true })
+    expect(test.outgoing).toEqual({ ok: false, error: refused, certificate })
+    expect(inspect).toHaveBeenCalledWith(input.config.outgoing, 'smtp', { ca: undefined })
+    // Only a certificate problem is worth a second look.
+    verify.mockRejectedValueOnce(new ProviderError('outgoingAuthentication', 'Wrong password.'))
+    const login = await service.testConnection({ ...input, connectionId: undefined })
+    expect(login.outgoing).toEqual({ ok: false, error: 'Wrong password.' })
+    expect(inspect).toHaveBeenCalledTimes(1)
+  })
+  it('saves a trusted certificate with the fingerprint computed from the certificate itself', async () => {
+    const forged = { sha256: Array(32).fill('00').join(':'), pem }
+    const config = input.config as ImapConnectionConfig
+    await service.connect({
+      ...input,
+      config: { ...config, outgoing: { ...config.outgoing, certificate: forged } },
+    })
+    const settings = await service.connectionSettings('imap-connection')
+    expect((settings.config as ImapConnectionConfig).outgoing.certificate).toEqual({
+      sha256: fingerprint,
+      pem,
+    })
+    const damaged = { ...forged, pem: pem.replace(/[A-Z]/g, 'A') }
+    await expect(
+      service.testConnection({
+        ...input,
+        config: { ...config, incoming: { ...config.incoming, certificate: damaged } },
+      }),
+    ).rejects.toThrow("can't be read")
   })
   it('requires both servers before completing setup', async () => {
     verify.mockRejectedValueOnce(
@@ -364,6 +417,14 @@ describe('IMAP sending', () => {
     expect((await journal()).state).toBe('rejected')
     expect((await service.send(draft)).status).toBe('sent')
     expect(service.accounts[0].outgoingError).toBeUndefined()
+  })
+  it('treats a refused outgoing certificate as definitely not sent', async () => {
+    const refused = 'smtp.example.com presented a different certificate than the one you trusted.'
+    submit.mockRejectedValueOnce(new ProviderError('outgoingCertificate', refused))
+    await expect(service.send(draft)).rejects.toThrow('different certificate')
+    expect(service.accounts[0]).toMatchObject({ status: 'connected', outgoingError: refused })
+    expect((await service.drafts())[0]).toMatchObject({ status: 'error', errorKind: 'certificate' })
+    expect((await journal()).state).toBe('rejected')
   })
 })
 

@@ -30,11 +30,19 @@ export const hostSchema = z
       /^\[?[0-9a-f:]+(:\d{1,3}(\.\d{1,3}){3})?\]?$/.test(value),
     'Enter a server name such as imap.example.com, without https:// or a port.',
   )
+export const trustedCertificateSchema = z.object({
+  sha256: z.string().regex(/^[0-9A-F]{2}(:[0-9A-F]{2}){31}$/),
+  pem: z
+    .string()
+    .max(16_384)
+    .regex(/^-----BEGIN CERTIFICATE-----\r?\n[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----\r?\n?$/),
+})
 export const serverSettingsSchema = z.object({
   host: hostSchema,
   port: z.number().int().min(1, 'Enter a port.').max(65535, 'Enter a port up to 65535.'),
   security: z.enum(['tls', 'starttls']),
   username: z.string().min(1, 'Enter a username.').max(320),
+  certificate: trustedCertificateSchema.optional(),
 })
 export const connectionConfigSchema = z.discriminatedUnion('protocol', [
   z.object({
@@ -151,7 +159,9 @@ export const draftSchema = z.object({
   serverFingerprint: z.string().optional(),
   status: z.enum(['local', 'saving', 'synced', 'error', 'sending', 'uncertain', 'sent']),
   error: z.string().optional(),
-  errorKind: z.enum(['conflict', 'connection', 'outgoingAuthentication', 'rejected']).optional(),
+  errorKind: z
+    .enum(['conflict', 'connection', 'outgoingAuthentication', 'certificate', 'rejected'])
+    .optional(),
 })
 export const sendDraftSchema = draftSchema
   .refine(

@@ -7,7 +7,9 @@ import {
   nextAccountColor,
   type Account,
   type AppEvent,
+  type CertificateDetails,
   type ConnectInput,
+  type ConnectionCheck,
   type ConnectionConfig,
   type ConnectionTest,
   type DesktopMailAPI,
@@ -19,6 +21,7 @@ import {
   type Message,
   type MailQuery,
   type MutationInput,
+  type ServerSettings,
   type SubmissionSummary,
 } from '@inlark/core'
 import { longDate } from './mail-date'
@@ -405,16 +408,54 @@ function folderReview(choices?: FolderMappings): FolderMappingReview {
   return review
 }
 const loginError = 'The server rejected the username or password.'
+/** A bridge on this computer, such as Proton Mail Bridge, with its own self-signed certificate. */
+const bridgeCertificate: CertificateDetails = {
+  problem: 'selfSigned',
+  sha256:
+    '23:E0:DC:41:A3:1A:2F:37:9E:B7:44:2A:84:97:04:8D:D9:14:85:65:0A:04:B8:91:6C:C0:FE:0B:25:9F:E6:AF',
+  pem: `-----BEGIN CERTIFICATE-----
+MIICBjCCAa2gAwIBAgIUGwUOiqnvorOa3clMVMGq9qxVuBowCgYIKoZIzj0EAwIw
+SzELMAkGA1UEBhMCQ0gxEjAQBgNVBAoMCVByb3RvbiBBRzEUMBIGA1UECwwLUHJv
+dG9uIE1haWwxEjAQBgNVBAMMCTEyNy4wLjAuMTAeFw0yNjEwMDUxNzMzNTNaFw00
+NjA5MzAxNzMzNTNaMEsxCzAJBgNVBAYTAkNIMRIwEAYDVQQKDAlQcm90b24gQUcx
+FDASBgNVBAsMC1Byb3RvbiBNYWlsMRIwEAYDVQQDDAkxMjcuMC4wLjEwWTATBgcq
+hkjOPQIBBggqhkjOPQMBBwNCAASnJ9hy5EFDQvHbvnMr1RyGWIVhdeXR/jJ9aSgJ
+XaUjsEKa93YrzrBmr/Ij/HV8FtYlnzK1mWECVM6iugkLfiDTo28wbTAdBgNVHQ4E
+FgQUJ/Wq8taq+JxuQMQGFv1aaoiG6zEwHwYDVR0jBBgwFoAUJ/Wq8taq+JxuQMQG
+Fv1aaoiG6zEwDwYDVR0TAQH/BAUwAwEB/zAaBgNVHREEEzARggkxMjcuMC4wLjGH
+BH8AAAEwCgYIKoZIzj0EAwIDRwAwRAIgPRE48rZJg/eFRQWbbTuRVOWuj+JtTFZl
+Wukj+PB9ujECIGbrTLztJ8IYOx2o01W6jV1gbx5aIpiMBXiDMnZ6eJjH
+-----END CERTIFICATE-----
+`,
+  subject: '127.0.0.1',
+  issuer: 'Proton AG',
+  names: ['127.0.0.1'],
+  validFrom: '2026-10-05T17:33:53.000Z',
+  validTo: '2046-09-30T17:33:53.000Z',
+}
+/** Demo only: a local server is refused until its certificate is trusted. */
+function untrustedBridge(server: ServerSettings): ConnectionCheck | undefined {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(server.host)) return undefined
+  if (server.certificate?.sha256 === bridgeCertificate.sha256) return undefined
+  return {
+    ok: false,
+    error: `The certificate of ${server.host} couldn't be verified, so the connection was stopped before signing in.`,
+    certificate: bridgeCertificate,
+  }
+}
 function demoTest(input: ConnectInput): ConnectionTest {
-  const incoming = input.password === 'wrong' ? { ok: false, error: loginError } : { ok: true }
+  const incoming =
+    (input.config.protocol === 'imap' && untrustedBridge(input.config.incoming)) ||
+    (input.password === 'wrong' ? { ok: false, error: loginError } : { ok: true })
   if (input.config.protocol === 'jmap') return { incoming }
   const outgoingPassword = input.config.outgoingSameCredentials
     ? input.password
     : input.outgoingPassword
   const outgoing =
-    outgoingPassword === 'nosmtp' || outgoingPassword === 'wrong'
+    untrustedBridge(input.config.outgoing) ||
+    (outgoingPassword === 'nosmtp' || outgoingPassword === 'wrong'
       ? { ok: false, error: 'The outgoing server rejected the username or password.' }
-      : { ok: true }
+      : { ok: true })
   return { incoming, outgoing, ...(incoming.ok ? { folders: folderReview() } : {}) }
 }
 

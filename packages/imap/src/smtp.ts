@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 import { TLSSocket } from 'node:tls'
 import { ProviderError, type ServerSettings, type SubmissionOutcome } from '@inlark/core'
+import { certificateError, certificateOptions } from './certificate'
 
 export interface SmtpSettings extends ServerSettings {
   password: string
@@ -39,7 +40,6 @@ interface Internals {
 const passwordMethods = ['PLAIN', 'LOGIN', 'CRAM-MD5']
 
 export function smtpOptions(settings: SmtpSettings): SMTPConnection.Options {
-  const ca = settings.tls?.ca
   const timeout = settings.timeoutMs
   return {
     host: settings.host,
@@ -60,10 +60,8 @@ export function smtpOptions(settings: SmtpSettings): SMTPConnection.Options {
     transactionLog: false,
     lmtp: false,
     tls: {
-      rejectUnauthorized: true,
-      minVersion: 'TLSv1.2',
+      ...certificateOptions(settings, settings.tls?.ca),
       ...(isIP(settings.host) ? {} : { servername: settings.host }),
-      ...(ca ? { ca: typeof ca === 'string' ? ca : Buffer.from(ca) } : {}),
     },
   }
 }
@@ -245,14 +243,10 @@ function connectionLost(
       'outgoingNetwork',
       `${host} didn't offer an encrypted connection (STARTTLS), so no password was sent. ${hint}`,
     )
-  if (
-    (socket instanceof TLSSocket && socket.authorizationError) ||
-    /certificate|altnames|self[- ]signed/i.test(text)
-  )
-    return new ProviderError(
-      'outgoingNetwork',
-      `The certificate of ${host} couldn't be verified, so the connection was stopped before signing in. Check the server name, or ask the server's administrator about its certificate.`,
-    )
+  const refused = socket instanceof TLSSocket ? socket.authorizationError : undefined
+  if (refused || /certificate|altnames|self[- ]signed/i.test(text))
+    // Node reports the verification code as a string, despite its type.
+    return certificateError('outgoing', settings, refused as unknown as string | undefined)
   if (error?.command === 'STARTTLS' && error.responseCode)
     return new ProviderError(
       'outgoingNetwork',

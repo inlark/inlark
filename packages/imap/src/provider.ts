@@ -37,6 +37,7 @@ import {
   toNewMessage,
   uidSet,
 } from './convert'
+import { inspectCertificate } from './certificate'
 import { isInbox, reviewFolders, rolesByPath } from './folders'
 import { ImapFlowPort } from './imapflow-port'
 import type {
@@ -72,6 +73,7 @@ export interface ImapProviderOptions {
       mime: Uint8Array,
     ) => Promise<SubmissionOutcome>
   }
+  inspect?: typeof inspectCertificate
   /** Tests only: trust an extra certificate authority. */
   tls?: { ca?: string | Uint8Array }
   timing?: Partial<Timing>
@@ -288,6 +290,14 @@ export class ImapProvider implements MailProvider {
   verifyOutgoing(): Promise<void> {
     return (this.options.smtp?.verify || verifySmtp)(this.smtpSettings())
   }
+  inspectCertificate(server: 'incoming' | 'outgoing') {
+    const { config, tls } = this.options
+    return (this.options.inspect || inspectCertificate)(
+      config[server],
+      server === 'incoming' ? 'imap' : 'smtp',
+      { ca: tls?.ca },
+    )
+  }
 
   // Folders
 
@@ -446,7 +456,8 @@ export class ImapProvider implements MailProvider {
       } catch (error) {
         if (this.disposed) break
         if (isProviderError(error, 'authentication')) this.setState('authentication', error.message)
-        else if (isProviderError(error, 'network', 'tls')) this.setState('offline', error.message)
+        else if (isProviderError(error, 'network', 'tls', 'certificate'))
+          this.setState('offline', error.message)
         failures++
         await this.wait(Math.min(60_000, 1000 * 2 ** Math.min(failures, 6)))
       }

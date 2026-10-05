@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { X509Certificate } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { accountSchema, hostSchema, ipcSchemas } from '../packages/core/src'
 
 const imap = {
@@ -30,6 +32,20 @@ describe('connection configuration validation', () => {
           config: { ...imap.config, incoming: { ...imap.config.incoming, security } },
         }).success,
       ).toBe(false)
+  })
+  it('accepts a trusted certificate only as a fingerprint and a single PEM certificate', () => {
+    const pem = readFileSync(new URL('./fixtures/tls/untrusted.crt', import.meta.url), 'utf8')
+    const sha256 = new X509Certificate(pem).fingerprint256
+    const trusting = (certificate: unknown) =>
+      accountSchema.safeParse({
+        ...imap,
+        config: { ...imap.config, incoming: { ...imap.config.incoming, certificate } },
+      }).success
+    expect(trusting({ sha256, pem })).toBe(true)
+    expect(trusting({ sha256: sha256.toLowerCase(), pem })).toBe(false)
+    expect(trusting({ sha256: sha256.slice(3), pem })).toBe(false)
+    expect(trusting({ sha256, pem: pem.replace('CERTIFICATE', 'PRIVATE KEY') })).toBe(false)
+    expect(trusting({ sha256, pem: pem + pem })).toBe(false)
   })
   it('requires a separate outgoing password only when credentials differ', () => {
     const separate = { ...imap, config: { ...imap.config, outgoingSameCredentials: false } }

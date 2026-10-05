@@ -57,8 +57,30 @@ describe.skipIf(!ready)('disposable Stalwart IMAP/SMTP integration', () => {
 
   it('enforces TLS verification, credentials and both security modes', async () => {
     const untrusted = imap('tls', { tls: undefined })
-    await expect(untrusted.connect()).rejects.toMatchObject({ code: 'tls' })
+    await expect(untrusted.connect()).rejects.toMatchObject({ code: 'certificate' })
     await untrusted.close()
+    // Without the test CA, the server's certificate can still be reviewed and trusted by itself.
+    for (const security of ['tls', 'starttls'] as const) {
+      const reviewing = imap(security, { tls: undefined })
+      const certificate = await reviewing.inspectCertificate('incoming')
+      expect(certificate).toMatchObject({ problem: 'unknownIssuer', issuer: 'Inlark Test CA' })
+      expect(await reviewing.inspectCertificate('outgoing')).toMatchObject({
+        sha256: certificate!.sha256,
+      })
+      const trusted = { sha256: certificate!.sha256, pem: certificate!.pem }
+      const base = config(security)
+      const p = imap(security, {
+        tls: undefined,
+        config: {
+          ...base,
+          incoming: { ...base.incoming, certificate: trusted },
+          outgoing: { ...base.outgoing, certificate: trusted },
+        },
+      })
+      expect(await p.connect()).toHaveLength(1)
+      await p.verifyOutgoing()
+      await p.close()
+    }
     const wrong = imap('tls', { password: 'wrong-' + randomUUID() })
     await expect(wrong.connect()).rejects.toMatchObject({ code: 'authentication' })
     await wrong.close()
