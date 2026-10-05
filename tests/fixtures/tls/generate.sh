@@ -28,3 +28,9 @@ rm -f ca.srl
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days "$days" \
   -subj '/CN=localhost' -keyout untrusted.key -out untrusted.crt \
   -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' -addext 'extendedKeyUsage=serverAuth'
+
+# Self-signed certificate for the same names that expired long ago (needs OpenSSL 3.4 or later)
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -not_before 20200101000000Z -not_after 20210101000000Z \
+  -subj '/CN=localhost' -keyout expired.key -out expired.crt \
+  -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' -addext 'extendedKeyUsage=serverAuth'

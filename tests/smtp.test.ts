@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { X509Certificate } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer, type AddressInfo, type Socket } from 'node:net'
 import { SMTPServer, type SMTPServerOptions } from 'smtp-server'
@@ -6,6 +7,10 @@ import { composeMime } from '../packages/imap/src/mime'
 import { smtpOptions, submitSmtp, verifySmtp, type SmtpSettings } from '../packages/imap/src/smtp'
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/tls/${name}`, import.meta.url))
+const trust = (name: string) => {
+  const pem = fixture(name).toString()
+  return { sha256: new X509Certificate(pem).fingerprint256, pem }
+}
 const ca = fixture('ca.crt')
 const trusted = { key: fixture('server.key'), cert: fixture('server.crt') }
 const untrusted = { key: fixture('untrusted.key'), cert: fixture('untrusted.crt') }
@@ -29,6 +34,7 @@ async function start(options: Partial<SMTPServerOptions> = {}) {
   const server = new SMTPServer({
     logger: false,
     disableReverseLookup: true,
+    closeTimeout: 10,
     ...trusted,
     onAuth(auth, session, callback) {
       log.auth.push(auth.username ?? '')
@@ -61,10 +67,9 @@ async function start(options: Partial<SMTPServerOptions> = {}) {
   server.server.on('connection', (socket: Socket) => sockets.add(socket))
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = (server.server.address() as AddressInfo).port
-  servers.push(async () => {
-    sockets.forEach((s) => s.destroy())
-    await new Promise<void>((resolve) => server.close(() => resolve()))
-  })
+  // The server ends what's still open itself. Destroying a raw socket under a TLS handshake the
+  // client refused crashes Node 24, since smtp-server leaves the TLS socket on top of it.
+  servers.push(() => new Promise<void>((resolve) => server.close(() => resolve())))
   return { port, log, sockets }
 }
 
@@ -144,13 +149,34 @@ describe('SMTP submission', () => {
   it('rejects an untrusted certificate before signing in', async () => {
     const tls = await start({ secure: true, ...untrusted })
     const error = await failure(verifySmtp(settings(tls.port)))
-    expect(error).toMatchObject({ code: 'outgoingNetwork' })
+    expect(error).toMatchObject({ code: 'outgoingCertificate' })
     expect(error.message).toMatch(/certificate/)
     const starttls = await start({ ...untrusted })
     const upgrade = await failure(verifySmtp(settings(starttls.port, { security: 'starttls' })))
-    expect(upgrade).toMatchObject({ code: 'outgoingNetwork' })
+    expect(upgrade).toMatchObject({ code: 'outgoingCertificate' })
     expect(upgrade.message).toMatch(/certificate/)
     expect([...tls.log.auth, ...starttls.log.auth]).toEqual([])
+  })
+
+  it('accepts exactly the certificate the user trusted, in both security modes', async () => {
+    const certificate = trust('untrusted.crt')
+    const tls = await start({ secure: true, ...untrusted })
+    await verifySmtp(settings(tls.port, { certificate }))
+    const starttls = await start({ ...untrusted })
+    await verifySmtp(settings(starttls.port, { security: 'starttls', certificate }))
+    expect([...tls.log.auth, ...starttls.log.auth]).toEqual(['user', 'user'])
+    // Trusting one certificate doesn't stop verifying others the normal way.
+    const verified = await start({ secure: true })
+    await verifySmtp(settings(verified.port, { certificate }))
+    expect(verified.log.auth).toEqual(['user'])
+  })
+
+  it('stops before signing in when the certificate differs from the trusted one', async () => {
+    const { port, log } = await start({ secure: true, ...untrusted })
+    const error = await failure(verifySmtp(settings(port, { certificate: trust('server.crt') })))
+    expect(error).toMatchObject({ code: 'outgoingCertificate' })
+    expect(error.message).toMatch(/different certificate than the one you trusted/)
+    expect(log.auth).toEqual([])
   })
 
   it('reports a wrong password as an authentication failure', async () => {

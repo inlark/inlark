@@ -5,7 +5,8 @@ import {
   type ListResponse,
   type MessageStructureObject,
 } from 'imapflow'
-import { ProviderError, type Address } from '@inlark/core'
+import { ProviderError, type Address, type ServerSettings } from '@inlark/core'
+import { certificateError, certificateOptions, isCertificateFailure } from './certificate'
 import type { BodyPart, FolderListing } from './metadata-index'
 import type {
   AppendResult,
@@ -20,20 +21,14 @@ import type {
   SelectedMailbox,
 } from './port'
 
-const tlsCodes = new Set([
-  'CERT_HAS_EXPIRED',
-  'CERT_NOT_YET_VALID',
-  'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'SELF_SIGNED_CERT_IN_CHAIN',
-  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-  'ERR_TLS_CERT_ALTNAME_INVALID',
-  'ERR_SSL_WRONG_VERSION_NUMBER',
-  'EPROTO',
-])
+const tlsCodes = new Set(['ERR_SSL_WRONG_VERSION_NUMBER', 'EPROTO'])
 
 /** Maps a connection-phase failure to a calm, specific error. Never includes the password. */
-export function connectionError(error: unknown, host: string): ProviderError {
+export function connectionError(
+  error: unknown,
+  server: Pick<ServerSettings, 'host' | 'certificate'>,
+): ProviderError {
+  const host = server.host
   const e = error as {
     code?: string
     authenticationFailed?: boolean
@@ -45,6 +40,7 @@ export function connectionError(error: unknown, host: string): ProviderError {
       'authentication',
       'The incoming server rejected this login. Check the username and password, or create an app password.',
     )
+  if (isCertificateFailure(e?.code)) return certificateError('incoming', server, e.code)
   if (
     e?.tlsFailed ||
     (e?.code && tlsCodes.has(e.code)) ||
@@ -86,11 +82,7 @@ export function imapFlowOptions(
     doSTARTTLS: implicit ? undefined : true,
     ...(isIP(options.host.replace(/^\[|\]$/g, '')) ? {} : { servername: options.host }),
     auth: { user: options.username, pass: options.password },
-    tls: {
-      rejectUnauthorized: true,
-      minVersion: 'TLSv1.2',
-      ...(options.tls?.ca ? { ca: Buffer.from(options.tls.ca) } : {}),
-    },
+    tls: certificateOptions(options, options.tls?.ca),
     logger: false,
     // No client identification is sent to the server.
     clientInfo: { name: false },
@@ -172,7 +164,7 @@ export class ImapFlowPort implements ImapPort {
     try {
       await this.client.connect()
     } catch (error) {
-      throw connectionError(error, this.options.host)
+      throw connectionError(error, this.options)
     }
   }
   async close() {

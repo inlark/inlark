@@ -70,6 +70,11 @@ function draftProblem(draft: Draft): { text: string; detail?: string } | undefin
       }
     case 'outgoingAuthentication':
       return { text: 'The outgoing server rejected your login. Nothing was sent.', detail }
+    case 'certificate':
+      return {
+        text: 'The server’s certificate couldn’t be verified. Nothing was sent; your draft is saved.',
+        detail,
+      }
     case 'connection':
       return {
         text: 'The server couldn’t be reached. Nothing was sent; your draft is saved.',
@@ -675,7 +680,8 @@ export function Composer({
                   Keep both versions
                 </Button>
               )}
-              {shown.errorKind === 'outgoingAuthentication' && (
+              {(shown.errorKind === 'outgoingAuthentication' ||
+                shown.errorKind === 'certificate') && (
                 <Button
                   size="small"
                   onClick={async () => {

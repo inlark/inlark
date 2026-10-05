@@ -192,7 +192,8 @@ export interface Draft {
   /** What kind of problem `error` describes, so the composer can offer the right recovery. */
   errorKind?: DraftErrorKind
 }
-export type DraftErrorKind = 'conflict' | 'connection' | 'outgoingAuthentication' | 'rejected'
+export type DraftErrorKind =
+  'conflict' | 'connection' | 'outgoingAuthentication' | 'certificate' | 'rejected'
 export interface Settings {
   theme: 'dark' | 'light' | 'system'
   remoteImages: boolean
@@ -255,6 +256,31 @@ export interface ServerSettings {
   port: number
   security: TransportSecurity
   username: string
+  /** A certificate the user chose to trust for this server, in addition to public authorities. */
+  certificate?: TrustedCertificate
+}
+/** Exactly one certificate, identified by its SHA-256 fingerprint. */
+export interface TrustedCertificate {
+  /** Upper-case hex pairs separated by colons, as shown to the user. */
+  sha256: string
+  pem: string
+}
+/**
+ * Why a server's certificate isn't accepted. `changed` means it differs from the trusted one.
+ * `expired` and `notYetValid` can't be trusted at all.
+ */
+export type CertificateProblem =
+  'selfSigned' | 'unknownIssuer' | 'otherName' | 'changed' | 'expired' | 'notYetValid'
+/** A certificate a server presented, read without signing in, for the user to review. */
+export interface CertificateDetails extends TrustedCertificate {
+  problem: CertificateProblem
+  /** The common name, or else the organization, of the subject and issuer. */
+  subject: string
+  issuer: string
+  /** The host names and addresses the certificate is valid for. */
+  names: string[]
+  validFrom: string
+  validTo: string
 }
 export interface JmapConnectionConfig {
   protocol: 'jmap'
@@ -323,6 +349,8 @@ export interface DiscoveryResult {
 export interface ConnectionCheck {
   ok: boolean
   error?: string
+  /** The certificate that stopped the connection, when the user may be able to trust it. */
+  certificate?: CertificateDetails
 }
 export interface ConnectionTest {
   incoming: ConnectionCheck
@@ -388,6 +416,11 @@ export interface MailProvider {
   connect(): Promise<Account[]>
   /** Signs in to the outgoing server without sending anything (SMTP providers only). */
   verifyOutgoing?(): Promise<void>
+  /**
+   * Reads the certificate a server presents without signing in. Undefined when the certificate
+   * would be accepted or can't be read.
+   */
+  inspectCertificate?(server: 'incoming' | 'outgoing'): Promise<CertificateDetails | undefined>
   /** Releases resources asynchronously, e.g. closing a local index before its files are removed. */
   close?(): Promise<void>
   mailboxes(account: Account): Promise<Mailbox[]>
