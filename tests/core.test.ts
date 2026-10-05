@@ -6,6 +6,7 @@ import {
   conversationFromMessages,
   mergePages,
   replyRecipients,
+  replyTarget,
   parseAddresses,
   mailtoDraft,
   draftSchema,
@@ -74,6 +75,32 @@ describe('mail domain', () => {
         scopeKey(m.accountId, m.id),
       ),
     ).toEqual([scopeKey('account', 'conflict'), scopeKey('other', 'local')])
+  })
+  it('replies to the newest sent or received message, never to an unsent draft', () => {
+    const first = message({ id: 'first' })
+    const answer = message({ id: 'answer', receivedAt: '2026-09-23T11:00:00Z' })
+    const reply = message({
+      id: 'reply',
+      receivedAt: '2026-09-23T12:00:00Z',
+      keywords: { $draft: true, $seen: true },
+    })
+    expect(replyTarget([first, answer, reply])?.id).toBe('answer')
+    expect(replyTarget([reply])).toBeUndefined()
+  })
+  it('lists only the people who wrote, not the author of an unsent draft', () => {
+    const received = message({ id: 'received' })
+    const reply = message({
+      id: 'reply',
+      from: [{ name: 'Me', email: 'me@example.com' }],
+      receivedAt: '2026-09-23T12:00:00Z',
+      keywords: { $draft: true, $seen: true },
+    })
+    expect(
+      conversationFromMessages('account', 'thread', [received, reply]).from.map((a) => a.email),
+    ).toEqual(['friend@example.com'])
+    expect(conversationFromMessages('account', 'thread', [reply]).from.map((a) => a.email)).toEqual(
+      ['me@example.com'],
+    )
   })
   it('merges pages without skipping unconsumed messages from another account', () => {
     const conv = (a: string, id: string, time: string) =>

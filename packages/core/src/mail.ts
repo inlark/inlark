@@ -29,6 +29,10 @@ export function identitySignature(
   if (identity.htmlSignature?.trim()) return { format: 'html', value: identity.htmlSignature }
   return { format: 'text', value: identity.textSignature ?? '' }
 }
+/** A saved but unsent message. Servers file reply drafts in the conversation they answer. */
+export const isDraft = (message: Pick<Message, 'keywords'>) => !!message.keywords.$draft
+/** The newest message of a conversation that was actually sent or received, oldest-first input. */
+export const replyTarget = (messages: Message[]) => messages.filter((m) => !isDraft(m)).at(-1)
 export function conversationFromMessages(
   accountId: string,
   threadId: string,
@@ -36,13 +40,17 @@ export function conversationFromMessages(
 ): Conversation {
   const sorted = [...messages].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
   const latest = sorted[0]
+  // The author of an unsent draft has not taken part yet.
+  const said = sorted.filter((m) => !isDraft(m))
   return {
     id: threadId,
     accountId,
     key: scopeKey(accountId, threadId),
     subject: latest?.subject || '(No subject)',
     from: [
-      ...new Map(sorted.flatMap((m) => m.from).map((a) => [a.email.toLowerCase(), a])).values(),
+      ...new Map(
+        (said.length ? said : sorted).flatMap((m) => m.from).map((a) => [a.email.toLowerCase(), a]),
+      ).values(),
     ],
     preview: latest?.preview || '',
     receivedAt: latest?.receivedAt || '',
@@ -96,7 +104,7 @@ export function unlinkedServerDrafts(conversations: Conversation[], local: Draft
     ...new Map(
       conversations
         .flatMap((c) => c.messages)
-        .filter((m) => m.keywords.$draft && !linked.has(scopeKey(m.accountId, m.id)))
+        .filter((m) => isDraft(m) && !linked.has(scopeKey(m.accountId, m.id)))
         .map((m) => [scopeKey(m.accountId, m.id), m]),
     ).values(),
   ].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))

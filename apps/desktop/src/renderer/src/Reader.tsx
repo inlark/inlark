@@ -27,11 +27,13 @@ import {
   ShieldCheck,
   Check,
   MailMinus,
+  PencilEdit,
 } from '@inlark/ui/icons'
 import { Tooltip } from '@base-ui/react/tooltip'
 import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
 import {
   friendlyError,
+  isDraft,
   type Account,
   type Message,
   type Settings,
@@ -495,6 +497,8 @@ interface ReaderProps {
   onAction: (action: MailAction) => void
   onMove: () => void
   onReply: (message: Message, kind: 'reply' | 'replyAll' | 'forward') => void
+  onEditDraft: (message: Message) => void
+  onDiscardDraft: (message: Message) => void
   notify: (message: string, tone?: 'error' | 'info') => void
   onMailto: (url: string) => void
   /** Set when the conversation comes from a mailing list that can be left. */
@@ -576,6 +580,8 @@ export function Reader({
   onAction,
   onMove,
   onReply,
+  onEditDraft,
+  onDiscardDraft,
   notify,
   onMailto,
   unsubscribe,
@@ -583,11 +589,14 @@ export function Reader({
   loading = false,
 }: ReaderProps) {
   const keys = useShortcutText()
-  const last = messages[messages.length - 1]
+  // Unsent drafts sit below the conversation they would continue, never among what was said.
+  const history = messages.filter((m) => !isDraft(m))
+  const drafts = messages.filter(isDraft)
+  const last = history.at(-1)
   const initiallyExpanded = () =>
     new Set(
       messages
-        .filter((m) => !m.keywords.$seen)
+        .filter((m) => !m.keywords.$seen || isDraft(m))
         .map((m) => m.id)
         .concat(last?.id || ''),
     )
@@ -621,15 +630,16 @@ export function Reader({
       return next
     })
   const [showAll, setShowAll] = useState(false)
-  if (!last) return null
+  const newest = last || drafts.at(-1)
+  if (!newest) return null
   // Long threads show their first message and the latest few; the middle folds into one row.
   const folded =
-    !showAll && messages.length > 4
-      ? messages.slice(1, -2).filter((m) => !expanded.has(m.id) || m.id === last.id)
+    !showAll && history.length > 4
+      ? history.slice(1, -2).filter((m) => !expanded.has(m.id) || m.id === last?.id)
       : []
   const foldedIds = new Set(folded.length > 1 ? folded.map((m) => m.id) : [])
   const participants = [
-    ...new Set(messages.flatMap((m) => m.from.map((a) => a.name || a.email.split('@')[0]))),
+    ...new Set(history.flatMap((m) => m.from.map((a) => a.name || a.email.split('@')[0]))),
   ]
   return (
     <div className="reader-page">
@@ -769,17 +779,17 @@ export function Reader({
             <span title={account.email}>{account.name}</span>
             <ChevronRight size={11} />
             <span>
-              {messages.length > 1
-                ? messages.length +
+              {history.length > 1
+                ? history.length +
                   ' messages · ' +
                   participants.slice(0, 3).join(', ') +
                   (participants.length > 3 ? ' +' + (participants.length - 3) : '')
                 : 'Conversation'}
             </span>
           </div>
-          <h1>{last.subject || '(No subject)'}</h1>
+          <h1>{newest.subject || '(No subject)'}</h1>
           <div className="conversation-messages">
-            {messages.map((message) => {
+            {[...history, ...drafts].map((message) => {
               if (foldedIds.has(message.id))
                 return message.id === folded[0].id ? (
                   <button key="folded" className="folded-messages" onClick={() => setShowAll(true)}>
@@ -787,59 +797,83 @@ export function Reader({
                   </button>
                 ) : null
               const open = expanded.has(message.id) || messages.length === 1
+              const draft = isDraft(message)
               const sender = message.from[0]
               const when = messageDate(message.receivedAt)
+              const recipients = [...message.to, ...message.cc].map((a) => a.name || a.email)
               const attachments =
                 message.attachments?.filter((a) => !a.cid || a.disposition === 'attachment') || []
               return (
                 <article
-                  className={'message-card ' + (!open ? 'collapsed-message' : '')}
+                  className={
+                    'message-card' +
+                    (draft ? ' draft-message' : '') +
+                    (!open ? ' collapsed-message' : '')
+                  }
+                  aria-label={draft ? 'Draft, not sent' : undefined}
                   key={message.id}
                 >
                   <div className="message-heading">
-                    <SenderAvatar
-                      name={sender?.name || sender?.email || '?'}
-                      email={sender?.email}
-                      color={account.color}
-                      size={35}
-                      remoteImages={settings.remoteImages}
-                    />
+                    {draft ? (
+                      <span className="draft-mark" aria-hidden="true">
+                        <PencilEdit size={16} />
+                      </span>
+                    ) : (
+                      <SenderAvatar
+                        name={sender?.name || sender?.email || '?'}
+                        email={sender?.email}
+                        color={account.color}
+                        size={35}
+                        remoteImages={settings.remoteImages}
+                      />
+                    )}
                     <button
                       className="message-person"
                       onClick={() => toggle(message.id, setExpanded)}
                       aria-expanded={open}
                       disabled={messages.length === 1}
                     >
-                      <span className="sender-name">
-                        {sender?.name || sender?.email}
-                        <span className="sender-address">{sender?.name ? sender.email : ''}</span>
-                      </span>
+                      {draft ? (
+                        <span className="sender-name">
+                          <span className="draft-badge">Draft</span>
+                          Not sent yet
+                        </span>
+                      ) : (
+                        <span className="sender-name">
+                          {sender?.name || sender?.email}
+                          <span className="sender-address">{sender?.name ? sender.email : ''}</span>
+                        </span>
+                      )}
                       <span className="message-to">
-                        {open
-                          ? 'to ' +
-                            ([...message.to, ...message.cc]
-                              .map((a) => a.name || a.email)
-                              .join(', ') || 'undisclosed recipients')
-                          : message.preview}
+                        {!open
+                          ? message.preview
+                          : recipients.length
+                            ? 'to ' + recipients.join(', ')
+                            : draft
+                              ? 'No recipients yet'
+                              : 'to undisclosed recipients'}
                       </span>
                     </button>
                     {!!message.attachments?.length && !open && (
                       <Paperclip size={13} className="message-attachment-hint" />
                     )}
                     <time dateTime={message.receivedAt} title={longDate(message.receivedAt)}>
+                      {draft && 'Saved '}
                       {when.date}
                       <span> · {when.time}</span>
                     </time>
-                    <IconButton
-                      label="Message details"
-                      aria-expanded={details.has(message.id)}
-                      onClick={() => toggle(message.id, setDetails)}
-                    >
-                      <ChevronDown
-                        size={13}
-                        className={'details-chevron' + (details.has(message.id) ? ' open' : '')}
-                      />
-                    </IconButton>
+                    {!draft && (
+                      <IconButton
+                        label="Message details"
+                        aria-expanded={details.has(message.id)}
+                        onClick={() => toggle(message.id, setDetails)}
+                      >
+                        <ChevronDown
+                          size={13}
+                          className={'details-chevron' + (details.has(message.id) ? ' open' : '')}
+                        />
+                      </IconButton>
+                    )}
                   </div>
                   {details.has(message.id) && (
                     <dl className="message-details">
@@ -918,33 +952,47 @@ export function Reader({
                           })}
                         </div>
                       )}
+                      {draft && (
+                        <div className="draft-message-actions">
+                          <Button onClick={() => onEditDraft(message)}>
+                            <PencilEdit size={14} />
+                            Continue editing
+                          </Button>
+                          <Button variant="ghost" onClick={() => onDiscardDraft(message)}>
+                            <Trash2 size={14} />
+                            Discard draft
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </article>
               )
             })}
           </div>
-          <div className="reply-panel">
-            <button className="reply-prompt" onClick={() => onReply(last, 'reply')}>
-              <Reply size={17} />
-              <span>
-                <strong>Reply to {last.from[0]?.name || last.from[0]?.email || 'sender'}</strong>
-              </span>
-              <ShortcutHint id="reply" />
-            </button>
-            <div className="reply-bar">
-              <Button variant="ghost" onClick={() => onReply(last, 'replyAll')}>
-                <ReplyAll size={14} />
-                Reply all
-                <ShortcutHint id="replyAll" />
-              </Button>
-              <Button variant="ghost" onClick={() => onReply(last, 'forward')}>
-                <Forward size={14} />
-                Forward
-                <ShortcutHint id="forward" />
-              </Button>
+          {last && (
+            <div className="reply-panel">
+              <button className="reply-prompt" onClick={() => onReply(last, 'reply')}>
+                <Reply size={17} />
+                <span>
+                  <strong>Reply to {last.from[0]?.name || last.from[0]?.email || 'sender'}</strong>
+                </span>
+                <ShortcutHint id="reply" />
+              </button>
+              <div className="reply-bar">
+                <Button variant="ghost" onClick={() => onReply(last, 'replyAll')}>
+                  <ReplyAll size={14} />
+                  Reply all
+                  <ShortcutHint id="replyAll" />
+                </Button>
+                <Button variant="ghost" onClick={() => onReply(last, 'forward')}>
+                  <Forward size={14} />
+                  Forward
+                  <ShortcutHint id="forward" />
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       {link && (

@@ -21,6 +21,7 @@ import {
   type MutationInput,
   type SubmissionSummary,
 } from '@inlark/core'
+import { longDate } from './mail-date'
 
 const names = ['Personal', 'Studio', 'Projects', 'Community', 'Archive']
 const emails = [
@@ -498,6 +499,91 @@ const submissionFor = (draftId: string) => {
   if (!found) throw new Error('This send is no longer tracked.')
   return found
 }
+
+/* ——— Server drafts: a synced reply is filed in its conversation, as a real server does ——— */
+const serverDrafts = new Map<string, Message>()
+const threadDrafts = (accountId: string, threadId: string) =>
+  [...serverDrafts.values()]
+    .filter((m) => m.accountId === accountId && m.threadId === threadId)
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
+/** A list entry for a sample message, with any drafts filed in its conversation. */
+function listed(accountId: string, m: Message) {
+  const messages = [m, ...threadDrafts(accountId, m.threadId)]
+  // Display the matching message, as the providers do, even when a draft is newer.
+  return {
+    ...conversationFromMessages(accountId, m.threadId, messages),
+    subject: m.subject,
+    preview: m.preview,
+    receivedAt: m.receivedAt,
+    count: messages.length,
+  }
+}
+function fileDraft(draft: Draft): Draft {
+  if (!draft.replyThreadId) return draft
+  const id = draft.serverId || 'draft-' + draft.id
+  const account = demoAccounts.find((a) => a.id === draft.accountId)!
+  serverDrafts.set(id, {
+    id,
+    accountId: account.id,
+    threadId: draft.replyThreadId,
+    subject: draft.subject,
+    from: [{ name: account.senderName || 'Paul', email: account.email }],
+    to: draft.to,
+    cc: draft.cc,
+    bcc: draft.bcc,
+    replyTo: [],
+    receivedAt: draft.updatedAt,
+    preview: draft.text.replace(/\s+/g, ' ').trim().slice(0, 140),
+    size: draft.text.length,
+    hasAttachment: draft.attachments.length > 0,
+    keywords: { $draft: true, $seen: true },
+    mailboxIds: { drafts: true },
+    html: draft.html,
+    text: draft.text,
+    messageId: [id + '@demo.example'],
+    inReplyTo: draft.inReplyTo,
+    references: draft.references,
+  })
+  return { ...draft, serverId: id }
+}
+const unfileDraft = (draft: Draft | undefined) => {
+  if (draft) serverDrafts.delete(draft.serverId || 'draft-' + draft.id)
+}
+// One reply waits unsent in Maya's conversation, to show how a draft reads in a thread.
+{
+  const original = message(0, 2)
+  const sender = original.from[0]
+  const reply =
+    'Agreed, the quieter direction is the one. I’ll tidy up the explorations and send them over on Thursday.'
+  const attribution =
+    'On ' + longDate(original.receivedAt) + ', ' + sender.name + ' <' + sender.email + '> wrote:'
+  const draft = fileDraft({
+    // Stable, so the cached draft list restored on reload still matches the thread.
+    id: 'b6f1d2a4-7c3e-4f8a-9d2b-5e6c7a8b9c0d',
+    accountId: original.accountId,
+    identityId: 'identity',
+    to: original.from,
+    cc: [],
+    bcc: [],
+    subject: 'Re: ' + original.subject,
+    html:
+      '<p>Hi Maya,</p><p>' +
+      reply +
+      '</p><p>Paul</p><p>' +
+      attribution.replace('<', '&lt;').replace('>', '&gt;') +
+      '</p><blockquote>' +
+      original.html +
+      '</blockquote>',
+    text: 'Hi Maya,\n\n' + reply + '\n\nPaul\n\n' + attribution + '\n> ' + original.preview,
+    attachments: [],
+    updatedAt: new Date(referenceTime.getTime() - 20 * 60_000).toISOString(),
+    status: 'synced',
+    inReplyTo: original.messageId,
+    references: original.messageId,
+    replyThreadId: original.threadId,
+  })
+  drafts.set(draft.id, draft)
+}
 const copyOf = (source: Draft, patch: Partial<Draft>): Draft => ({
   ...source,
   id: crypto.randomUUID(),
@@ -716,10 +802,7 @@ export const demoAPI: DesktopMailAPI = {
           accountId: account.id,
           position,
           page: {
-            items: selected.map((m) => ({
-              ...conversationFromMessages(account.id, m.threadId, [m]),
-              count: 1,
-            })),
+            items: selected.map((m) => listed(account.id, m)),
             total,
             next: position + 50 < total ? position + 50 : undefined,
             incomplete: indexing(account),
@@ -733,7 +816,7 @@ export const demoAPI: DesktopMailAPI = {
     const accountIndex = demoAccounts.findIndex((a) => a.id === accountId)
     const m = get(accountIndex, Number(threadId.replace('thread-', '')))
     if (!m) throw new Error('Conversation not found.')
-    return [m]
+    return [m, ...threadDrafts(accountId, threadId)]
   },
   mutate: async (input) => {
     const saved: [string, Message | null | undefined][] = []
@@ -813,8 +896,12 @@ export const demoAPI: DesktopMailAPI = {
       )
     changed()
   },
-  resumeDraft: async () => {
-    throw new Error('No server draft is available.')
+  resumeDraft: async (accountId, messageId) => {
+    const linked = [...drafts.values()].find(
+      (d) => d.accountId === accountId && d.serverId === messageId,
+    )
+    if (!linked) throw new Error('No server draft is available.')
+    return linked
   },
   stageRemoteAttachments: async () => [],
   drafts: async () => [...drafts.values()],
@@ -823,15 +910,22 @@ export const demoAPI: DesktopMailAPI = {
     return draft
   },
   syncDraft: async (draft) => {
-    const result = { ...draft, status: 'synced' as const }
+    const result = fileDraft({ ...draft, status: 'synced' as const })
     drafts.set(draft.id, result)
+    if (result.serverId) changed()
     return result
   },
   deleteDraft: async (id) => {
+    unfileDraft(drafts.get(id))
     drafts.delete(id)
     changed()
   },
   deleteServerDraft: async (accountId, messageId) => {
+    if (serverDrafts.delete(messageId)) {
+      for (const draft of drafts.values())
+        if (draft.accountId === accountId && draft.serverId === messageId) drafts.delete(draft.id)
+      return changed()
+    }
     const accountIndex = demoAccounts.findIndex((a) => a.id === accountId)
     changes.set(accountIndex + ':' + messageId.replace('message-', ''), null)
     changed()
@@ -869,6 +963,7 @@ export const demoAPI: DesktopMailAPI = {
         message: 'Delivery is not confirmed. Your draft is safe. Check status before trying again.',
       }
     }
+    unfileDraft(drafts.get(draft.id) || draft)
     drafts.delete(draft.id)
     // Record the outcome before announcing the change, as the desktop app does.
     queueMicrotask(changed)
