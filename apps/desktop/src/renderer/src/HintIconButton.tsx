@@ -41,10 +41,10 @@ export function HintIconButton({
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Positioner sideOffset={7}>
-          <Tooltip.Popup className="tooltip tooltip-with-hint">
-            <span className="tooltip-text">
+          <Tooltip.Popup className="tooltip tooltip-with-hint items-start max-w-70">
+            <span className="tooltip-text flex flex-col gap-[2px]">
               {label}
-              <span className="tooltip-hint">{hint}</span>
+              <span className="tooltip-hint text-muted leading-[1.5]">{hint}</span>
             </span>
             {shortcut && <kbd>{shortcut}</kbd>}
           </Tooltip.Popup>

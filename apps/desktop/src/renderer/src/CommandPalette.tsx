@@ -147,7 +147,11 @@ export function CommandPalette({
             }
           }}
         />
-        <button className="command-dismiss" onClick={onClose} aria-label="Close search">
+        <button
+          className="command-dismiss border-0 bg-none bg-transparent p-0"
+          onClick={onClose}
+          aria-label="Close search"
+        >
           <kbd>Esc</kbd>
         </button>
       </div>
@@ -186,10 +190,16 @@ export function CommandPalette({
               </span>
               <span className="command-text">
                 {c.label}
-                {c.description && <small className="command-description">{c.description}</small>}
+                {c.description && (
+                  <small className="command-description block mt-[2px] text-[11px] text-muted whitespace-normal">
+                    {c.description}
+                  </small>
+                )}
               </span>
-              {query && c.id !== 'search' && <span className="command-group">{c.group}</span>}
-              {c.checked && <Check size={14} className="command-check" />}
+              {query && c.id !== 'search' && (
+                <span className="command-group text-[11px] text-faint">{c.group}</span>
+              )}
+              {c.checked && <Check size={14} className="command-check text-primary" />}
               {c.key && (
                 <span className="command-keys">
                   {c.key.split(' ').map((k) => (
@@ -200,9 +210,13 @@ export function CommandPalette({
             </button>
           </Fragment>
         ))}
-        {!options.length && <div className="command-empty">No commands</div>}
+        {!options.length && (
+          <div className="command-empty py-5.5 px-3 text-center text-[12px] text-muted">
+            No commands
+          </div>
+        )}
       </div>
-      <div className="command-footer">
+      <div className="command-footer border-t border-solid border-t-border py-3 px-5.25 flex gap-2 items-center text-[11px] text-muted">
         <kbd>
           <ArrowUp size={11} />
         </kbd>
@@ -210,13 +224,13 @@ export function CommandPalette({
           <ArrowDown size={11} />
         </kbd>{' '}
         Navigate
-        <span className="command-enter">
+        <span className="command-enter flex items-center gap-1.75 ml-3">
           <kbd>
             <CornerDownLeft size={11} />
           </kbd>{' '}
           Run
         </span>
-        <Wordmark className="command-footer-brand" height={12} />
+        <Wordmark className="command-footer-brand ml-auto text-faint" height={12} />
       </div>
     </Modal>
   )

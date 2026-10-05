@@ -100,7 +100,7 @@ const fontStack = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
 const paperStyles =
   'html,body{margin:0;background:#fff;color:#24262b;font:16px/1.75 ' +
   fontStack +
-  ';overflow-wrap:anywhere}body{padding:22px 24px 26px}p{margin:0 0 16px}a{color:#5a4fb0}blockquote{margin:16px 0;padding-left:16px;border-left:2px solid #d5d5dc;color:#5d6068}hr{border:0;border-top:1px solid #e3e3e8;margin:24px 0}summary{color:#70737d}summary:hover{background:#f0f0f3}'
+  ';overflow-wrap:anywhere}body{padding:22px 24px 26px}p{margin:0 0 16px}a{color:#5a4fb0}blockquote{margin:16px 0;padding-left:16px;border-l:2px solid #d5d5dc;color:#5d6068}hr{border:0;border-t:1px solid #e3e3e8;margin:24px 0}summary{color:#70737d}summary:hover{background:#f0f0f3}'
 const adaptiveStyles = (theme: 'light' | 'dark') =>
   'html,body{margin:0;background:transparent;color:' +
   token('--text') +
@@ -112,11 +112,11 @@ const adaptiveStyles = (theme: 'light' | 'dark') =>
   token('--accent') +
   ';text-decoration:underline;text-decoration-color:' +
   token('--border-strong') +
-  ';text-underline-offset:3px}a:hover{text-decoration-color:currentColor}blockquote{margin:14px 0;padding-left:14px;border-left:2px solid ' +
+  ';text-underline-offset:3px}a:hover{text-decoration-color:currentColor}blockquote{margin:14px 0;padding-left:14px;border-l:2px solid ' +
   token('--border-strong') +
   ';color:' +
   token('--muted') +
-  '}hr{border:0;border-top:1px solid ' +
+  '}hr{border:0;border-t:1px solid ' +
   token('--border-strong') +
   ';margin:22px 0}summary{color:' +
   token('--muted') +
@@ -421,7 +421,7 @@ export function EmailBody({
   return (
     <>
       {blocked && (
-        <div className="image-notice">
+        <div className="image-notice flex gap-1.75 items-center text-muted text-[11px] pt-2 pb-4.25 px-0">
           <ImageOff size={13} />
           Remote images are off. You can enable them in Settings.
         </div>
@@ -431,7 +431,10 @@ export function EmailBody({
           ref={frame}
           title={'Message from ' + (message.from[0]?.name || message.from[0]?.email || 'sender')}
           sandbox="allow-same-origin"
-          className={'email-frame' + (adaptive ? ' email-frame-adaptive' : '')}
+          className={
+            'email-frame w-full border-0 block min-h-10 ' +
+            (adaptive ? 'email-frame-adaptive bg-transparent rounded-none' : 'bg-white rounded-lg')
+          }
           referrerPolicy="no-referrer"
           onLoad={onFrameLoad}
           onError={() => {
@@ -442,7 +445,11 @@ export function EmailBody({
         />
       )}
       {loading && (
-        <div className="body-skeleton" aria-label="Loading message" role="status">
+        <div
+          className="body-skeleton grid gap-3 pt-1.5 pb-2.5 px-0"
+          aria-label="Loading message"
+          role="status"
+        >
           <span />
           <span />
           <span />
@@ -451,12 +458,12 @@ export function EmailBody({
       )}
       {!frameReady && !loading && (
         <>
-          <div className="email-fallback">
+          <div className="email-fallback pt-[2px] pb-1 px-0 text-foreground whitespace-pre-wrap">
             {(message.text?.trim() ? message.text : message.preview?.trim()) ||
               'No readable message body is available.'}
           </div>
           {renderIssue && (
-            <details className="email-render-details">
+            <details className="email-render-details mt-3 text-muted text-[12px]">
               <summary>HTML rendering details</summary>
               <p>
                 Review these details before sharing them. Error text can contain message
@@ -520,7 +527,11 @@ function UnsubscribeButton({ state, onClick }: { state: UnsubscribeState; onClic
         render={
           <Button
             variant="ghost"
-            className={'unsubscribe-button unsubscribe-' + state}
+            className={
+              'unsubscribe-button unsubscribe-' +
+              state +
+              (state === 'pending' ? ' text-muted' : state === 'done' ? ' text-success' : '')
+            }
             aria-label={
               state === 'available'
                 ? 'Unsubscribe from this mailing list'
@@ -646,7 +657,7 @@ export function Reader({
       <div className="reader-toolbar">
         <Button
           variant="ghost"
-          className="reader-back"
+          className="reader-back max-w-45 -ml-1.5"
           aria-label={'Back to ' + backLabel.toLowerCase()}
           onClick={onBack}
           title={'Back' + (keys('back') ? ' · ' + keys('back') : '')}
@@ -741,7 +752,10 @@ export function Reader({
           {[...new Set([moveLimit, offersAction(view, 'destroy') && destroyLimit])]
             .filter(Boolean)
             .map((reason) => (
-              <p className="menu-note" key={String(reason)}>
+              <p
+                className="menu-note max-w-60 mt-1 mb-0 mx-0 pt-1.75 pb-1.25 px-2.5 border-t border-solid border-t-border text-[11px] leading-[1.5] text-muted"
+                key={String(reason)}
+              >
                 {reason}
               </p>
             ))}
@@ -774,7 +788,7 @@ export function Reader({
       </div>
       <div className="reader-scroll" ref={scroller} tabIndex={-1}>
         <div className="reader-content">
-          <div className="reader-eyebrow">
+          <div className="reader-eyebrow flex gap-2.25 items-center text-[11px] text-secondary">
             <AccountMark account={account} size={16} />
             <span title={account.email}>{account.name}</span>
             <ChevronRight size={11} />
@@ -792,7 +806,11 @@ export function Reader({
             {[...history, ...drafts].map((message) => {
               if (foldedIds.has(message.id))
                 return message.id === folded[0].id ? (
-                  <button key="folded" className="folded-messages" onClick={() => setShowAll(true)}>
+                  <button
+                    key="folded"
+                    className="folded-messages relative flex justify-center w-full h-8.5 m-0 p-0 border-0 border-t border-solid border-t-border-strong bg-none bg-transparent"
+                    onClick={() => setShowAll(true)}
+                  >
                     <span>{folded.length} earlier messages</span>
                   </button>
                 ) : null
@@ -815,7 +833,10 @@ export function Reader({
                 >
                   <div className="message-heading">
                     {draft ? (
-                      <span className="draft-mark" aria-hidden="true">
+                      <span
+                        className="draft-mark grid place-items-center w-8.75 h-8.75 shrink-0 border border-dashed border-foreground/28 rounded-full text-muted"
+                        aria-hidden="true"
+                      >
                         <PencilEdit size={16} />
                       </span>
                     ) : (
@@ -835,7 +856,9 @@ export function Reader({
                     >
                       {draft ? (
                         <span className="sender-name">
-                          <span className="draft-badge">Draft</span>
+                          <span className="draft-badge py-0 px-1.5 rounded-xs bg-draft/14 text-draft text-[11px] font-[550] leading-[18px]">
+                            Draft
+                          </span>
                           Not sent yet
                         </span>
                       ) : (
@@ -844,7 +867,7 @@ export function Reader({
                           <span className="sender-address">{sender?.name ? sender.email : ''}</span>
                         </span>
                       )}
-                      <span className="message-to">
+                      <span className="message-to text-muted text-[11px] mt-[3px] whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
                         {!open
                           ? message.preview
                           : recipients.length
@@ -855,7 +878,10 @@ export function Reader({
                       </span>
                     </button>
                     {!!message.attachments?.length && !open && (
-                      <Paperclip size={13} className="message-attachment-hint" />
+                      <Paperclip
+                        size={13}
+                        className="message-attachment-hint text-muted shrink-0"
+                      />
                     )}
                     <time dateTime={message.receivedAt} title={longDate(message.receivedAt)}>
                       {draft && 'Saved '}
@@ -913,13 +939,13 @@ export function Reader({
                         onMailto={onMailto}
                       />
                       {attachments.length > 0 && (
-                        <div className="attachment-list">
+                        <div className="attachment-list flex gap-2.5 flex-wrap mt-5">
                           {attachments.map((attachment) => {
                             const Icon = attachmentIcon(attachment.type, attachment.name)
                             return (
                               <div className="attachment-card" key={attachment.blobId}>
                                 <button
-                                  className="attachment-open"
+                                  className="attachment-open flex items-center gap-2.5 min-w-0 max-w-65 py-[3px] pr-1 pl-0 border-0 bg-none bg-transparent text-left"
                                   title={'Open ' + attachment.name}
                                   onClick={() =>
                                     void api
@@ -930,7 +956,7 @@ export function Reader({
                                   <span className="attachment-icon">
                                     <Icon size={18} strokeWidth={1.6} />
                                   </span>
-                                  <span className="attachment-label">
+                                  <span className="attachment-label min-w-0">
                                     <strong>{attachment.name}</strong>
                                     <span>
                                       {extension(attachment.name)} · {formatBytes(attachment.size)}
@@ -953,7 +979,7 @@ export function Reader({
                         </div>
                       )}
                       {draft && (
-                        <div className="draft-message-actions">
+                        <div className="draft-message-actions flex gap-1.5 mt-4">
                           <Button onClick={() => onEditDraft(message)}>
                             <PencilEdit size={14} />
                             Continue editing
@@ -996,7 +1022,10 @@ export function Reader({
         </div>
       </div>
       {link && (
-        <div className="link-status" aria-hidden="true">
+        <div
+          className="link-status absolute left-3 bottom-3 max-w-[min(640px,_calc(100%_-_24px))] py-1.25 px-2.25 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-secondary bg-raised border border-solid border-border-strong rounded-md pointer-events-none z-5"
+          aria-hidden="true"
+        >
           {link}
         </div>
       )}

@@ -35,7 +35,7 @@ export function DraftRows({
         const canDelete = deletable(item)
         return (
           <div className={'draft-row' + (selected.has(item.key) ? ' selected' : '')} key={item.key}>
-            <span className="draft-selector">
+            <span className="draft-selector relative grid place-items-center shrink-0 w-4.25 h-4.25">
               <FileText size={17} />
               <Checkbox
                 aria-label={'Select ' + subject}
@@ -44,7 +44,10 @@ export function DraftRows({
                 onCheckedChange={(_, event) => onSelect(item.key, !!(event as MouseEvent).shiftKey)}
               />
             </span>
-            <button className="draft-open" onClick={() => onOpen(item)}>
+            <button
+              className="draft-open flex flex-1 gap-4 items-center min-w-0 py-4.75 px-0 bg-none bg-transparent border-0 text-left"
+              onClick={() => onOpen(item)}
+            >
               <div>
                 <strong>{subject}</strong>
                 <span>
@@ -64,7 +67,7 @@ export function DraftRows({
                 {shortDate(item.kind === 'server' ? item.message.receivedAt : item.draft.updatedAt)}
               </time>
             </button>
-            <span className="draft-actions">
+            <span className="draft-actions relative grid place-items-center shrink-0 w-7 h-7">
               <ArrowUpRight size={14} aria-hidden="true" />
               {canDelete && (
                 <IconButton

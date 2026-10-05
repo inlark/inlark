@@ -77,7 +77,7 @@ export function FolderMappingEditor({
   const folders = review.folders.filter((f) => f.path.toUpperCase() !== 'INBOX')
   const proposal = useMemo(() => initialFolderChoices(review), [review])
   return (
-    <div className="folder-roles">
+    <div className="folder-roles grid">
       {folderRoles.map((role) => {
         const info = roles[role]
         const mapping = review.mappings[role]
@@ -109,7 +109,7 @@ export function FolderMappingEditor({
         const id = 'folder-role-' + role
         return (
           <div className="folder-role" key={role}>
-            <div className="folder-role-text">
+            <div className="folder-role-text flex flex-wrap items-baseline gap-[2px_10px] min-w-0">
               <label htmlFor={id}>
                 <strong>{info.label}</strong>
               </label>
@@ -117,7 +117,10 @@ export function FolderMappingEditor({
                 {status.tone === 'confirmed' ? (
                   <Check size={11} />
                 ) : status.tone === 'uncertain' ? (
-                  <span className="folder-role-dot" aria-hidden="true" />
+                  <span
+                    className="folder-role-dot w-1.5 h-1.5 rounded-full bg-primary"
+                    aria-hidden="true"
+                  />
                 ) : null}
                 {status.text}
               </span>
@@ -181,7 +184,7 @@ export function FolderMappingsDialog({
       }}
       title={'Folders for ' + (account?.name || 'this account')}
       description="Choose where Inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put conversations."
-      className="folder-modal"
+      className="folder-modal w-[min(600px,_calc(100vw_-_40px))]"
     >
       <form
         onSubmit={async (e) => {
@@ -215,7 +218,10 @@ export function FolderMappingsDialog({
             disabled={saving}
           />
         ) : (
-          <div className="folder-roles-loading" role="status">
+          <div
+            className="folder-roles-loading flex items-center gap-2 py-5 px-0 text-[12px] text-muted"
+            role="status"
+          >
             <Spinner size={14} />
             Loading folders…
           </div>

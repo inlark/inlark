@@ -120,6 +120,8 @@ pnpm dev:web      # browser preview with sample mail, no real accounts
 
 Add `?stress=1` to the browser preview's URL for five synthetic 50,000-message inboxes, or run `pnpm dev -- --demo` for a sample workspace in the desktop app. On NixOS, run `nix develop path:.` first. The shell provides a compatible Electron.
 
+The desktop UI uses Tailwind CSS v4 through the Vite plugin. Its CSS-first theme and shared controls live in `packages/ui/src/styles.css`; renderer styles reference that theme with `@reference`. Use utilities in JSX for layouts and `@layer components` for reusable controls, editor content, and selectors shared across components. Colors follow the app's appearance setting, and spacing uses a fixed 4px unit to preserve the desktop's 14px typography. Keep conditional utility names complete so Tailwind can detect them.
+
 <details>
 <summary><b>Checks, packaging and releases</b></summary>
 

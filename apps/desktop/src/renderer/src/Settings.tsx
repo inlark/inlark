@@ -37,16 +37,22 @@ import { ShortcutEditor } from './ShortcutEditor'
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
   return (
-    <span className={'mini-window mini-window-' + theme + (className ? ' ' + className : '')}>
-      <span className="mini-sidebar">
+    <span
+      className={
+        'mini-window absolute grid grid-cols-[30%_1fr] bg-[var(--w-sidebar)] mini-window-' +
+        theme +
+        (className ? ' ' + className : '')
+      }
+    >
+      <span className="mini-sidebar flex flex-col gap-[7%] py-[18%] px-[14%]">
         <span className="mini-nav active" />
         <span className="mini-nav" />
         <span className="mini-nav" />
       </span>
-      <span className="mini-list">
+      <span className="mini-list flex flex-col gap-[12%] mt-[10%] pt-[12%] pb-0 px-[12%] rounded-tl-[6px] bg-[var(--w-bg)]">
         {[0, 1, 2].map((row) => (
-          <span className="mini-row" key={row}>
-            <span className="mini-avatar" />
+          <span className="mini-row flex items-center gap-[8%]" key={row}>
+            <span className="mini-avatar w-2.25 h-2.25 shrink-0 rounded-full bg-[color-mix(in_srgb,_var(--w-accent)_60%,_transparent)]" />
             <span className="mini-line" />
           </span>
         ))}
@@ -70,7 +76,7 @@ function AccountDetailsForm({
   const [saving, setSaving] = useState(false)
   return (
     <form
-      className="account-details-form"
+      className="account-details-form grid grid-cols-[1fr_1fr] gap-[0_14px] -mt-1 mb-0 mx-0 pt-0 pb-4.5 pr-0 pl-11.5"
       onSubmit={async (e) => {
         e.preventDefault()
         setSaving(true)
@@ -98,7 +104,7 @@ function AccountDetailsForm({
           placeholder="Personal"
           onChange={(e) => setName(e.target.value)}
         />
-        <span className="field-hint">Only you see this.</span>
+        <span className="field-hint text-muted text-[11px] block mt-1.25">Only you see this.</span>
       </label>
       <label className="form-field">
         Your name
@@ -109,14 +115,14 @@ function AccountDetailsForm({
           placeholder="Jane Doe"
           onChange={(e) => setSenderName(e.target.value)}
         />
-        <span className="field-hint">
+        <span className="field-hint text-muted text-[11px] block mt-1.25">
           Recipients see{' '}
-          <span className="sender-preview">
+          <span className="sender-preview text-secondary">
             {(senderName.trim() || 'Your server’s name') + ' <' + account.email + '>'}
           </span>
         </span>
       </label>
-      <div className="account-details-actions">
+      <div className="account-details-actions flex justify-end gap-2 mt-3.5">
         <Button size="small" onClick={onDone}>
           Cancel
         </Button>
@@ -202,10 +208,10 @@ export function SettingsPanel({
           if (!value) onClose()
         }}
         title="Settings"
-        className="settings-modal"
+        className="settings-modal w-[min(880px,_calc(100vw_-_40px))] p-0 overflow-visible"
         popupRef={modalRef}
       >
-        <div className="settings-layout">
+        <div className="settings-layout flex min-h-0 h-[min(620px,_calc(100dvh_-_80px))] overflow-hidden rounded-[inherit]">
           <nav className="settings-nav" aria-label="Settings sections">
             {[
               ['general', 'General', SlidersHorizontal],
@@ -280,7 +286,7 @@ export function SettingsPanel({
                     </div>
                     <Select
                       aria-label="After archiving or deleting"
-                      className="setting-select"
+                      className="setting-select w-auto min-w-60 shrink-0"
                       value={bootstrap.settings.afterArchive || 'next'}
                       options={afterArchiveOptions}
                       onValueChange={(afterArchive) => void update({ afterArchive })}
@@ -342,7 +348,7 @@ export function SettingsPanel({
                       </div>
                       <Select
                         aria-label="Default sending account"
-                        className="setting-select"
+                        className="setting-select w-auto min-w-60 shrink-0"
                         value={
                           bootstrap.settings.defaultAccountId || bootstrap.accounts[0]?.id || ''
                         }
@@ -372,7 +378,7 @@ export function SettingsPanel({
                 />
               ) : (
                 <>
-                  <div className="settings-section-heading">
+                  <div className="settings-section-heading flex justify-between items-start gap-2.5">
                     <div>
                       <h3>Accounts</h3>
                     </div>
@@ -394,8 +400,11 @@ export function SettingsPanel({
                         (account.status !== 'connected' && account.status !== 'connecting') ||
                         !!account.outgoingError
                       return (
-                        <div className="settings-account-entry" key={account.id}>
-                          <div className="settings-account">
+                        <div
+                          className="settings-account-entry border-b border-solid border-b-border"
+                          key={account.id}
+                        >
+                          <div className="settings-account flex items-center gap-2.5 py-4.5 px-0">
                             <AccountAvatarPicker
                               name={account.name}
                               email={account.email}
@@ -404,7 +413,7 @@ export function SettingsPanel({
                               onChange={(appearance) => updateAppearance(account, appearance)}
                               onError={(e) => notify(friendlyError(e), 'error')}
                             />
-                            <div className="settings-account-text">
+                            <div className="settings-account-text flex-1 min-w-0">
                               <strong>
                                 {account.name}
                                 <span
@@ -421,7 +430,9 @@ export function SettingsPanel({
                               <span className="settings-account-email">{account.email}</span>
                               <small
                                 className={
-                                  account.status === 'connected' ? 'connected' : 'connection-error'
+                                  account.status === 'connected'
+                                    ? 'connected text-success'
+                                    : 'connection-error text-danger'
                                 }
                               >
                                 <span className="connection-dot" />
@@ -436,18 +447,18 @@ export function SettingsPanel({
                                     : account.error || 'Disconnected'}
                               </small>
                               {account.outgoingError && (
-                                <small className="connection-error outgoing-error">
+                                <small className="connection-error text-danger outgoing-error">
                                   <Send size={11} />
                                   <span>Sending unavailable: {account.outgoingError}</span>
                                 </small>
                               )}
                               {account.indexing && !account.indexing.complete && (
-                                <small className="account-indexing">
+                                <small className="account-indexing text-muted">
                                   <IndexingMeter indexing={account.indexing} />
                                 </small>
                               )}
                             </div>
-                            <div className="account-actions">
+                            <div className="account-actions flex gap-1">
                               {needsSignIn && (
                                 <Button
                                   size="small"
@@ -458,7 +469,7 @@ export function SettingsPanel({
                               )}
                               <Dropdown
                                 container={modalRef}
-                                className="settings-account-menu"
+                                className="settings-account-menu w-55"
                                 trigger={
                                   <Button
                                     size="small"
@@ -499,7 +510,7 @@ export function SettingsPanel({
                                   <RefreshCw size={14} />
                                   Reconnect
                                 </MenuItem>
-                                <div className="account-menu-divider" />
+                                <div className="account-menu-divider h-[1px] m-1.25 bg-border" />
                                 <MenuItem danger onClick={() => setRemove(account)}>
                                   <Trash2 size={14} />
                                   Remove account…
@@ -519,7 +530,7 @@ export function SettingsPanel({
                     })}
                   </div>
                   {!bootstrap.accounts.length && (
-                    <div className="no-accounts">
+                    <div className="no-accounts flex min-h-90">
                       <EmptyState
                         icon={Mail}
                         title="No accounts yet"
@@ -554,7 +565,7 @@ export function SettingsPanel({
                     />
                   </>
                 ) : (
-                  <div className="no-accounts">
+                  <div className="no-accounts flex min-h-90">
                     <EmptyState
                       icon={PenLine}
                       title="No signatures yet"
@@ -586,15 +597,23 @@ export function SettingsPanel({
             )}
             {tab === 'about' && (
               <>
-                <div className="about-hero">
-                  <img className="about-mark" src={appIcon} alt="" width={52} height={52} />
+                <div className="about-hero flex items-center gap-4 pb-6.5 border-b border-solid border-b-border">
+                  <img
+                    className="about-mark w-13 h-13 block shrink-0"
+                    src={appIcon}
+                    alt=""
+                    width={52}
+                    height={52}
+                  />
                   <div>
                     <h3>
                       <Wordmark height={24} />
                     </h3>
                     <p>A desktop email client for JMAP and IMAP servers.</p>
                   </div>
-                  <span className="about-version">Version {bootstrap.version}</span>
+                  <span className="about-version shrink-0 py-[3px] px-2 border border-solid border-border-strong rounded-3xl text-secondary text-[11px] tabular-nums">
+                    Version {bootstrap.version}
+                  </span>
                 </div>
                 <div className="setting-section">
                   <h4>Privacy</h4>

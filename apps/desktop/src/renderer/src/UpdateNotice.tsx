@@ -6,11 +6,21 @@ export function UpdateNotice({ status }: { status: UpdateStatus }) {
   if (status.phase === 'idle') return null
   const manual = status.phase === 'manual'
   return (
-    <section className={'update-notice' + (manual ? ' update-notice-manual' : '')}>
-      <span className="update-notice-icon" aria-hidden="true">
+    <section
+      className={
+        'update-notice flex items-center gap-3 py-3 px-5.5 border-b border-solid border-b-border shrink-0' +
+        (manual
+          ? ' update-notice-manual bg-[color-mix(in_srgb,_var(--raised)_75%,_var(--bg))]'
+          : ' bg-[color-mix(in_srgb,_var(--accent)_7%,_var(--bg))]')
+      }
+    >
+      <span
+        className="update-notice-icon w-7.5 h-7.5 rounded-lg grid place-items-center text-primary bg-primary-tint shrink-0"
+        aria-hidden="true"
+      >
         {manual ? <Download size={17} /> : <RefreshCw size={17} />}
       </span>
-      <div className="update-notice-copy">
+      <div className="update-notice-copy min-w-0 flex-1 flex flex-col gap-[2px] text-[12px] leading-[1.4]">
         <strong>
           {manual
             ? `Inlark ${status.version} is available`
@@ -27,7 +37,7 @@ export function UpdateNotice({ status }: { status: UpdateStatus }) {
         </span>
         {status.phase === 'downloading' && (
           <div
-            className="update-notice-progress"
+            className="update-notice-progress mt-1.75 w-[min(280px,_100%)] h-[3px] rounded-xs bg-border-strong overflow-hidden"
             role="progressbar"
             aria-label="Update download"
             aria-valuemin={0}

@@ -12,7 +12,7 @@ export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () =
       }}
       title="Keyboard shortcuts"
       description="Click any keys to change them, or + to add another. Letter shortcuts are paused while you type in a field."
-      className="shortcut-modal"
+      className="shortcut-modal w-[min(760px,_calc(100vw_-_40px))]"
     >
       <ShortcutEditor />
     </Modal>
@@ -41,7 +41,7 @@ export function FilterDialog({
       }}
       title="Filter conversations"
       description="Searches your whole mailbox on the server, not just what’s loaded."
-      className="filter-modal"
+      className="filter-modal w-[min(520px,_calc(100vw_-_40px))]"
     >
       <form
         onSubmit={(event) => {
@@ -49,7 +49,7 @@ export function FilterDialog({
           onApply(values)
         }}
       >
-        <div className="filter-fields">
+        <div className="filter-fields grid grid-cols-[1fr_1fr] gap-[16px_12px]">
           {(['from', 'to'] as const).map((key) => (
             <label key={key}>
               {{ from: 'From', to: 'To' }[key]}
@@ -77,7 +77,9 @@ export function FilterDialog({
             <div className="filter-date-range">
               {(['after', 'before'] as const).map((key, index) => (
                 <Fragment key={key}>
-                  {index > 0 && <span className="filter-date-separator">to</span>}
+                  {index > 0 && (
+                    <span className="filter-date-separator text-[12px] text-faint">to</span>
+                  )}
                   <DatePicker
                     aria-label={{ after: 'After', before: 'Before' }[key]}
                     placeholder={{ after: 'Start date', before: 'End date' }[key]}

@@ -176,7 +176,11 @@ export function Composer({
           .replace(/\n/g, '<br/>') +
         '</p>',
     editorProps: {
-      attributes: { class: 'compose-editor', 'aria-label': 'Message body', spellcheck: 'true' },
+      attributes: {
+        class: 'compose-editor min-h-45 outline-none text-[15px] leading-[1.8] text-foreground',
+        'aria-label': 'Message body',
+        spellcheck: 'true',
+      },
     },
     onUpdate: ({ editor }) => update({ html: editor.getHTML(), text: editor.getText() }),
   })
@@ -436,9 +440,9 @@ export function Composer({
           }
         >
           <Dialog.Title className="sr-only">Compose email</Dialog.Title>
-          <div className="compose-heading">
+          <div className="compose-heading flex items-center justify-between h-12 py-0 pr-4.25 pl-6 bg-raised border-b border-solid border-b-border shrink-0">
             <span>
-              <span className="compose-dot" />{' '}
+              <span className="compose-dot w-1.25 h-1.25 rounded-full inline-block bg-primary mr-1.5" />{' '}
               {initial.replyThreadId
                 ? 'Reply'
                 : /^fwd:/i.test(initial.subject)
@@ -446,7 +450,10 @@ export function Composer({
                   : 'New message'}
             </span>
             <div>
-              <span className="draft-state" role="status">
+              <span
+                className="draft-state flex items-center gap-1.25 text-muted text-[11px] mr-3"
+                role="status"
+              >
                 {sending || state === 'Saving…' ? (
                   <Spinner size={11} />
                 ) : state.startsWith('Sav') || state === 'All changes saved' ? (
@@ -545,12 +552,15 @@ export function Composer({
               )}
             </form.Field>
           </div>
-          <div className="compose-body">
+          <div className="compose-body flex-1 overflow-auto py-5 px-6 min-h-0">
             <EditorContent editor={editor} />
             {draft.attachments.length > 0 && (
-              <div className="compose-attachments">
+              <div className="compose-attachments flex gap-1.75 flex-wrap mt-3.75">
                 {draft.attachments.map((a) => (
-                  <div className="compose-attachment" key={a.id}>
+                  <div
+                    className="compose-attachment flex gap-1.75 items-center py-1.75 px-2.25 border border-solid border-border-strong rounded-md text-[11px]"
+                    key={a.id}
+                  >
                     <FileText size={14} />
                     <span>{a.name}</span>
                     <small>{formatBytes(a.size)}</small>
@@ -573,12 +583,17 @@ export function Composer({
             )}
           </div>
           {problem && draft.status !== 'uncertain' && (
-            <div className="compose-warning" role="status">
+            <div
+              className="compose-warning flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8"
+              role="status"
+            >
               <AlertCircle size={15} />
               <span>
                 {problem.text}
                 {problem.detail && problem.detail !== problem.text && (
-                  <small className="compose-warning-detail">{problem.detail}</small>
+                  <small className="compose-warning-detail block mt-[2px] text-muted">
+                    {problem.detail}
+                  </small>
                 )}
               </span>
               {(shown.errorKind === 'conflict' || shown.error?.includes('another client')) && (
@@ -603,7 +618,7 @@ export function Composer({
             </div>
           )}
           {draft.status === 'uncertain' && (
-            <div className="compose-warning">
+            <div className="compose-warning flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8">
               <AlertCircle size={15} />
               The server may have accepted this message. Check delivery to avoid sending it twice.
             </div>
@@ -658,7 +673,7 @@ export function Composer({
               <Paperclip size={15} />
             </IconButton>
           </fieldset>
-          <div className="compose-footer">
+          <div className="compose-footer flex items-center gap-2.5 py-3.25 px-5 border-t border-solid border-t-border">
             <Button
               variant="primary"
               onClick={() => void send()}
@@ -674,7 +689,11 @@ export function Composer({
                   : isDemo
                     ? 'Simulate send'
                     : 'Send message'}
-              {sendShortcut && <span className="send-shortcut">{bindingText(sendShortcut)}</span>}
+              {sendShortcut && (
+                <span className="send-shortcut text-[11px] opacity-60 ml-2.5">
+                  {bindingText(sendShortcut)}
+                </span>
+              )}
             </Button>
             <span className="compose-account">{account.email}</span>
             <IconButton
@@ -741,7 +760,11 @@ export function Composer({
             />
           </label>
           {linkError && (
-            <span className="field-error" id="compose-link-error" role="alert">
+            <span
+              className="field-error block mt-1.25 text-[11px] text-danger"
+              id="compose-link-error"
+              role="alert"
+            >
               {linkError}
             </span>
           )}

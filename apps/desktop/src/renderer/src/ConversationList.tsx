@@ -302,7 +302,7 @@ export function ConversationList({
         })}
       </div>
       {isFetchingNextPage && (
-        <div className="load-more">
+        <div className="load-more flex items-center justify-center gap-2 text-[12px] text-muted p-3.75">
           <Spinner size={14} />
           Loading more conversations…
         </div>

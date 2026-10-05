@@ -97,7 +97,7 @@ function ShortcutRecorder({
           <ShortcutKeys binding={steps} />
           <span className="shortcut-then">then…</span>
           <span
-            className="shortcut-recorder-timer"
+            className="shortcut-recorder-timer absolute h-[2px] bg-primary-solid"
             style={{ animationDuration: sequenceWait + 'ms' }}
           />
         </>
@@ -191,7 +191,7 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
   const customized = shortcutDefinitions.some(({ id }) => isCustomized(bindings, id))
 
   return (
-    <div className="shortcut-editor">
+    <div className="shortcut-editor flex flex-col gap-4.5">
       <div className="shortcut-toolbar">
         <label className="shortcut-search">
           <Search size={14} />
@@ -219,12 +219,12 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
         )}
       </div>
       {error && (
-        <p className="form-error shortcut-error" role="alert">
+        <p className="form-error shortcut-error m-0" role="alert">
           <AlertCircle size={14} />
           <span>Couldn’t save your shortcuts. {error}</span>
         </p>
       )}
-      <div className="shortcut-sections">
+      <div className="shortcut-sections gap-x-9">
         {shortcutSections.map((section) => {
           const items = matches.filter((definition) => definition.section === section)
           if (!items.length) return null
@@ -239,16 +239,17 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
                 return (
                   <div
                     className={
-                      'shortcut-item' + (recording?.id === id ? ' shortcut-item-recording' : '')
+                      'shortcut-item break-inside-avoid border-b border-solid border-b-border' +
+                      (recording?.id === id ? ' shortcut-item-recording' : '')
                     }
                     key={id}
                   >
-                    <div className="shortcut-row">
-                      <span className="shortcut-label">
+                    <div className="shortcut-row flex items-center justify-between gap-3 min-h-8.5 text-[12px] text-secondary">
+                      <span className="shortcut-label flex flex-col min-w-0 py-1.5 px-0">
                         {definition.label}
                         {'description' in definition && <small>{definition.description}</small>}
                       </span>
-                      <span className="shortcut-bindings">
+                      <span className="shortcut-bindings flex flex-wrap items-center justify-end gap-[2px] py-1 px-0">
                         {list.map((binding, index) =>
                           recording?.id === id && recording.index === index ? (
                             <ShortcutRecorder
@@ -262,7 +263,7 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
                               }}
                             />
                           ) : (
-                            <span className="shortcut-binding" key={index}>
+                            <span className="shortcut-binding relative inline-flex" key={index}>
                               <button
                                 id={elementId(id, index)}
                                 className="shortcut-binding-keys"
@@ -366,7 +367,7 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
                           ))}
                           .
                         </p>
-                        <span className="shortcut-conflict-actions">
+                        <span className="shortcut-conflict-actions flex gap-1.5 ml-auto">
                           <Button
                             size="small"
                             variant="ghost"
@@ -401,7 +402,9 @@ export function ShortcutEditor({ autoFocus }: { autoFocus?: boolean }) {
           )
         })}
         {!matches.length && (
-          <p className="shortcut-no-results">No shortcuts match “{query.trim()}”.</p>
+          <p className="shortcut-no-results m-0 py-7 px-0 text-[12px] text-center text-muted">
+            No shortcuts match “{query.trim()}”.
+          </p>
         )}
       </div>
       <Modal

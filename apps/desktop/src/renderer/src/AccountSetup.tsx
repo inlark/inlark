@@ -151,12 +151,12 @@ function TextField({
         {...props}
       />
       {error ? (
-        <span id={id} className="field-error">
+        <span id={id} className="field-error block mt-1.25 text-[11px] text-danger">
           {error}
         </span>
       ) : (
         hint && (
-          <span id={id} className="field-hint">
+          <span id={id} className="field-hint text-muted text-[11px] block mt-1.25">
             {hint}
           </span>
         )
@@ -190,7 +190,9 @@ function CheckRow({
         ) : null}
       </span>
       <strong>{label}</strong>
-      <span className="connection-check-host">{host}</span>
+      <span className="connection-check-host text-muted overflow-hidden text-ellipsis whitespace-nowrap">
+        {host}
+      </span>
       <span className="connection-check-result">
         {check
           ? check.ok
@@ -207,22 +209,22 @@ function CheckRow({
 /** The server settings of a discovered or saved configuration, shown before any password is sent. */
 function ServerSummary({ fields }: { fields: Fields }) {
   return fields.protocol === 'jmap' ? (
-    <dl className="server-summary">
+    <dl className="server-summary m-0 text-[12px]">
       <div>
         <dt>Server · JMAP</dt>
         <dd>
-          <span className="server-host">{fields.serverUrl}</span>
+          <span className="server-host font-medium text-strong">{fields.serverUrl}</span>
         </dd>
       </div>
     </dl>
   ) : (
-    <dl className="server-summary">
+    <dl className="server-summary m-0 text-[12px]">
       {(['incoming', 'outgoing'] as const).map((kind) => (
         <div key={kind}>
           <dt>{kind === 'incoming' ? 'Incoming · IMAP' : 'Outgoing · SMTP'}</dt>
           <dd>
-            <span className="server-host">{fields[kind].host}</span>
-            <span className="server-meta">
+            <span className="server-host font-medium text-strong">{fields[kind].host}</span>
+            <span className="server-meta text-secondary tabular-nums">
               Port {fields[kind].port} · {securityLabel[fields[kind].security]}
             </span>
           </dd>
@@ -569,12 +571,17 @@ export function AccountSetup({
   const failed = test && (!test.incoming.ok || (test.outgoing && !test.outgoing.ok))
 
   return (
-    <form className="account-form" ref={form} onSubmit={(e) => void submit(e)} noValidate>
-      <Button variant="ghost" size="small" className="account-form-back" onClick={onBack}>
+    <form className="account-form max-w-140" ref={form} onSubmit={(e) => void submit(e)} noValidate>
+      <Button
+        variant="ghost"
+        size="small"
+        className="account-form-back -ml-2.5 text-muted"
+        onClick={onBack}
+      >
         <ArrowLeft size={13} />
         Back to accounts
       </Button>
-      <header className="account-form-title">
+      <header className="account-form-title mt-4.5 mb-2 mx-0">
         <h3>{phase === 'folders' ? 'Check folders' : title}</h3>
         {phase === 'email' ? (
           <p>
@@ -588,7 +595,7 @@ export function AccountSetup({
             conversations. You can change this later.
           </p>
         ) : (
-          <p className="account-form-address">
+          <p className="account-form-address flex items-baseline gap-2.5">
             <span>{email}</span>
             {mode === 'add' && (
               <button
@@ -606,7 +613,7 @@ export function AccountSetup({
         )}
       </header>
       {accountProblem && phase === 'server' && (
-        <div className="form-error account-form-problem">
+        <div className="form-error account-form-problem mt-3.5 mb-0 mx-0">
           <AlertCircle size={14} />
           <span>{accountProblem}</span>
         </div>
@@ -628,7 +635,10 @@ export function AccountSetup({
               setEmailError('')
             }}
           />
-          <div className="setup-lookup" role="status">
+          <div
+            className="setup-lookup flex items-center gap-2 min-h-4.5 mt-3 text-[12px] text-muted"
+            role="status"
+          >
             {discovering && (
               <>
                 <Spinner size={12} />
@@ -641,14 +651,17 @@ export function AccountSetup({
 
       {phase === 'server' &&
         (loadingSaved ? (
-          <div className="setup-lookup" role="status">
+          <div
+            className="setup-lookup flex items-center gap-2 min-h-4.5 mt-3 text-[12px] text-muted"
+            role="status"
+          >
             <Spinner size={12} />
             Loading saved settings…
           </div>
         ) : (
           <>
             <section className="account-form-section">
-              <div className="account-form-section-heading">
+              <div className="account-form-section-heading flex items-center justify-between gap-3 min-h-6.5">
                 <h4>Server</h4>
                 {editing ? (
                   (candidates.length > 0 || savedSettings) &&
@@ -679,14 +692,14 @@ export function AccountSetup({
                 )}
               </div>
               {notice && (
-                <div className="form-notice setup-notice" role="status">
+                <div className="form-notice setup-notice mt-2.5 mb-1 mx-0" role="status">
                   <AlertCircle size={14} />
                   <span>{notice}</span>
                 </div>
               )}
               {!editing && candidates.length > 1 && (
                 <div
-                  className="server-options"
+                  className="server-options grid gap-1.5 mt-3 mb-2.5 mx-0"
                   role="radiogroup"
                   aria-label="Server settings found"
                 >
@@ -707,20 +720,22 @@ export function AccountSetup({
                       />
                       <span className="theme-radio" aria-hidden="true" />
                       <span className="protocol-tag">{candidate.protocol.toUpperCase()}</span>
-                      <span className="server-option-title">{candidateTitle(candidate)}</span>
+                      <span className="server-option-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {candidateTitle(candidate)}
+                      </span>
                       <span className="server-option-source">{sourceLabel(candidate)}</span>
                     </label>
                   ))}
                 </div>
               )}
               {!editing && (
-                <div className="server-card">
+                <div className="server-card mt-3 pt-3 pb-1 px-3.5 border border-solid border-border-strong rounded-lg bg-field">
                   {candidates.length < 2 && (
-                    <div className="server-card-heading">
+                    <div className="server-card-heading flex items-center gap-2.5 mb-1">
                       <span className="protocol-tag">
                         {fields.protocol === 'jmap' ? 'JMAP' : 'IMAP · SMTP'}
                       </span>
-                      <span className="server-card-source">
+                      <span className="server-card-source text-[11px] text-muted">
                         {selected
                           ? sourceLabel(selected)
                           : origin.kind === 'saved'
@@ -735,7 +750,9 @@ export function AccountSetup({
               {editing && (
                 <div className="server-fields">
                   <div className="form-field">
-                    <span className="form-label">Protocol</span>
+                    <span className="form-label block mb-1.5 text-[12px] text-secondary">
+                      Protocol
+                    </span>
                     <SegmentedControl
                       label="Protocol"
                       value={fields.protocol}
@@ -757,7 +774,10 @@ export function AccountSetup({
                     />
                   ) : (
                     (['incoming', 'outgoing'] as const).map((kind) => (
-                      <fieldset className="server-group" key={kind}>
+                      <fieldset
+                        className="server-group mt-4.5 mb-0 mx-0 p-0 border-0 min-w-0"
+                        key={kind}
+                      >
                         <legend>
                           {kind === 'incoming' ? 'Incoming mail · IMAP' : 'Outgoing mail · SMTP'}
                         </legend>
@@ -787,7 +807,9 @@ export function AccountSetup({
                             }
                           />
                           <div className="form-field">
-                            <span className="form-label">Security</span>
+                            <span className="form-label block mb-1.5 text-[12px] text-secondary">
+                              Security
+                            </span>
                             <SegmentedControl
                               label={
                                 (kind === 'incoming' ? 'Incoming' : 'Outgoing') + ' server security'
@@ -810,7 +832,7 @@ export function AccountSetup({
 
             <section className="account-form-section">
               <h4>Sign in</h4>
-              <div className="form-row">
+              <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                 <TextField
                   label="Username"
                   autoComplete="username"
@@ -857,7 +879,7 @@ export function AccountSetup({
                     Outgoing server uses the same login
                   </label>
                   {!fields.sameLogin && (
-                    <div className="form-row">
+                    <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                       <TextField
                         label="Outgoing username"
                         autoComplete="off"
@@ -910,7 +932,7 @@ export function AccountSetup({
             {mode === 'add' && (
               <section className="account-form-section">
                 <h4>How it appears</h4>
-                <div className="form-row">
+                <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                   <TextField
                     label="Label"
                     placeholder="Personal"
@@ -929,7 +951,7 @@ export function AccountSetup({
                     hint={
                       <>
                         Recipients see{' '}
-                        <span className="sender-preview">
+                        <span className="sender-preview text-secondary">
                           {(senderName.trim() || 'your server’s name') + ' <' + email + '>'}
                         </span>
                       </>
@@ -942,7 +964,7 @@ export function AccountSetup({
             {fields.protocol === 'imap' && (busy === 'testing' || test) && (
               <section className="account-form-section" aria-live="polite">
                 <h4>Connection check</h4>
-                <ul className="connection-checks">
+                <ul className="connection-checks list-none mt-2.5 mb-0 mx-0 p-0 border border-solid border-border-strong rounded-lg">
                   <CheckRow
                     label="Incoming"
                     host={fields.incoming.host}
@@ -957,7 +979,7 @@ export function AccountSetup({
                   />
                 </ul>
                 {failed && (
-                  <p className="connection-check-hint">
+                  <p className="connection-check-hint mt-2.5 mb-0 mx-0 text-[11px] text-muted">
                     Nothing was saved. Check the password or the server settings above, then try
                     again.
                   </p>
@@ -984,9 +1006,13 @@ export function AccountSetup({
           <span>{error}</span>
         </div>
       )}
-      <footer className="account-form-footer">
+      <footer className="account-form-footer flex justify-end gap-2 mt-5.5 pt-4.5 border-t border-solid border-t-border">
         {phase === 'email' && (
-          <Button variant="ghost" className="account-form-manual" onClick={setUpManually}>
+          <Button
+            variant="ghost"
+            className="account-form-manual mr-auto -ml-2.5 text-muted"
+            onClick={setUpManually}
+          >
             Set up manually
           </Button>
         )}

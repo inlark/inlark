@@ -11,12 +11,12 @@ export function IndexingMeter({
   const total = Math.max(indexing.total, indexing.indexed)
   const ratio = total ? indexing.indexed / total : 0
   return (
-    <span className="indexing-meter">
+    <span className="indexing-meter inline-flex items-center gap-2.5 tabular-nums">
       <span>
         {label} · {indexing.indexed.toLocaleString()} of {total.toLocaleString()}
       </span>
       <span
-        className="indexing-bar"
+        className="indexing-bar relative w-18 h-[3px] shrink-0 rounded-[2px] bg-border-strong overflow-hidden"
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}

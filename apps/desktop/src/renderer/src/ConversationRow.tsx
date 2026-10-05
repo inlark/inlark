@@ -80,14 +80,16 @@ export function ConversationRow({
         />
         <span title={c.from.map((sender) => sender.email).join(', ')}>{senderLabel(c)}</span>
         {count > 1 && <small>{count}</small>}
-        {drafts > 0 && <span className="row-draft">Draft</span>}
+        {drafts > 0 && (
+          <span className="row-draft shrink-0 text-draft text-[11px] font-semibold">Draft</span>
+        )}
       </div>
       <div className="row-content" role="gridcell">
         <span className="row-subject">{subject}</span>
         <span className="row-preview">{c.preview}</span>
       </div>
       <div className="row-meta" role="gridcell">
-        <span className="row-attachment">
+        <span className="row-attachment w-3.25">
           {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
         </span>
         {a && <AccountMark account={a} size={22} title={a.name} />}

@@ -182,7 +182,10 @@ export function SubmissionList({
     )
   }
   return (
-    <section className="submissions" aria-labelledby="submissions-title">
+    <section
+      className="submissions border-b border-solid border-b-border pb-1.5"
+      aria-labelledby="submissions-title"
+    >
       <h2 className="draft-section-label" id="submissions-title">
         Needs attention
       </h2>
@@ -202,19 +205,21 @@ export function SubmissionList({
                 <Check size={16} />
               )}
             </span>
-            <div className="submission-text">
+            <div className="submission-text flex-1 min-w-0">
               <strong>{s.subject || '(No subject)'}</strong>
               <span className="submission-state">
                 {text.state}
                 {account && (
-                  <span className="submission-account">
+                  <span className="submission-account inline-flex items-center gap-1.5 text-[11px] text-muted">
                     <AccountMark account={account} size={14} />
                     {account.name}
                   </span>
                 )}
               </span>
-              <span className="submission-detail">{text.detail}</span>
-              <div className="submission-actions">{actions(s)}</div>
+              <span className="submission-detail block mt-1 max-w-140 text-[11px] leading-[1.6] text-muted">
+                {text.detail}
+              </span>
+              <div className="submission-actions flex flex-wrap gap-1.5 mt-2.5">{actions(s)}</div>
             </div>
             <time dateTime={s.at} title={new Date(s.at).toLocaleString()}>
               {shortDate(s.at)}
@@ -234,7 +239,7 @@ export function SubmissionList({
           '” was delivered. If it was, recipients will receive it twice.'
         }
       >
-        <p className="modal-body-text">
+        <p className="modal-body-text m-0 text-[12px] leading-[1.6] text-secondary">
           The replacement opens as a new draft for you to review. Nothing is sent until you choose
           Send. The unconfirmed message stays listed here, so you can still check it.
         </p>

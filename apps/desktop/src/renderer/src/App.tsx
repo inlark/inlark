@@ -1474,7 +1474,7 @@ export function App() {
           setFolderDialog({ operation, accountId, folder })
         }
       />
-      <main className="main-content">
+      <main className="main-content relative flex-1 min-w-0 flex flex-col bg-background border border-solid border-border-strong rounded-xl overflow-hidden">
         <UpdateNotice status={updateStatus} />
         {!boot.data ? (
           <EmptyState
@@ -1550,8 +1550,8 @@ export function App() {
         ) : (
           <>
             <div className="list-heading">
-              <div className="list-title">
-                <div className="list-eyebrow">
+              <div className="list-title min-w-0">
+                <div className="list-eyebrow flex items-center gap-1.75 text-[11px] text-muted mb-1.5">
                   Mail <ChevronRight size={10} />
                   <Dropdown
                     trigger={
@@ -1562,29 +1562,33 @@ export function App() {
                       </button>
                     }
                   >
-                    <div className="account-menu">
-                      <div className="menu-label">Mail accounts</div>
+                    <div className="account-menu w-62.5 max-w-[calc(100vw_-_40px)] max-h-[min(420px,_65vh)] overflow-y-auto">
+                      <div className="menu-label py-1.75 px-2.5 text-[11px] text-muted">
+                        Mail accounts
+                      </div>
                       <MenuItem onClick={() => go({ view, q: route.q })}>
                         <Inbox size={15} />
-                        <span className="account-menu-label">
+                        <span className="account-menu-label flex-1 min-w-0">
                           <strong>All accounts</strong>
                           <small>Unified inbox</small>
                         </span>
-                        {!account && <Check size={14} className="account-menu-check" />}
+                        {!account && (
+                          <Check size={14} className="account-menu-check text-primary" />
+                        )}
                       </MenuItem>
-                      <div className="account-menu-divider" />
+                      <div className="account-menu-divider h-[1px] m-1.25 bg-border" />
                       {accounts.map((item) => (
                         <MenuItem
                           key={item.id}
                           onClick={() => go({ view, q: route.q, account: item.id })}
                         >
                           <AccountMark account={item} size={28} />
-                          <span className="account-menu-label">
+                          <span className="account-menu-label flex-1 min-w-0">
                             <strong>{item.name}</strong>
                             <small>{item.email}</small>
                           </span>
                           {item.id === account?.id && (
-                            <Check size={14} className="account-menu-check" />
+                            <Check size={14} className="account-menu-check text-primary" />
                           )}
                         </MenuItem>
                       ))}
@@ -1629,15 +1633,17 @@ export function App() {
                       </IconButton>
                     }
                   >
-                    <div className="menu-label">Message density</div>
+                    <div className="menu-label py-1.75 px-2.5 text-[11px] text-muted">
+                      Message density
+                    </div>
                     <MenuItem onClick={() => setDensity('comfortable')}>
-                      <span className="menu-check">
+                      <span className="menu-check w-3.75 inline-flex text-primary">
                         {density === 'comfortable' && <Check size={14} />}
                       </span>
                       Comfortable
                     </MenuItem>
                     <MenuItem onClick={() => setDensity('compact')}>
-                      <span className="menu-check">
+                      <span className="menu-check w-3.75 inline-flex text-primary">
                         {density === 'compact' && <Check size={14} />}
                       </span>
                       Compact
@@ -1680,7 +1686,7 @@ export function App() {
                 {filterChips.map(([key, value]) => (
                   <button
                     key={key}
-                    className="filter-chip"
+                    className="filter-chip inline-flex items-center gap-2 max-w-65 py-1 px-2 text-[11px] text-primary border border-solid border-primary/25 bg-primary-tint rounded-sm"
                     aria-label={'Remove ' + (filterLabels[key] || key) + ' filter'}
                     onClick={() => setFilters((current) => ({ ...current, [key]: undefined }))}
                   >
@@ -1744,7 +1750,10 @@ export function App() {
                     onClick={() => setFilterOpen(true)}
                   >
                     <SlidersHorizontal size={13} />
-                    Filter{hasFilters && <span className="filter-dot" />}
+                    Filter
+                    {hasFilters && (
+                      <span className="filter-dot bg-primary w-1.25 h-1.25 rounded-full" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -1871,7 +1880,10 @@ export function App() {
                   ]
                     .filter(Boolean)
                     .map((reason) => (
-                      <p className="menu-note" key={String(reason)}>
+                      <p
+                        className="menu-note max-w-60 mt-1 mb-0 mx-0 pt-1.75 pb-1.25 px-2.5 border-t border-solid border-t-border text-[11px] leading-[1.5] text-muted"
+                        key={String(reason)}
+                      >
                         {reason}
                       </p>
                     ))}
@@ -1903,7 +1915,7 @@ export function App() {
               />
             )}
             {(mail.isError || mail.data?.pages.some((p) => p.failedAccounts.length)) && (
-              <div className="connection-banner">
+              <div className="connection-banner py-2.25 px-7.5 text-[11px] flex items-center gap-2.25 text-secondary bg-primary-tint">
                 <WifiOff size={13} />
                 {mail.isError
                   ? friendlyError(mail.error)
@@ -1923,7 +1935,7 @@ export function App() {
               </div>
             )}
             {view === 'drafts' ? (
-              <div className="draft-list">
+              <div className="draft-list flex-1 overflow-auto">
                 <SubmissionList
                   submissions={pendingSends.filter(
                     (s) => !route.account || s.accountId === route.account,
@@ -1944,7 +1956,7 @@ export function App() {
                   onDelete={discardDrafts}
                 />
                 {mail.hasNextPage && (
-                  <div className="load-more">
+                  <div className="load-more flex items-center justify-center gap-2 text-[12px] text-muted p-3.75">
                     <Button
                       disabled={mail.isFetchingNextPage}
                       onClick={() => void mail.fetchNextPage()}
@@ -2048,7 +2060,9 @@ export function App() {
                     <span
                       className={
                         'connection-dot ' +
-                        (accounts.some((a) => a.status !== 'connected') ? 'connection-pending' : '')
+                        (accounts.some((a) => a.status !== 'connected')
+                          ? 'connection-pending bg-danger'
+                          : '')
                       }
                     />
                     {accounts.every((a) => a.status === 'connected')

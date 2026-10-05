@@ -128,7 +128,10 @@ export function SignatureSettings({
             ? query.data[0]
             : undefined
         return (
-          <section className="signature-account" key={account.id}>
+          <section
+            className="signature-account py-5 px-0 border-t border-solid border-t-border"
+            key={account.id}
+          >
             <header>
               <AccountMark account={account} size={20} />
               <strong>{account.name}</strong>
@@ -153,7 +156,7 @@ export function SignatureSettings({
                 return (
                   <div className="signature-identity" key={key}>
                     {identity !== lone && (
-                      <div className="signature-identity-heading">
+                      <div className="signature-identity-heading flex items-center gap-3 mb-2">
                         <label htmlFor={id}>
                           {identity.name ? identity.name + ' · ' : ''}
                           {identity.email}
@@ -161,7 +164,7 @@ export function SignatureSettings({
                         {formatSwitch(identity, identity.email)}
                       </div>
                     )}
-                    <div className="signature-editor">
+                    <div className="signature-editor relative">
                       <textarea
                         id={id}
                         rows={html ? 6 : 3}
@@ -187,7 +190,7 @@ export function SignatureSettings({
                       </span>
                     </div>
                     {html && signature.value.trim() && (
-                      <div className="signature-preview">
+                      <div className="signature-preview mt-2.5">
                         <span>Preview</span>
                         <SignaturePreview html={signature.value} />
                         {!remoteImages &&

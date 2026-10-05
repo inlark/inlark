@@ -58,7 +58,7 @@ export function AccountAvatarPicker({
           <AccountTile account={{ ...value, email }} />
         </Menu.Trigger>
         <Menu.Portal container={portalContainer}>
-          <Menu.Positioner sideOffset={6} align="start" className="account-avatar-menu">
+          <Menu.Positioner sideOffset={6} align="start" className="account-avatar-menu z-130">
             <Menu.Popup className="dropdown">
               <MenuItem onClick={() => input.current?.click()}>
                 <ImageUpload size={15} />

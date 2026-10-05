@@ -159,7 +159,7 @@ export function Sidebar({
                 }
                 className={
                   'nav-item ' +
-                  (v.id === 'archive' ? 'nav-secondary-start ' : '') +
+                  (v.id === 'archive' ? 'nav-secondary-start mt-3.25 ' : '') +
                   (view === v.id && !route.account && !route.folder && !route.q ? 'active' : '')
                 }
                 onClick={() => go({ view: v.id })}
@@ -226,7 +226,7 @@ export function Sidebar({
                         ) : a.status !== 'connected' ? (
                           <WifiOff
                             size={12}
-                            className="account-offline"
+                            className="account-offline text-faint"
                             aria-label="Not connected"
                           />
                         ) : accountUnread[a.id] ? (
@@ -241,7 +241,7 @@ export function Sidebar({
                   </button>
                   {!collapsed && expanded && (
                     <div
-                      className="account-children"
+                      className="account-children mt-[1px] mb-2 mr-0 ml-4.5 pl-1.25 border-l border-solid border-l-border"
                       id={'account-folders-' + a.id}
                       role="group"
                       aria-label={a.name + ' folders'}
@@ -274,7 +274,7 @@ export function Sidebar({
                       {(boxesByAccount[a.id] || [])
                         .filter((b) => !b.role)
                         .map((b) => (
-                          <div className="folder-nav-row" key={b.id}>
+                          <div className="folder-nav-row flex items-center" key={b.id}>
                             <button
                               className={
                                 'nav-item ' +

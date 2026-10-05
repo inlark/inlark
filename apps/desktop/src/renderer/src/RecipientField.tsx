@@ -72,9 +72,12 @@ export function RecipientField({
   const showing = open && matches.length > 0
   const highlighted = Math.min(active, matches.length - 1)
   return (
-    <div className="compose-field recipient-field" onClick={() => input.current?.focus()}>
+    <div
+      className="compose-field recipient-field relative cursor-text py-1 px-0"
+      onClick={() => input.current?.focus()}
+    >
       <label htmlFor={id}>{label}</label>
-      <div className="recipient-chips">
+      <div className="recipient-chips flex-1 min-w-0 flex flex-wrap items-center gap-1">
         {chips.map((chip, i) => (
           <span
             key={chip.email + i}
@@ -168,7 +171,11 @@ export function RecipientField({
       </div>
       {children}
       {showing && (
-        <div className="recipient-suggestions" role="listbox" id={listId}>
+        <div
+          className="recipient-suggestions absolute z-5 top-[calc(100%_+_4px)] left-10.75 w-[min(360px,_calc(100%_-_43px))] p-1 bg-raised border border-solid border-border-strong rounded-lg shadow-popup"
+          role="listbox"
+          id={listId}
+        >
           {matches.map((match, i) => (
             <button
               type="button"

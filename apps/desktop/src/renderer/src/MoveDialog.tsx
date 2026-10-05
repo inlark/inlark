@@ -75,9 +75,11 @@ export function MoveDialog({
           ? 'Select conversations within one account to move them to a folder.'
           : accounts.find((a) => a.id === accountId)?.email
       }
-      className="move-modal"
+      className="move-modal w-[min(440px,_calc(100vw_-_40px))]"
     >
-      {limit && <p className="modal-body-text">{limit}</p>}
+      {limit && (
+        <p className="modal-body-text m-0 text-[12px] leading-[1.6] text-secondary">{limit}</p>
+      )}
       {choosable && (
         <>
           <div className="folder-search">
@@ -114,7 +116,13 @@ export function MoveDialog({
               }}
             />
           </div>
-          <div className="folder-picker" role="listbox" id={listId} aria-label="Folders" ref={list}>
+          <div
+            className="folder-picker max-h-[min(340px,_calc(100vh_-_280px))] overflow-y-auto my-0 -mx-1.5 py-0 px-1.5"
+            role="listbox"
+            id={listId}
+            aria-label="Folders"
+            ref={list}
+          >
             {folders.map((b, i) => (
               <button
                 key={b.id}
@@ -133,18 +141,24 @@ export function MoveDialog({
               </button>
             ))}
             {boxes.isLoading && (
-              <div className="folder-picker-note" role="status">
+              <div
+                className="folder-picker-note flex items-center gap-2 py-3.5 px-3 text-[12px] text-muted"
+                role="status"
+              >
                 <Spinner size={14} />
                 Loading folders…
               </div>
             )}
             {boxes.isError && (
-              <div className="folder-picker-note" role="alert">
+              <div
+                className="folder-picker-note flex items-center gap-2 py-3.5 px-3 text-[12px] text-muted"
+                role="alert"
+              >
                 {friendlyError(boxes.error)}
               </div>
             )}
             {boxes.data && !folders.length && (
-              <div className="folder-picker-note">
+              <div className="folder-picker-note flex items-center gap-2 py-3.5 px-3 text-[12px] text-muted">
                 {text.trim() ? 'No folders match “' + text.trim() + '”' : 'No folders to move to'}
               </div>
             )}

@@ -66,7 +66,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
   render() {
     return this.state.error ? (
-      <div className="startup-error">
+      <div className="startup-error max-w-130 my-[20vh] mx-auto p-6.25">
         <h1>Something went wrong</h1>
         <p>Inlark ran into an unexpected problem. Your saved drafts are safe on this device.</p>
         <button className="button" onClick={() => location.reload()}>
