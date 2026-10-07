@@ -277,6 +277,88 @@ describe('durable mail operations', () => {
     expect(saved.text).toBe('Hello')
     expect(JmapProvider.prototype.createDraft).not.toHaveBeenCalled()
   })
+  it.each([false, true])(
+    'keeps JMAP replacement IDs through delayed saves (encrypted: %s)',
+    async (encrypted) => {
+      const remote = new Map<string, { message: Message; raw: Uint8Array }>()
+      if (encrypted) {
+        await service.encryption.vault.create('test-vault-password')
+        const fixture = await readFile(
+          new URL('./fixtures/openpgp/encrypted-signed.eml', import.meta.url),
+        )
+        vi.spyOn(service.encryption, 'compose').mockImplementation(async (_draft, _own, id) =>
+          Buffer.concat([Buffer.from('X-Draft-Revision: ' + id + '\r\n'), fixture]),
+        )
+      }
+      let revision = 0
+      vi.mocked(JmapProvider.prototype.createDraft).mockImplementation(
+        async (_account, input, _messageId, mime) => {
+          const id = 'revision-' + ++revision
+          remote.set(id, {
+            message: {
+              ...mail,
+              id,
+              subject: input.subject,
+              to: input.to,
+              html: input.html,
+              text: input.text,
+              keywords: { $draft: true, $seen: true },
+            },
+            raw: mime || Buffer.from('Content-Type: text/plain\r\n\r\n' + input.text),
+          })
+          return id
+        },
+      )
+      vi.mocked(JmapProvider.prototype.messages).mockImplementation(async (_account, ids) =>
+        ids.flatMap((id) => (remote.has(id) ? [remote.get(id)!.message] : [])),
+      )
+      vi.spyOn(JmapProvider.prototype, 'rawMessage').mockImplementation(
+        async (_account, id) => remote.get(id)!.raw,
+      )
+      vi.mocked(JmapProvider.prototype.update).mockImplementation(async (_a, _changes, ids) => {
+        for (const id of ids || []) remote.delete(id)
+        return { updated: [], failures: [] }
+      })
+      const first = await service.syncDraft(draft)
+      const second = await service.syncDraft({
+        ...first,
+        encryption: encrypted ? 'encrypt' : undefined,
+        text: 'Second revision',
+        updatedAt: '2026-09-23T10:01:00.000Z',
+      })
+      expect(second.status).toBe('synced')
+      expect(remote.has(first.serverId!)).toBe(false)
+      // The next edit was captured before the replacement reply reached the composer.
+      const third = await service.syncDraft({
+        ...second,
+        serverId: first.serverId,
+        serverFingerprint: first.serverFingerprint,
+        text: 'Third revision',
+        updatedAt: '2026-09-23T10:02:00.000Z',
+      })
+      expect(third.status).toBe('synced')
+      expect([...remote.keys()]).toEqual([third.serverId])
+      if (encrypted) {
+        expect(third.serverFingerprint).toMatch(/^[a-f0-9]{64}$/)
+        expect(await readFile(join(directory, 'drafts.json'), 'utf8')).not.toContain(
+          'Third revision',
+        )
+      }
+      vi.spyOn(JmapProvider.prototype, 'submit').mockResolvedValue({
+        accepted: ['recipient@example.com'],
+        rejected: [],
+      })
+      expect(
+        (
+          await service.send({
+            ...third,
+            serverId: first.serverId,
+            serverFingerprint: first.serverFingerprint,
+          })
+        ).status,
+      ).toBe('sent')
+    },
+  )
 
   it('does not undo over a subsequent change from another client', async () => {
     const result = await service.mutate({

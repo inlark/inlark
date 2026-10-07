@@ -25,6 +25,7 @@ import { Modal, Button, IconButton, Select, Spinner } from '@inlark/ui'
 import {
   friendlyError,
   identitySignature,
+  isValidRecipientEmail as validAddress,
   type Address,
   type Account,
   type Draft,
@@ -44,7 +45,6 @@ import { SignatureNode } from './signature'
 import { linkTarget } from './link-target'
 import { SignatureParagraph, hasDraftContent, replaceSignature } from './composer-document'
 
-const validAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 /** One From choice: an account and one of its sending addresses. */
 const senderKey = (accountId: string, identityId: string) => JSON.stringify([accountId, identityId])
 /** The editor's own formatting keys, which follow the platform (⌘ on macOS, Ctrl elsewhere). */
@@ -368,7 +368,7 @@ export function Composer({
             serverId: result.serverId || current.serverId,
             serverFingerprint: result.serverFingerprint || current.serverFingerprint,
             ...(current.updatedAt === captured.updatedAt
-              ? { status: result.status, error: result.error }
+              ? { status: result.status, error: result.error, errorKind: result.errorKind }
               : {}),
           }
           latest.current = merged

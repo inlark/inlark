@@ -3,6 +3,10 @@ import type { DesktopMailAPI } from './model'
 
 const id = z.string().min(1).max(2048)
 const address = z.object({ name: z.string().max(1000), email: z.string().max(320) })
+const recipientEmailSchema = z.email().max(320)
+/** Uses the same validation for composer recipients and encryption IPC requests. */
+export const isValidRecipientEmail = (email: string): boolean =>
+  recipientEmailSchema.safeParse(email).success
 export const serverUrlSchema = z
   .string()
   .url()
@@ -185,7 +189,7 @@ export const sendDraftSchema = draftSchema
     (d) =>
       [...d.to, ...d.cc, ...d.bcc].length > 0 &&
       [...d.to, ...d.cc, ...d.bcc].every(
-        (a) => z.email().safeParse(a.email).success && !/[\r\n]/.test(a.name),
+        (a) => isValidRecipientEmail(a.email) && !/[\r\n]/.test(a.name),
       ),
     'Add valid recipients before sending.',
   )
@@ -230,7 +234,7 @@ export const ipcSchemas = {
     z.string().regex(/^[a-f0-9]{40,64}$/),
     z.boolean(),
   ]),
-  encryptionReadiness: z.tuple([id, id, z.array(z.email().max(320)).max(600)]),
+  encryptionReadiness: z.tuple([id, id, z.array(recipientEmailSchema).max(600)]),
   unlockEncryption: z.tuple([z.string().max(4096).optional()]),
   lockEncryption: z.tuple([]),
   transferEncryption: z.tuple([

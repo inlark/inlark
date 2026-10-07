@@ -1,10 +1,9 @@
 import { cn } from '@inlark/ui'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { Lock, LockOpen, X } from '@inlark/ui/icons'
-import { parseAddresses, type Address } from '@inlark/core'
+import { isValidRecipientEmail as valid, parseAddresses, type Address } from '@inlark/core'
 import { Avatar } from '@inlark/ui'
 
-const valid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 const same = (a: Address, b: Address) => a.email.toLowerCase() === b.email.toLowerCase()
 const format = (a: Address) => (a.name ? a.name + ' <' + a.email + '>' : a.email)
 /** Whether mail to a recipient can be encrypted, shown on their chip while encrypting. */

@@ -11,6 +11,8 @@ import {
   mailtoDraft,
   draftSchema,
   sendDraftSchema,
+  isValidRecipientEmail,
+  ipcSchemas,
   defaultSettings,
   identityKey,
   identitySignature,
@@ -55,6 +57,26 @@ export const draft = (overrides: Partial<Draft> = {}): Draft => ({
   ...overrides,
 })
 describe('mail domain', () => {
+  it('waits for complete recipients before requesting encryption readiness', () => {
+    for (const email of [
+      'paul',
+      'paul@',
+      'paul@blinkdisk.',
+      'paul@blinkdisk.c',
+      'paul@blinkdisk.com',
+      '.paul@blinkdisk.com',
+      'paul..test@blinkdisk.com',
+      'paul+test@blinkdisk.com',
+    ]) {
+      const valid = isValidRecipientEmail(email)
+      expect(
+        ipcSchemas.encryptionReadiness.safeParse(['account', 'identity', [email]]).success,
+      ).toBe(valid)
+      expect(sendDraftSchema.safeParse(draft({ to: [{ name: '', email }] })).success).toBe(valid)
+    }
+    expect(isValidRecipientEmail('paul@blinkdisk.c')).toBe(false)
+    expect(isValidRecipientEmail('paul@blinkdisk.com')).toBe(true)
+  })
   it('keeps identical remote IDs in different connections and accounts separate', () => {
     const a = accountKey('connection-a', 'same'),
       b = accountKey('connection-b', 'same')
