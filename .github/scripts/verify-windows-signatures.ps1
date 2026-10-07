@@ -9,7 +9,7 @@ if ($CertificateSha1 -notmatch '^[A-F0-9]{40}$') {
     throw 'CERTUM_CERTIFICATE_SHA1 must be the 40-character SHA-1 certificate thumbprint'
 }
 
-$app = Join-Path $ReleaseDirectory 'win-unpacked/Inlark.exe'
+$app = Join-Path $ReleaseDirectory 'win-unpacked/inlark.exe'
 if (-not (Test-Path -LiteralPath $app -PathType Leaf)) {
     throw "Packaged Windows app not found: $app"
 }

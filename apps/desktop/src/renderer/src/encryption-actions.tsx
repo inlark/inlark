@@ -47,7 +47,7 @@ function UnlockDialog({
       description={
         passwordMode
           ? 'Enter your vault password to read encrypted mail and keep writing encrypted drafts.'
-          : 'Inlark couldn’t open your keys with the system keyring. Make sure it’s unlocked, then try again.'
+          : 'inlark couldn’t open your keys with the system keyring. Make sure it’s unlocked, then try again.'
       }
       className="w-[min(440px,_calc(100vw_-_40px))]"
     >
@@ -155,7 +155,7 @@ export function keysChanged(status?: EncryptionStatus) {
 }
 
 /**
- * The keys known for one contact: which one Inlark uses, where each came from, and whether it
+ * The keys known for one contact: which one inlark uses, where each came from, and whether it
  * was verified. A changed or conflicting key is explained before anything else.
  */
 export function ContactKeyDialog({ email, onClose }: { email?: string; onClose: () => void }) {
@@ -269,7 +269,7 @@ export function ContactKeyDialog({ email, onClose }: { email?: string; onClose: 
         if (!open && !busy) onClose()
       }}
       title={'Keys for ' + (email || 'this contact')}
-      description={'Inlark encrypts mail to ' + (email || 'them') + ' with the key in use.'}
+      description={'inlark encrypts mail to ' + (email || 'them') + ' with the key in use.'}
       className="w-[min(520px,_calc(100vw_-_40px))]"
     >
       {keys.isPending && (

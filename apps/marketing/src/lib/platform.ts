@@ -85,7 +85,7 @@ export function recommend(platform: Platform): Recommendation | null {
         return {
           build: 'nix',
           auto: false,
-          note: 'There are no ARM packages yet, but Nix builds Inlark for your processor.',
+          note: 'There are no ARM packages yet, but Nix builds inlark for your processor.',
         }
       if (/Ubuntu|Debian|Mint|Pop!_OS|elementary/i.test(ua)) return { build: 'deb', auto: true }
       if (/Fedora|Red Hat|CentOS|Rocky|Alma/i.test(ua)) return { build: 'rpm', auto: true }

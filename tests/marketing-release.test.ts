@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  builds,
   buildById,
   downloadFor,
   fetchCurrentRelease,
@@ -36,6 +37,7 @@ describe('website release version', () => {
     expect(release?.version).toBe('1.2.3')
     const download = downloadFor(release!, buildById('deb'))
     expect(download.confirmed).toBe(true)
+    expect(download.file).toBe('Inlark-1.2.3-amd64.deb')
     expect(download.url).toContain('/v1.2.3/Inlark-1.2.3-amd64.deb')
     expect(download.digest).toBe('abc123')
   })
@@ -76,6 +78,60 @@ describe('website release version', () => {
       vi.fn(async () => new Response('<html>Unavailable</html>')),
     )
     expect(await fetchCurrentRelease()).toBeNull()
+  })
+})
+
+describe('download filename compatibility', () => {
+  const version = '1.3.0'
+  const releaseUrl = `https://github.com/inlark/inlark/releases/tag/v${version}`
+  const asset = (name: string) => ({
+    name,
+    size: 12345,
+    url: `https://github.com/inlark/inlark/releases/download/v${version}/${name}`,
+    digest: 'abc123',
+  })
+  const release = (assets: ReturnType<typeof asset>[]) => ({
+    version,
+    url: releaseUrl,
+    publishedAt: null,
+    assets,
+  })
+
+  it.each(builds.filter((build) => build.file))(
+    'downloads both lowercase and legacy filenames for $id with matching install instructions',
+    (build) => {
+      const lowercase = build.file!(version)
+      expect(lowercase.startsWith('inlark-')).toBe(true)
+      for (const file of [lowercase, lowercase.replace(/^inlark-/, 'Inlark-')]) {
+        const published = asset(file)
+        expect(downloadFor(release([published]), build)).toMatchObject({
+          confirmed: true,
+          file,
+          url: published.url,
+          size: published.size,
+          digest: published.digest,
+        })
+      }
+      const legacy = asset(lowercase.replace(/^inlark-/, 'Inlark-'))
+      const current = asset(lowercase)
+      expect(downloadFor(release([legacy, current]), build).file).toBe(current.name)
+    },
+  )
+
+  it('uses the release page when the requested architecture or format is missing', () => {
+    const published = asset('inlark-1.3.0-x64.dmg')
+    expect(downloadFor(release([published]), buildById('mac-arm64'))).toMatchObject({
+      confirmed: false,
+      file: 'inlark-1.3.0-arm64.dmg',
+      url: releaseUrl,
+      size: null,
+      digest: null,
+    })
+    expect(downloadFor(release([published]), buildById('nix'))).toMatchObject({
+      confirmed: false,
+      file: null,
+      url: releaseUrl,
+    })
   })
 })
 

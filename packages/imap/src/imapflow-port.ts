@@ -50,7 +50,7 @@ export function connectionError(
       'tls',
       'A secure connection to ' +
         host +
-        ' could not be established or its certificate could not be verified. Inlark never falls back to an unencrypted connection.',
+        ' could not be established or its certificate could not be verified. inlark never falls back to an unencrypted connection.',
     )
   if (e?.code === 'ENOTFOUND' || e?.code === 'EAI_AGAIN')
     return new ProviderError(

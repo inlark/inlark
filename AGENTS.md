@@ -1,8 +1,10 @@
-# Inlark
+# inlark
+
+The name inlark is always written with a lowercase “i”.
 
 ## Overall goal
 
-Build an exceptional email client that makes everyday email feel fast, clear, and effortless. Inlark should become a dependable personal daily driver, with the visual quality and thoughtful interactions of the best modern productivity apps.
+Build an exceptional email client that makes everyday email feel fast, clear, and effortless. inlark should become a dependable personal daily driver, with the visual quality and thoughtful interactions of the best modern productivity apps.
 
 People on Linux, Windows, and macOS deserve a beautiful email client with excellent usability and reliable account connections. This project exists because existing options too often combine dated interfaces, awkward workflows, connection problems, or high costs.
 

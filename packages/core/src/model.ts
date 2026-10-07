@@ -230,7 +230,7 @@ export interface Settings {
   remoteImages: boolean
   notifications: boolean
   closeToTray: boolean
-  /** Use the system window frame instead of Inlark's title bar, after restarting. */
+  /** Use the system window frame instead of inlark's title bar, after restarting. */
   systemTitleBar?: boolean
   defaultAccountId?: string
   signatures: Record<string, string>
@@ -333,7 +333,7 @@ export interface ImapConnectionConfig {
 export type ConnectionConfig = JmapConnectionConfig | ImapConnectionConfig
 export type FolderRole = 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 export const folderRoles: FolderRole[] = ['sent', 'drafts', 'archive', 'junk', 'trash']
-/** An existing folder for a role, or one Inlark should create. `null` means none. */
+/** An existing folder for a role, or one inlark should create. `null` means none. */
 export type FolderMappings = Partial<Record<FolderRole, { path: string; create?: boolean } | null>>
 export interface FolderMappingReview {
   folders: { path: string; name: string }[]

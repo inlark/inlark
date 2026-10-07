@@ -21,42 +21,42 @@ export const builds: Build[] = [
     os: 'mac',
     label: 'Apple silicon',
     detail: 'Macs with an M-series chip',
-    file: (v) => `Inlark-${v}-arm64.dmg`,
+    file: (v) => `inlark-${v}-arm64.dmg`,
   },
   {
     id: 'mac-x64',
     os: 'mac',
     label: 'Intel',
     detail: 'Macs with an Intel processor',
-    file: (v) => `Inlark-${v}-x64.dmg`,
+    file: (v) => `inlark-${v}-x64.dmg`,
   },
   {
     id: 'windows',
     os: 'windows',
     label: 'Installer',
     detail: '64-bit, installs for your account',
-    file: (v) => `Inlark-${v}-x64-setup.exe`,
+    file: (v) => `inlark-${v}-x64-setup.exe`,
   },
   {
     id: 'appimage',
     os: 'linux',
     label: 'AppImage',
     detail: 'Runs on most distributions',
-    file: (v) => `Inlark-${v}-x86_64.AppImage`,
+    file: (v) => `inlark-${v}-x86_64.AppImage`,
   },
   {
     id: 'deb',
     os: 'linux',
     label: 'Debian · Ubuntu',
     detail: '.deb package',
-    file: (v) => `Inlark-${v}-amd64.deb`,
+    file: (v) => `inlark-${v}-amd64.deb`,
   },
   {
     id: 'rpm',
     os: 'linux',
     label: 'Fedora',
     detail: '.rpm package',
-    file: (v) => `Inlark-${v}-x86_64.rpm`,
+    file: (v) => `inlark-${v}-x86_64.rpm`,
   },
   { id: 'nix', os: 'linux', label: 'Nix', detail: 'Any Linux with Nix, x86-64 or ARM' },
   { id: 'nixos', os: 'linux', label: 'NixOS', detail: 'Flake module' },
@@ -100,10 +100,14 @@ export interface Download {
 
 export function downloadFor(release: Release, build: Build): Download {
   const file = build.file?.(release.version) ?? null
-  const asset = file ? release.assets.find((a) => a.name === file) : undefined
+  // Published releases keep their original filenames. Prefer the lowercase name if both exist.
+  const asset = file
+    ? (release.assets.find((a) => a.name === file) ??
+      release.assets.find((a) => a.name === file.replace(/^inlark-/, 'Inlark-')))
+    : undefined
   return {
     build,
-    file,
+    file: asset?.name ?? file,
     url: asset?.url ?? release.url,
     size: asset?.size ?? null,
     digest: asset?.digest ?? null,

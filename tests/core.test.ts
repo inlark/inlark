@@ -246,7 +246,7 @@ describe('signatures', () => {
   const identity = { accountId: 'a', id: 'i' }
   const key = identityKey('a', 'i')
 
-  it('prefers the signature written in Inlark, in the format it was written in', () => {
+  it('prefers the signature written in inlark, in the format it was written in', () => {
     const server = { ...identity, textSignature: 'Server', htmlSignature: '<b>Server</b>' }
     expect(identitySignature({ signatures: { [key]: 'Paul' } }, server)).toEqual({
       format: 'text',

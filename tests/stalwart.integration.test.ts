@@ -28,7 +28,7 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
     expect(account).toBeTruthy()
     const identities = await provider.identities(account)
     expect(identities.length).toBeGreaterThan(0)
-    const tag = 'Inlark-test-' + randomUUID()
+    const tag = 'inlark-test-' + randomUUID()
     let folderId = ''
     const created: string[] = []
     try {

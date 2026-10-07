@@ -21,6 +21,7 @@ import { openWorkerIndex } from './imap-index/open'
 import { discover } from './discovery-transport'
 import { SenderAvatarResolver } from './sender-avatar'
 import { UpdateManager } from './updates'
+import { configureAppIdentity } from './app-identity'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 protocol.registerSchemesAsPrivileged([
@@ -35,8 +36,7 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ])
-app.setName('Inlark')
-if (process.env.INLARK_DATA_DIR) app.setPath('userData', process.env.INLARK_DATA_DIR)
+configureAppIdentity(app)
 let window: BrowserWindow | null = null,
   tray: Tray | null = null,
   quitting = false
@@ -61,13 +61,13 @@ function send(event: AppEvent) {
   if (event.type === 'unread' && tray) {
     unreadCount = event.count
     tray.setImage(trayImage(unreadCount > 0))
-    tray.setToolTip('Inlark · ' + unreadCount + ' unread messages')
+    tray.setToolTip('inlark · ' + unreadCount + ' unread messages')
     tray.setTitle(unreadCount ? String(unreadCount) : '')
   }
   if (event.type === 'accounts' && tray) {
     const connected = event.accounts.filter((a) => a.status === 'connected').length
     tray.setToolTip(
-      'Inlark · ' +
+      'inlark · ' +
         unreadCount +
         ' unread · ' +
         connected +
@@ -92,7 +92,7 @@ function trusted(event: Electron.IpcMainInvokeEvent): boolean {
     return false
   }
 }
-// Inlark draws its own title bar and keeps the native window controls on it. These match
+// inlark draws its own title bar and keeps the native window controls on it. These match
 // --sidebar and --secondary in packages/ui/src/styles.css so the controls blend in.
 const titleBarHeight = 36
 const titleBarColors = {
@@ -119,7 +119,7 @@ function createWindow() {
     show: false,
     icon: join(here, '../../resources/icon.png'),
     backgroundColor: themeColors().color,
-    title: 'Inlark',
+    title: 'inlark',
     titleBarStyle: windowUsesSystemTitleBar ? 'default' : 'hidden',
     // Also centers the macOS traffic lights in the title bar and reports its size to the page.
     titleBarOverlay: windowUsesSystemTitleBar
@@ -217,8 +217,20 @@ else {
   app
     .whenReady()
     .then(async () => {
+      // Rebuild the standard macOS menu with the display name now that credential storage
+      // has initialized with its legacy identity.
+      if (process.platform === 'darwin')
+        Menu.setApplicationMenu(
+          Menu.buildFromTemplate([
+            { role: 'appMenu' },
+            { role: 'fileMenu' },
+            { role: 'editMenu' },
+            { role: 'viewMenu' },
+            { role: 'windowMenu' },
+          ]),
+        )
       // Remove the in-window menu entirely so Alt cannot reveal it in either title bar mode.
-      if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+      else Menu.setApplicationMenu(null)
       const rendererRoot = resolve(here, '../renderer')
       protocol.handle('inlark', (request) => {
         const url = new URL(request.url)
@@ -241,7 +253,7 @@ else {
         discover,
       })
       await service.init()
-      // Native surfaces such as the window controls and menus follow Inlark's theme setting.
+      // Native surfaces such as the window controls and menus follow inlark's theme setting.
       nativeTheme.themeSource = service.settings.theme
       nativeTheme.on('updated', followTheme)
       const handlers: Record<keyof typeof ipcSchemas, (...args: any[]) => unknown> = {
@@ -330,10 +342,10 @@ else {
       createWindow()
       try {
         tray = new Tray(trayImage())
-        tray.setToolTip('Inlark')
+        tray.setToolTip('inlark')
         tray.setContextMenu(
           Menu.buildFromTemplate([
-            { label: 'Open Inlark', click: show },
+            { label: 'Open inlark', click: show },
             { label: 'Check for new mail', click: () => void service.refresh() },
             { type: 'separator' },
             {
@@ -353,12 +365,12 @@ else {
       if (!demo && !smoke) updates.start()
       app.on('activate', show)
       mailtoFromArgs(process.argv)
-      // The packaged desktop entry lets the user choose Inlark as their mailto handler.
+      // The packaged desktop entry lets the user choose inlark as their mailto handler.
     })
     .catch((error) => {
       // Avoid dumping potentially private protocol data into application logs.
       console.error(
-        'Inlark failed to start:',
+        'inlark failed to start:',
         error instanceof Error ? error.message : 'unknown error',
       )
       app.quit()

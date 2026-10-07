@@ -14,7 +14,7 @@ const unavailable = new Proxy({} as DesktopMailAPI, {
       ? () => () => {}
       : async () => {
           throw new Error(
-            'The desktop connection could not start. Restart Inlark or reinstall the application.',
+            'The desktop connection could not start. Restart inlark or reinstall the application.',
           )
         },
 })

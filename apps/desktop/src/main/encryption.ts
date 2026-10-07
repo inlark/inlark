@@ -878,7 +878,7 @@ export class EncryptionService {
           bcc: [],
           subject: 'Autocrypt Setup Message',
           html: '',
-          text: 'Import this Setup Message on your other device using the Setup Code shown by Inlark. Keep that code separately and securely.',
+          text: 'Import this Setup Message on your other device using the Setup Code shown by inlark. Keep that code separately and securely.',
           messageId: randomUUID() + '@' + identity.email.split('@')[1],
           attachments: [
             {

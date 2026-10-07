@@ -35,7 +35,7 @@ export const recipientProblems: Record<Exclude<RecipientReadiness['status'], 're
   conflict: 'Several keys found',
 }
 const sourceLabels: Record<EncryptionKeySummary['sources'][number], string> = {
-  own: 'created in Inlark',
+  own: 'created in inlark',
   import: 'imported',
   wkd: 'their provider’s key directory',
   autocrypt: 'mail they sent you',
@@ -52,7 +52,7 @@ export function keyFileError(error: unknown, password: string) {
       ? 'That password didn’t unlock the key file. Check it and try again.'
       : 'This key file is password protected. Enter its password, then choose the file again.'
   if (/armor|packet|misformed|no key/i.test(text))
-    return 'This file doesn’t contain a private key Inlark can read. Choose an exported private key or a backup.'
+    return 'This file doesn’t contain a private key inlark can read. Choose an exported private key or a backup.'
   return text
 }
 

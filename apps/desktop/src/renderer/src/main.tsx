@@ -69,7 +69,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
     return this.state.error ? (
       <div className="startup-error [&_h1]:text-[23px] [&_p]:text-muted [&_p]:leading-[1.8] max-w-130 my-[20vh] mx-auto p-6.25">
         <h1>Something went wrong</h1>
-        <p>Inlark ran into an unexpected problem. Your saved drafts are safe on this device.</p>
+        <p>inlark ran into an unexpected problem. Your saved drafts are safe on this device.</p>
         <button
           className={cn(
             'button inline-flex items-center justify-center gap-1.75 border border-solid border-border-strong bg-surface',
@@ -79,7 +79,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
           )}
           onClick={() => location.reload()}
         >
-          Reload Inlark
+          Reload inlark
         </button>
       </div>
     ) : (

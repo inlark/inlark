@@ -22,7 +22,7 @@ export function Wordmark({
       className={className}
       style={{ display: 'inline-block', flexShrink: 0, verticalAlign: 'middle' }}
       role={decorative ? undefined : 'img'}
-      aria-label={decorative ? undefined : 'Inlark'}
+      aria-label={decorative ? undefined : 'inlark'}
       aria-hidden={decorative || undefined}
       focusable="false"
     >

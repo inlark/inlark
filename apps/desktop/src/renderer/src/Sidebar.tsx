@@ -139,7 +139,7 @@ export function Sidebar({
         <img
           className="brand-mark h-6 w-6 block shrink-0 light:brightness-0 max-[700px]:w-6 max-[700px]:h-6"
           src={appIcon}
-          alt={collapsed ? 'Inlark' : ''}
+          alt={collapsed ? 'inlark' : ''}
           width={24}
           height={24}
         />

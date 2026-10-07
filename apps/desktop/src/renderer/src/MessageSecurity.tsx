@@ -234,7 +234,7 @@ export function WithheldBody({
           icon: ShieldX,
           tone: 'danger' as const,
           title: 'This message may have been tampered with',
-          text: 'Inlark couldn’t confirm it arrived intact, so its content and attachments are hidden.',
+          text: 'inlark couldn’t confirm it arrived intact, so its content and attachments are hidden.',
         }
       : security.state === 'missingKey'
         ? {

@@ -837,7 +837,7 @@ export function SettingsPanel({
                     <div>
                       <strong>Direct connection</strong>
                       <p>
-                        Inlark connects straight to your mail server. No account or cloud service in
+                        inlark connects straight to your mail server. No account or cloud service in
                         between.
                       </p>
                     </div>
@@ -851,7 +851,7 @@ export function SettingsPanel({
                   >
                     <div>
                       <strong>No telemetry</strong>
-                      <p>Inlark collects no usage data or analytics.</p>
+                      <p>inlark collects no usage data or analytics.</p>
                     </div>
                   </div>
                 </div>
@@ -903,8 +903,8 @@ export function SettingsPanel({
         onOpenChange={(value) => {
           if (!restarting) setRestartPrompt(value)
         }}
-        title="Restart Inlark to apply this change"
-        description="Your title bar preference has been saved. Restart now to apply it, or cancel and it will apply the next time you open Inlark."
+        title="Restart inlark to apply this change"
+        description="Your title bar preference has been saved. Restart now to apply it, or cancel and it will apply the next time you open inlark."
       >
         <div className="modal-actions flex justify-end gap-2 mt-6">
           <Button disabled={restarting} onClick={() => setRestartPrompt(false)}>
@@ -923,7 +923,7 @@ export function SettingsPanel({
               }
             }}
           >
-            {restarting ? 'Restarting…' : 'Restart Inlark'}
+            {restarting ? 'Restarting…' : 'Restart inlark'}
           </Button>
         </div>
       </Modal>

@@ -24,17 +24,17 @@ export function UpdateNotice({ status }: { status: UpdateStatus }) {
       <div className="update-notice-copy [&_strong]:text-foreground [&_strong]:font-semibold [&>span]:text-muted min-w-0 flex-1 flex flex-col gap-[2px] text-[12px] leading-[1.4]">
         <strong>
           {manual
-            ? `Inlark ${status.version} is available`
+            ? `inlark ${status.version} is available`
             : status.phase === 'ready'
-              ? `Inlark ${status.version} is ready`
-              : `Downloading Inlark ${status.version}`}
+              ? `inlark ${status.version} is ready`
+              : `Downloading inlark ${status.version}`}
         </strong>
         <span>
           {manual
             ? 'The automatic update could not finish. You can download the new version.'
             : status.phase === 'ready'
-              ? 'The update will install when you quit Inlark. Open it again to use the new version.'
-              : 'The update will install after you quit Inlark. You can keep working.'}
+              ? 'The update will install when you quit inlark. Open it again to use the new version.'
+              : 'The update will install after you quit inlark. You can keep working.'}
         </span>
         {status.phase === 'downloading' && (
           <div

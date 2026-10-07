@@ -4,7 +4,7 @@ import { accounts } from '../../data/mail'
 import { AppTile } from './icons'
 import { useCopied } from './CodeBlock'
 
-const shareText = 'Inlark, a calm and fast email client. Download it on your computer:'
+const shareText = 'inlark, a calm and fast email client. Download it on your computer:'
 
 /** Tomorrow at nine, when most people are back at their desk. */
 function reminderStart() {
@@ -18,17 +18,17 @@ function calendars(url: string) {
   const start = reminderStart()
   const end = new Date(start.getTime() + 15 * 60_000)
   const compact = (d: Date) => d.toISOString().replace(/[-:]|\.\d{3}/g, '')
-  const details = `Install Inlark on your computer: ${url}`
+  const details = `Install inlark on your computer: ${url}`
   const google = new URLSearchParams({
     action: 'TEMPLATE',
-    text: 'Download Inlark',
+    text: 'Download inlark',
     dates: `${compact(start)}/${compact(end)}`,
     details,
   })
   const outlook = new URLSearchParams({
     path: '/calendar/action/compose',
     rru: 'addevent',
-    subject: 'Download Inlark',
+    subject: 'Download inlark',
     startdt: start.toISOString(),
     enddt: end.toISOString(),
     body: details,
@@ -76,7 +76,7 @@ export function Mobile() {
 
   const share = async () => {
     try {
-      await navigator.share({ title: 'Inlark', text: shareText, url })
+      await navigator.share({ title: 'inlark', text: shareText, url })
     } catch {
       // Closing the share sheet rejects too, and needs no feedback.
     }
@@ -116,7 +116,7 @@ export function Mobile() {
         className="rise mt-5 text-[1.05rem] leading-relaxed text-ink-2"
         style={{ '--delay': '.22s' } as CSSProperties}
       >
-        Inlark is a desktop app, and there’s no phone version yet. Send yourself the link and pick
+        inlark is a desktop app, and there’s no phone version yet. Send yourself the link and pick
         it up on your computer.
       </p>
 
@@ -130,7 +130,7 @@ export function Mobile() {
           </button>
         ) : (
           <a
-            href={`mailto:?subject=${encodeURIComponent('Download Inlark')}&body=${encodeURIComponent(shareText + '\n' + url)}`}
+            href={`mailto:?subject=${encodeURIComponent('Download inlark')}&body=${encodeURIComponent(shareText + '\n' + url)}`}
             className="btn btn-primary col-span-2 h-12"
           >
             <Mail size={17} /> Email me the link

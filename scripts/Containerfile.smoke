@@ -5,4 +5,4 @@ USER app
 ENV INLARK_DATA_DIR=/tmp/inlark-smoke
 # Nested Chromium namespaces are unavailable in many rootless container hosts.
 # Only this isolated, network-disabled packaging smoke uses --no-sandbox.
-CMD ["sh", "-c", "dpkg-deb -x /release/Inlark-0.1.0-amd64.deb /tmp/package && xvfb-run -a /tmp/package/opt/Inlark/inlark --smoke-test --no-sandbox --disable-gpu"]
+CMD ["sh", "-c", "dpkg-deb -x /release/inlark-*-amd64.deb /tmp/package && xvfb-run -a /tmp/package/opt/inlark/inlark --smoke-test --no-sandbox --disable-gpu"]
