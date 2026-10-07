@@ -98,7 +98,14 @@ import { messageText } from './message-text'
 import { signatureBlock, signatureText } from './signature'
 import { textSignatureMarker } from './composer-document'
 import { selectConversation } from './selection'
-import { ShortcutHint, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
+import {
+  ignoreInputsForCommand,
+  sameBinding,
+  ShortcutHint,
+  useShortcutHandlers,
+  useShortcutText,
+  useShortcuts,
+} from './shortcuts'
 import { emptyListState } from './empty-states'
 import { AccountMark } from './AccountMark'
 import { lockVault, useEncryption } from './encryption-ui'
@@ -981,9 +988,9 @@ export function App() {
       commandMenu: {
         run: () => setPaletteOpen((p) => !p),
         enabled: !composer,
-        ignoreInputs: false,
+        ignoreInputs: ignoreInputsForCommand,
       },
-      settings: { run: () => openSettings(), ignoreInputs: false },
+      settings: { run: () => openSettings(), ignoreInputs: ignoreInputsForCommand },
       toggleSidebar: { run: () => setCollapsed((c) => !c) },
       compose: { run: () => void compose() },
       search: { run: focusSearch },
@@ -1005,6 +1012,7 @@ export function App() {
       previous: { run: () => step(-1) },
       open: { run: openFocused },
       back: {
+        ignoreInputs: (binding) => !sameBinding(binding, ['Escape']),
         run: () => {
           if (route.thread) back()
           else if (draftSelected.size) setDraftSelected(new Set())
