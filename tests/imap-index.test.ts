@@ -9,6 +9,7 @@ import {
   SqliteMetadataIndex,
   asyncIndex,
   openInProcessIndex,
+  SCHEMA_VERSION,
 } from '../apps/desktop/src/main/imap-index/sqlite-index'
 import { WorkerMetadataIndex, type IndexPort } from '../apps/desktop/src/main/imap-index/client'
 import type { FolderListing, IndexedMessage, MetadataIndex, NewMessage } from '@inlark/imap'
@@ -82,6 +83,7 @@ describe('SQLite metadata index', () => {
     expect((await stat(join(directory, 'index'))).mode & 0o777).toBe(0o700)
     const { INBOX } = await mailboxes()
     const input = message(INBOX!, 5, {
+      emailId: '18446744073709551615',
       modseq: '18446744073709551615',
       inReplyTo: ['parent@example.com'],
       references: ['root@example.com', 'parent@example.com'],
@@ -444,6 +446,59 @@ describe('SQLite metadata index', () => {
     const bytes = await readFile(future)
     expect(() => new SqliteMetadataIndex(future)).toThrow(/newer version/)
     expect(await readFile(future)).toEqual(bytes)
+  })
+
+  it('refreshes a version 1 index and backfills email identity without losing location IDs', async () => {
+    const { INBOX, Archive } = await mailboxes()
+    const ids = await index.upsertMessages('a', [
+      message(INBOX!, 1, { messageId: null }),
+      message(Archive!, 2, { messageId: null }),
+    ])
+    await index.updateMailbox('a', INBOX!, { uidNext: 2, indexedFrom: 1, complete: true })
+    const oldThread = (await one('a', ids[1]!)).threadId
+    await index.close()
+    // Recreate the prior schema from the same stored locations.
+    const db = new DatabaseSync(path)
+    db.exec(
+      'DROP INDEX messages_email_id; ALTER TABLE messages DROP COLUMN email_id; PRAGMA user_version = 1',
+    )
+    db.close()
+    index = openInProcessIndex(path)
+    expect((await index.listMailboxes('a')).find((b) => b.id === INBOX)).toMatchObject({
+      uidNext: null,
+      indexedFrom: null,
+      complete: false,
+    })
+    expect((await index.messages('a', ids)).map((m) => m.id).sort()).toEqual([...ids].sort())
+    expect(
+      await index.upsertMessages('a', [
+        message(INBOX!, 1, { messageId: null, emailId: '123' }),
+        message(Archive!, 2, { messageId: null, emailId: '123' }),
+      ]),
+    ).toEqual(ids)
+    const page = await index.conversations('a', {}, { limit: 10 })
+    expect(page.total).toBe(1)
+    expect(page.items[0].count).toBe(1)
+    expect(await index.threadMessages('a', [oldThread])).toHaveLength(2)
+    await index.close()
+    index = openInProcessIndex(path)
+    expect((await one('a', ids[0]!)).emailId).toBe('123')
+    const migrated = new DatabaseSync(path)
+    expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: SCHEMA_VERSION })
+    migrated.close()
+  })
+
+  it('scopes server email identities and deduplicated counts to the account', async () => {
+    const a = await mailboxes('a')
+    const b = await mailboxes('b')
+    await index.upsertMessages('a', [message(a.INBOX!, 1, { emailId: '123' })])
+    await index.upsertMessages('b', [message(b.INBOX!, 1, { emailId: '123' })])
+    for (const accountId of ['a', 'b']) {
+      const page = await index.conversations(accountId, {}, { limit: 10 })
+      expect(page.total).toBe(1)
+      expect(page.items[0].count).toBe(1)
+      expect(await index.threadMessages(accountId, [page.items[0].threadId])).toHaveLength(1)
+    }
   })
 
   it('answers conversation pages quickly on a large mailbox', async () => {

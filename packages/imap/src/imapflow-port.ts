@@ -276,6 +276,7 @@ export class ImapFlowPort implements ImapPort {
           : undefined
         result.push({
           uid: m.uid,
+          emailId: m.emailId,
           modseq: m.modseq?.toString(),
           flags: m.flags ? [...m.flags] : undefined,
           envelope,

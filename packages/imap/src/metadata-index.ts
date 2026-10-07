@@ -31,7 +31,8 @@ export interface MetadataIndex {
 
   /**
    * Inserts or updates messages by location. A new location gets a new ID and a thread; an
-   * existing location keeps its ID and only has flags, modseq and preview refreshed.
+   * existing location keeps its ID and has flags, modseq, preview and server identity refreshed.
+   * Server identity may join threads, but never replaces a location used for mutations.
    * Returns the ID for each input, in order.
    */
   upsertMessages(accountId: string, messages: NewMessage[]): Promise<string[]>
@@ -126,6 +127,8 @@ export interface MessageLocation {
 
 export interface NewMessage extends MessageLocation {
   modseq?: string
+  /** Account-wide server identity; unlike Message-ID, safe for display deduplication. */
+  emailId?: string
   /** Without angle brackets. `null` when the header is missing or unusable. */
   messageId: string | null
   inReplyTo: string[]
@@ -191,6 +194,6 @@ export interface ConversationRow {
   threadId: string
   /** The newest message matching the filter, which represents the conversation in lists. */
   latest: IndexedMessage
-  /** Messages in the whole conversation, matching or not. */
+  /** Emails in the whole conversation, matching or not, counting each server identity once. */
   count: number
 }

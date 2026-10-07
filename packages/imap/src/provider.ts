@@ -876,14 +876,19 @@ export class ImapProvider implements MailProvider {
     const rows = await this.index.threadMessages(this.accountId, [threadId])
     if (!rows.length)
       throw new ProviderError('notFound', 'This conversation is no longer available.')
-    const messages = await this.withBodies(account, rows)
+    const messages = await this.withBodies(account, rows, true)
     if (!messages.length)
       throw new ProviderError('notFound', 'This conversation is no longer available.')
     return messages.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
   }
-  private async withBodies(account: Account, rows: IndexedMessage[]): Promise<Message[]> {
+  private async withBodies(
+    account: Account,
+    rows: IndexedMessage[],
+    deduplicate = false,
+  ): Promise<Message[]> {
     const boxes = await this.index.listMailboxes(this.accountId)
     const result: Message[] = []
+    const displayed = new Set<string>()
     for (const [mailboxId, items] of byMailbox(rows)) {
       const box = boxes.find((b) => b.id === mailboxId)
       if (!box) continue
@@ -891,6 +896,9 @@ export class ImapProvider implements MailProvider {
         const selected = await port.select(box.path)
         for (const row of items) {
           if (row.uidValidity !== selected.uidValidity) continue
+          // Gmail labels expose the same email at several UIDs. Keep every location for
+          // mutations, but read its body once. A missing/stale location allows another to load.
+          if (deduplicate && row.emailId && displayed.has(row.emailId)) continue
           const body = await this.body(port, row)
           if (!body) {
             await this.index.removeMessages(this.accountId, [row.id])
@@ -904,6 +912,7 @@ export class ImapProvider implements MailProvider {
             text: body.text,
             attachments: attachmentsOf(row),
           })
+          if (row.emailId) displayed.add(row.emailId)
         }
       })
     }
