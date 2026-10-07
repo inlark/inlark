@@ -88,12 +88,14 @@ export function Modal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="modal-backdrop fixed inset-0 bg-[#0505079c] backdrop-blur-[5px] transition-[opacity] duration-160 ease-[ease] z-100 data-starting-style:opacity-0 data-ending-style:opacity-0" />
+        {/* Dialogs stay below the desktop title bar so it keeps working as one. */}
+        <Dialog.Backdrop className="modal-backdrop fixed inset-x-0 bottom-0 top-[var(--titlebar-height,0px)] bg-[#0505079c] backdrop-blur-[5px] transition-[opacity] duration-160 ease-[ease] z-100 data-starting-style:opacity-0 data-ending-style:opacity-0" />
         <Dialog.Popup
           ref={popupRef}
           className={cn(
-            'modal fixed top-[50%] left-[50%] transform-[translate(-50%,_-50%)] w-[min(560px,_calc(100vw_-_40px))]',
-            'max-h-[calc(100vh_-_70px)] overflow-y-auto bg-surface border border-solid border-border-strong rounded-2xl',
+            'modal fixed top-[calc(50%_+_var(--titlebar-height,0px)_/_2)] left-[50%] transform-[translate(-50%,_-50%)]',
+            'w-[min(560px,_calc(100vw_-_40px))] max-h-[calc(100vh_-_70px_-_var(--titlebar-height,0px))] overflow-y-auto',
+            'bg-surface border border-solid border-border-strong rounded-2xl',
             'shadow-popup p-5.75 z-101 max-w-[calc(100vw_-_40px)] transition-[opacity,transform] duration-160 ease-[ease]',
             'data-starting-style:opacity-0 data-starting-style:transform-[translate(-50%,_-48%)_scale(0.98)]',
             'data-ending-style:opacity-0 data-ending-style:transform-[translate(-50%,_-48%)_scale(0.98)]',

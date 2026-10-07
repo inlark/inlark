@@ -525,10 +525,11 @@ export function Composer({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="compose-backdrop fixed inset-0 bg-[#0004] z-70 transition-[opacity] duration-160 ease-[ease] data-starting-style:opacity-0 data-ending-style:opacity-0" />
+        <Dialog.Backdrop className="compose-backdrop fixed inset-x-0 bottom-0 top-(--titlebar-height) bg-[#0004] z-70 transition-[opacity] duration-160 ease-[ease] data-starting-style:opacity-0 data-ending-style:opacity-0" />
         <Dialog.Popup
           className={cn(
-            'composer fixed right-6 bottom-6 w-[min(660px,_calc(100vw_-_48px))] h-[min(700px,_calc(100vh_-_48px))]',
+            'composer fixed right-6 bottom-6 w-[min(660px,_calc(100vw_-_48px))]',
+            'h-[min(700px,_calc(100vh_-_48px_-_var(--titlebar-height)))]',
             'bg-surface border border-solid border-border-strong rounded-2xl shadow-popup z-71 flex flex-col overflow-hidden',
             'transition-[opacity,transform] duration-160 ease-[ease] data-starting-style:opacity-0',
             'data-starting-style:transform-[translateY(10px)_scale(0.99)] data-ending-style:opacity-0',
