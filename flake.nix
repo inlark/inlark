@@ -1,5 +1,5 @@
 {
-  description = "Inlark — a considered home for your email";
+  description = "inlark — a considered home for your email";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   outputs = { self, nixpkgs }:
     let

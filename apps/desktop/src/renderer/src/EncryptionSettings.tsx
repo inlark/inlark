@@ -60,7 +60,7 @@ const settingRow = cn(
 )
 const dialogWidth = 'w-[min(490px,_calc(100vw_-_40px))]'
 const backupHint =
-  'At least 10 characters. Inlark can’t recover it, so keep it apart from the backup file, for example in a password manager.'
+  'At least 10 characters. inlark can’t recover it, so keep it apart from the backup file, for example in a password manager.'
 
 type Notify = (message: string, tone?: 'error' | 'info') => void
 /** One sending address, with its key when it has one. */
@@ -144,7 +144,7 @@ export function EncryptionPanel({
     <>
       <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Encryption</h3>
       <p className="settings-lead text-muted mt-1.5 mb-6 mx-0 text-[12px] leading-[1.6]">
-        Encrypted mail can only be read by you and the people you send it to. Inlark uses OpenPGP,
+        Encrypted mail can only be read by you and the people you send it to. inlark uses OpenPGP,
         so it works with Thunderbird, Proton Mail and other apps that support it. Subjects and
         addresses aren’t encrypted.
       </p>
@@ -1045,7 +1045,7 @@ function SetupDialog({
           }}
         >
           <p className={dialogLead}>
-            Your system keyring isn’t available, so Inlark protects your keys with a password of
+            Your system keyring isn’t available, so inlark protects your keys with a password of
             their own. You’ll enter it whenever you unlock them.
           </p>
           <NewPasswordFields
@@ -1259,8 +1259,8 @@ function TransferDialog({
       {!code ? (
         <>
           <p className={dialogLead}>
-            Inlark saves a Setup Message: an encrypted file containing your key for{' '}
-            {target.identity.email}. Copy it to your other device, open it in Inlark or another app
+            inlark saves a Setup Message: an encrypted file containing your key for{' '}
+            {target.identity.email}. Copy it to your other device, open it in inlark or another app
             that supports Autocrypt, and enter the code shown next.
           </p>
           {error && <FormError>{error}</FormError>}
@@ -1568,7 +1568,7 @@ function OlderKeyDialog({
         }}
       >
         <p className={dialogLead}>
-          Import a private key you used before, so Inlark can open older mail encrypted to it. It
+          Import a private key you used before, so inlark can open older mail encrypted to it. It
           won’t be used for new mail.
         </p>
         <PasswordField

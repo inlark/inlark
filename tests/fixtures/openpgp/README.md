@@ -4,6 +4,6 @@
 
 Fixtures cover signed and unsigned PGP/MIME encryption, hidden recipients, exact-byte detached signatures, invalid signatures, inline encryption, inline cleartext signatures, HTML alternatives and attachments. Regeneration changes key fingerprints and ciphertext; tests derive fingerprints from the keys rather than hard-coding them.
 
-Run `python3 tests/fixtures/openpgp/generate.py` with GnuPG installed to regenerate. Run `pnpm test:crypto-interop` to check the reverse direction: GnuPG decrypts and verifies output from the bundled Inlark worker and imports a password-protected backup. It uses a disposable keyring and kills its test agent on completion.
+Run `python3 tests/fixtures/openpgp/generate.py` with GnuPG installed to regenerate. Run `pnpm test:crypto-interop` to check the reverse direction: GnuPG decrypts and verifies output from the bundled inlark worker and imports a password-protected backup. It uses a disposable keyring and kills its test agent on completion.
 
 Thunderbird interoperability is a separate release requirement; these fixtures do not stand in for a Thunderbird test.

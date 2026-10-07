@@ -794,7 +794,7 @@ export function App() {
           ? 'Search · '
           : '') +
       (unread ? 'Inbox (' + unread.toLocaleString() + ') · ' : '') +
-      'Inlark'
+      'inlark'
   }, [route.thread, route.q, thread.data, mailboxCounts.unread])
   useEffect(() => {
     // Reopen where you left off: the same view, account and folder (not a stale conversation).
@@ -1561,7 +1561,7 @@ export function App() {
         {!boot.data ? (
           <EmptyState
             icon={Mail}
-            title={boot.isError ? 'Inlark couldn’t start' : 'Starting Inlark'}
+            title={boot.isError ? 'inlark couldn’t start' : 'Starting inlark'}
             description={boot.isError ? friendlyError(boot.error) : undefined}
           >
             {!boot.isError && <Spinner />}
@@ -1569,7 +1569,7 @@ export function App() {
         ) : !accounts.length ? (
           <EmptyState
             icon={Inbox}
-            title="Welcome to Inlark"
+            title="Welcome to inlark"
             description="Connect your email account to get started."
           >
             <Button

@@ -25,7 +25,7 @@ stdenv.mkDerivation (finalAttrs: {
   '';
   desktopItems = [ (makeDesktopItem {
     name = "inlark";
-    desktopName = "Inlark";
+    desktopName = "inlark";
     genericName = "Email client";
     exec = "inlark %U";
     icon = "inlark";

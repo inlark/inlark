@@ -389,7 +389,7 @@ function CertificateReview({
         <div className="flex items-center gap-3 mt-3 ml-6.25 max-[700px]:flex-col max-[700px]:items-start">
           <p className="flex-1 m-0 text-[11px] text-muted leading-[1.6]">
             Trust it only if you expect it, for example by comparing the fingerprint with the one
-            your server or bridge shows. Inlark will accept exactly this certificate and stop if it
+            your server or bridge shows. inlark will accept exactly this certificate and stop if it
             ever changes.
           </p>
           <Button size="small" className="shrink-0" disabled={disabled} onClick={onTrust}>
@@ -844,13 +844,13 @@ export function AccountSetup({
         </h3>
         {phase === 'email' ? (
           <p>
-            Enter your email address and Inlark looks up your server settings. You’ll see them
+            Enter your email address and inlark looks up your server settings. You’ll see them
             before your password is sent anywhere.
           </p>
         ) : phase === 'folders' ? (
           <p>
             Some folders on {review && fields.incoming.host} couldn’t be confirmed. Choose where
-            Inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put
+            inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put
             conversations. You can change this later.
           </p>
         ) : (

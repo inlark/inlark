@@ -25,7 +25,7 @@ const json = (body: string, status: number, cache: string) =>
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': cache },
   })
 
-/** A short calendar reminder to download Inlark, for visitors who found it on their phone. */
+/** A short calendar reminder to download inlark, for visitors who found it on their phone. */
 function reminder(url: URL) {
   const start = new Date(url.searchParams.get('start') ?? '')
   const soon = Date.now() - 86_400_000 < start.getTime() && start.getTime() < Date.now() + 4e10
@@ -36,7 +36,7 @@ function reminder(url: URL) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Inlark//Download reminder//EN',
+    'PRODID:-//inlark//Download reminder//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -44,12 +44,12 @@ function reminder(url: URL) {
     `DTSTAMP:${stamp(new Date())}`,
     `DTSTART:${stamp(start)}`,
     `DTEND:${stamp(new Date(start.getTime() + 15 * 60_000))}`,
-    'SUMMARY:Download Inlark',
-    `DESCRIPTION:Install Inlark on your computer: ${link}`,
+    'SUMMARY:Download inlark',
+    `DESCRIPTION:Install inlark on your computer: ${link}`,
     `URL:${link}`,
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
-    'DESCRIPTION:Download Inlark',
+    'DESCRIPTION:Download inlark',
     'TRIGGER:PT0M',
     'END:VALARM',
     'END:VEVENT',

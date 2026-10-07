@@ -254,7 +254,7 @@ export function confirmActionCopy(action: MailAction, count: number) {
   return {
     title,
     description:
-      'Includes conversations that haven’t loaded yet. Inlark tells you about any it couldn’t change.',
+      'Includes conversations that haven’t loaded yet. inlark tells you about any it couldn’t change.',
     confirm,
   }
 }

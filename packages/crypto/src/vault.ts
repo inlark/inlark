@@ -133,7 +133,7 @@ export class Vault {
         version: 1,
         id,
         protection,
-        records: { check: seal(key, Buffer.from('Inlark vault'), aad(id, 'check')) },
+        records: { check: seal(key, Buffer.from('inlark vault'), aad(id, 'check')) },
       }
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
       const temporary = this.path + '.' + randomUUID() + '.tmp'
@@ -185,7 +185,7 @@ export class Vault {
       if (
         key.length !== 32 ||
         !doc.records.check ||
-        unseal(key, doc.records.check, aad(doc.id, 'check')).toString() !== 'Inlark vault'
+        unseal(key, doc.records.check, aad(doc.id, 'check')).toString() !== 'inlark vault'
       )
         throw new Error('Invalid vault.')
       // Authenticate every record before accepting an unlock, including historical private keys.

@@ -377,7 +377,7 @@ export class JmapProvider implements MailProvider {
     )
       return []
     const [result] = await this.call([['Identity/get', { accountId: account.remoteId }, 'i']], true)
-    // The name the user chose in Inlark wins over the one configured on the server.
+    // The name the user chose in inlark wins over the one configured on the server.
     return result.list.map((i: Json) => ({
       ...i,
       name: account.senderName || i.name,

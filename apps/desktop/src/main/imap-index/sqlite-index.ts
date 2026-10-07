@@ -290,7 +290,7 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
       )
       if (version > SCHEMA_VERSION)
         throw new Error(
-          'The mail index was created by a newer version of Inlark (schema ' +
+          'The mail index was created by a newer version of inlark (schema ' +
             version +
             '). It has been left unchanged.',
         )

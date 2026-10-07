@@ -1,5 +1,5 @@
 appId: app.inlark.com
-productName: Inlark
+productName: inlark
 publish:
   provider: github
   owner: inlark
@@ -19,7 +19,7 @@ linux:
   category: Network
   executableName: inlark
   syncDesktopName: true
-  artifactName: 'Inlark-${version}-${arch}.${ext}'
+  artifactName: 'inlark-${version}-${arch}.${ext}'
   icon: resources/icon.png
   desktop:
     entry:
@@ -33,13 +33,13 @@ mac:
     - dmg
     - zip
   icon: resources/icon.png
-  artifactName: 'Inlark-${version}-${arch}.${ext}'
+  artifactName: 'inlark-${version}-${arch}.${ext}'
   forceCodeSigning: true
   hardenedRuntime: true
   notarize: true
 win:
   icon: resources/icon.png
-  artifactName: 'Inlark-${version}-${arch}-setup.${ext}'
+  artifactName: 'inlark-${version}-${arch}-setup.${ext}'
   forceCodeSigning: true
   signtoolOptions:
     signingHashAlgorithms: [sha256]

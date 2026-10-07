@@ -62,7 +62,7 @@ export function AliasesDialog({
         if (!open && !saving) onClose()
       }}
       title={'Email addresses for ' + (account?.name || 'this account')}
-      description="Send from aliases or custom-domain addresses that your provider delivers to this account. Set them up with your provider first; Inlark doesn’t create them."
+      description="Send from aliases or custom-domain addresses that your provider delivers to this account. Set them up with your provider first; inlark doesn’t create them."
       className="alias-modal w-[min(600px,_calc(100vw_-_40px))]"
     >
       <form

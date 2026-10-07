@@ -18,7 +18,7 @@ const Path = ({ children }: { children: ReactNode }) => (
 
 const connect: Step = {
   title: 'Connect your mail',
-  body: 'Enter your address and Inlark looks up your server’s settings, or enter them yourself. Add as many accounts as you like.',
+  body: 'Enter your address and inlark looks up your server’s settings, or enter them yourself. Add as many accounts as you like.',
   visual: <ConnectVisual />,
 }
 
@@ -31,14 +31,14 @@ function steps({ build, file }: Download): Step[] {
           title: 'Move it to Applications',
           body: (
             <>
-              Open <Path>{file}</Path> from your Downloads, then drag Inlark onto the Applications
+              Open <Path>{file}</Path> from your Downloads, then drag inlark onto the Applications
               folder.
             </>
           ),
           visual: <DragVisual />,
         },
         {
-          title: 'Open Inlark',
+          title: 'Open inlark',
           body: 'Find it in Launchpad or with Spotlight. The first time, macOS asks you to confirm opening an app from the internet.',
           visual: <LauncherVisual />,
         },
@@ -50,15 +50,15 @@ function steps({ build, file }: Download): Step[] {
           title: 'Run the installer',
           body: (
             <>
-              Open <Path>{file}</Path> from your Downloads. It installs Inlark for your account, no
+              Open <Path>{file}</Path> from your Downloads. It installs inlark for your account, no
               administrator needed.
             </>
           ),
           visual: <DownloadsVisual file={file!} />,
         },
         {
-          title: 'Open Inlark',
-          body: 'It starts as soon as setup finishes. After that, find it in the Start menu or search for Inlark.',
+          title: 'Open inlark',
+          body: 'It starts as soon as setup finishes. After that, find it in the Start menu or search for inlark.',
           visual: <LauncherVisual />,
         },
         connect,
@@ -77,7 +77,7 @@ function steps({ build, file }: Download): Step[] {
           ),
         },
         {
-          title: 'Start Inlark',
+          title: 'Start inlark',
           body: (
             <>
               Double-click it or run it from a terminal. If nothing happens, your system may need
@@ -104,7 +104,7 @@ function steps({ build, file }: Download): Step[] {
           ),
         },
         {
-          title: 'Open Inlark',
+          title: 'Open inlark',
           body: (
             <>
               Find it in your app menu, or run <Path>inlark</Path>. It also becomes a handler for
@@ -130,7 +130,7 @@ function steps({ build, file }: Download): Step[] {
           ),
         },
         {
-          title: 'Open Inlark',
+          title: 'Open inlark',
           body: (
             <>
               Find it in your app menu, or run <Path>inlark</Path>. To get updates, run{' '}
@@ -145,7 +145,7 @@ function steps({ build, file }: Download): Step[] {
       return [
         {
           title: 'Add the flake',
-          body: 'Follow the latest code from the default branch by adding Inlark as an input, then enable its module in your system configuration.',
+          body: 'Follow the latest code from the default branch by adding inlark as an input, then enable its module in your system configuration.',
           visual: (
             <CodeBlock
               code={
@@ -161,7 +161,7 @@ function steps({ build, file }: Download): Step[] {
           title: 'Switch to it',
           body: (
             <>
-              Rebuild your system and Inlark appears in your app menu. For updates, run{' '}
+              Rebuild your system and inlark appears in your app menu. For updates, run{' '}
               <Path>nix flake update inlark</Path> in your system configuration directory, then
               rebuild.
             </>
@@ -228,7 +228,7 @@ function DragVisual() {
           <AppTile size={56} />
           <AppTile size={56} className="drag-ghost absolute inset-0" />
         </span>
-        <span className="text-[0.72rem] text-ink-2">Inlark</span>
+        <span className="text-[0.72rem] text-ink-2">inlark</span>
       </div>
       <svg width="64" height="20" viewBox="0 0 64 20" fill="none" className="text-ink-3">
         <path
@@ -300,7 +300,7 @@ function LauncherVisual() {
           <div className="flex items-center gap-2.5 rounded-[6px] bg-(--selected) px-2 py-2">
             <AppTile size={26} />
             <div>
-              <p className="text-[12px] text-(--text-strong)">Inlark</p>
+              <p className="text-[12px] text-(--text-strong)">inlark</p>
               <p className="text-[10px] text-(--muted)">Email client</p>
             </div>
           </div>

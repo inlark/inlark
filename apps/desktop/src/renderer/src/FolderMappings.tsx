@@ -201,7 +201,7 @@ export function FolderMappingsDialog({
         if (!open && !saving) onClose()
       }}
       title={'Folders for ' + (account?.name || 'this account')}
-      description="Choose where Inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put conversations."
+      description="Choose where inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put conversations."
       className="folder-modal w-[min(600px,_calc(100vw_-_40px))]"
     >
       <form

@@ -182,7 +182,7 @@ describe('certificate inspection', () => {
     expect(await inspectCertificate(server(privateAuthority.port), 'imap')).toMatchObject({
       problem: 'unknownIssuer',
       subject: 'localhost',
-      issuer: 'Inlark Test CA',
+      issuer: 'inlark Test CA',
     })
     const replaced = await imapServer('untrusted', 'tls')
     const settings = server(replaced.port, { certificate: trust('server') })

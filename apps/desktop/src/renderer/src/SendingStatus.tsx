@@ -246,7 +246,7 @@ export function SubmissionList({
         }}
         title="Send a replacement?"
         description={
-          'Inlark couldn’t confirm whether “' +
+          'inlark couldn’t confirm whether “' +
           (replace?.subject || '(No subject)') +
           '” was delivered. If it was, recipients will receive it twice.'
         }
@@ -284,7 +284,7 @@ export function SubmissionList({
         }}
         title="Stop tracking this message?"
         description={
-          'Inlark will stop checking whether “' +
+          'inlark will stop checking whether “' +
           (dismiss?.subject || '(No subject)') +
           '” was delivered and remove its unconfirmed draft from this device. Look in Sent first if you’re unsure.'
         }

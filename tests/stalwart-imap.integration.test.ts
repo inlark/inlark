@@ -72,7 +72,7 @@ describe.skipIf(!ready)('disposable Stalwart IMAP/SMTP integration', () => {
     for (const security of ['tls', 'starttls'] as const) {
       const reviewing = imap(security, { tls: undefined })
       const certificate = await reviewing.inspectCertificate('incoming')
-      expect(certificate).toMatchObject({ problem: 'unknownIssuer', issuer: 'Inlark Test CA' })
+      expect(certificate).toMatchObject({ problem: 'unknownIssuer', issuer: 'inlark Test CA' })
       expect(await reviewing.inspectCertificate('outgoing')).toMatchObject({
         sha256: certificate!.sha256,
       })
@@ -114,7 +114,7 @@ describe.skipIf(!ready)('disposable Stalwart IMAP/SMTP integration', () => {
     const [jmapAccount] = await jmap.connect()
     const p = imap()
     const [account] = await p.connect()
-    const tag = 'Inlark-imap-' + randomUUID()
+    const tag = 'inlark-imap-' + randomUUID()
     let folderId = ''
     try {
       await p.folder(account, 'create', undefined, tag)

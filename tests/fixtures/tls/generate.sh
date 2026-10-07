@@ -8,7 +8,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 # Test CA
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days "$days" \
-  -subj '/CN=Inlark Test CA' -keyout ca.key -out ca.crt \
+  -subj '/CN=inlark Test CA' -keyout ca.key -out ca.crt \
   -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
 
 # Server certificate for localhost and 127.0.0.1, signed by the test CA

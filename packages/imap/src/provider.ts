@@ -945,7 +945,7 @@ export class ImapProvider implements MailProvider {
   async identities(account: Account): Promise<Identity[]> {
     return this.senders(account)
   }
-  /** The account's own address first, then the aliases the user added in Inlark. */
+  /** The account's own address first, then the aliases the user added in inlark. */
   private senders(account: Account): Identity[] {
     return [
       {

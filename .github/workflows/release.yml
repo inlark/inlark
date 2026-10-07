@@ -144,13 +144,13 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           for arch in x64 arm64; do
-            archive="apps/desktop/release/Inlark-${version}-${arch}.zip"
+            archive="apps/desktop/release/inlark-${version}-${arch}.zip"
             test -f "$archive"
             test -f "${archive}.blockmap"
-            test -f "apps/desktop/release/Inlark-${version}-${arch}.dmg"
+            test -f "apps/desktop/release/inlark-${version}-${arch}.dmg"
             destination="$RUNNER_TEMP/verify-macos-$arch"
             ditto -x -k "$archive" "$destination"
-            app="$destination/Inlark.app"
+            app="$destination/inlark.app"
             codesign --verify --deep --strict --verbose=2 "$app"
             codesign --display --verbose=4 "$app" 2>&1 | grep -F 'Authority=Developer ID Application:'
             xcrun stapler validate "$app"
@@ -248,7 +248,7 @@ jobs:
             test -f "release-assets/${channel}${suffix}.yml"
           done
           for arch in x64 arm64; do
-            archive="Inlark-${RELEASE_TAG#v}-${arch}.zip"
+            archive="inlark-${RELEASE_TAG#v}-${arch}.zip"
             test -f "release-assets/$archive"
             test -f "release-assets/${archive}.blockmap"
             grep -F -- "$archive" "release-assets/${channel}-mac.yml"

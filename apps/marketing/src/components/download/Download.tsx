@@ -154,10 +154,10 @@ export function DownloadPage({ initial }: { initial: Release }) {
             <h1 className="display rise mt-5 text-[clamp(2.8rem,7vw,5.2rem)]" style={delay(0.12)}>
               {build ? (
                 <>
-                  Inlark for <em className="dawn-text pr-[0.06em]">{osNames[build.os]}</em>
+                  inlark for <em className="dawn-text pr-[0.06em]">{osNames[build.os]}</em>
                 </>
               ) : (
-                'Download Inlark'
+                'Download inlark'
               )}
             </h1>
             <p
@@ -299,7 +299,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
             <Builds release={release} selected={selected} onChoose={(b) => choose(b)} />
           </div>
           <p className="mt-8 max-w-2xl text-[0.92rem] leading-relaxed text-ink-3">
-            <span className="text-dawn">Inlark {release.version} is an early preview.</span> Try it
+            <span className="text-dawn">inlark {release.version} is an early preview.</span> Try it
             alongside your current client while it matures, and{' '}
             <a
               href={links.issues}
