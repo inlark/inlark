@@ -1,0 +1,19 @@
+From: Alice Fixture <alice@encryption.test>
+To: Bob Fixture <bob@encryption.test>
+Subject: Visible fixture subject
+Date: Wed, 7 Oct 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Secret inline fixture body.
+
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQTpp44KYkr9f+EQIXDmV3Mx8NenbAUCasZ61wAKCRDmV3Mx8Nen
+bJpqAP4sieOMhFiX09hTadcSQ8UpQvADuXEYkpLjrrfax4MfhAD/U0gmI6ObChS1
+fBCX6YoLvhbKubZFa6xbKutZQnuTugo=
+=PsA4
+-----END PGP SIGNATURE-----

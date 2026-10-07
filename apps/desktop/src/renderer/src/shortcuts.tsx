@@ -91,6 +91,13 @@ export const shortcutDefinitions = [
     description: 'While composing a message.',
     defaults: [['Mod+Shift+A']],
   },
+  {
+    id: 'toggleEncryption',
+    section: 'Write',
+    label: 'Encrypt or stop encrypting',
+    description: 'While composing, from an address with encryption set up.',
+    defaults: [['Mod+Shift+E']],
+  },
   { id: 'showCc', section: 'Write', label: 'Show and focus Cc', defaults: [['Mod+Shift+C']] },
   { id: 'showBcc', section: 'Write', label: 'Show and focus Bcc', defaults: [['Mod+Shift+B']] },
   {

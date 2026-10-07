@@ -14,7 +14,8 @@
     "@inlark/core": "workspace:*",
     "imapflow": "^2.0.6",
     "mailparser": "^3.9.28",
-    "nodemailer": "^10.0.10"
+    "nodemailer": "^10.0.10",
+    "@inlark/mime": "workspace:*"
   },
   "devDependencies": {
     "@types/mailparser": "^3.4.6",

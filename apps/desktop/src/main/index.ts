@@ -1,3 +1,4 @@
+import { openCryptoWorker } from './crypto-open'
 import {
   app,
   BrowserWindow,
@@ -236,6 +237,7 @@ else {
       })
       service = new MailService(new JsonStore(join(app.getPath('userData'), 'mail')), send, {
         providers: imapProviders,
+        crypto: openCryptoWorker,
         discover,
       })
       await service.init()
@@ -247,6 +249,18 @@ else {
           rendererReady = true
           for (const event of pendingEvents.splice(0)) window?.webContents.send('mail:event', event)
         },
+        encryptionStatus: service.encryptionStatus,
+        setupEncryption: service.setupEncryption,
+        setEncryptionPreference: service.setEncryptionPreference,
+        exportEncryptionKey: service.exportEncryptionKey,
+        revokeEncryptionKey: service.revokeEncryptionKey,
+        postponeEncryptionBackup: service.postponeEncryptionBackup,
+        discoverEncryptionKeys: service.discoverEncryptionKeys,
+        acceptEncryptionKey: service.acceptEncryptionKey,
+        encryptionReadiness: service.encryptionReadiness,
+        unlockEncryption: service.unlockEncryption,
+        lockEncryption: service.lockEncryption,
+        transferEncryption: service.transferEncryption,
         bootstrap: service.bootstrap,
         updateStatus: updates.getStatus,
         discover: service.discover,

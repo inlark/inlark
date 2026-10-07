@@ -1,12 +1,17 @@
 import { cn } from '@inlark/ui'
 import { useId, useRef, useState, type ReactNode } from 'react'
-import { X } from '@inlark/ui/icons'
+import { Lock, LockOpen, X } from '@inlark/ui/icons'
 import { parseAddresses, type Address } from '@inlark/core'
 import { Avatar } from '@inlark/ui'
 
 const valid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 const same = (a: Address, b: Address) => a.email.toLowerCase() === b.email.toLowerCase()
 const format = (a: Address) => (a.name ? a.name + ' <' + a.email + '>' : a.email)
+/** Whether mail to a recipient can be encrypted, shown on their chip while encrypting. */
+export interface ChipSecurity {
+  ready: boolean
+  label: string
+}
 
 /**
  * Recipients as removable chips with keyboard autocomplete. Text that has been typed but not yet
@@ -21,6 +26,7 @@ export function RecipientField({
   autoFocus,
   placeholder,
   onChange,
+  security,
   children,
 }: {
   id: string
@@ -31,6 +37,7 @@ export function RecipientField({
   autoFocus?: boolean
   placeholder?: string
   onChange: (addresses: Address[]) => void
+  security?: (address: Address) => ChipSecurity | undefined
   children?: ReactNode
 }) {
   const [chips, setChips] = useState(defaultValue)
@@ -95,47 +102,62 @@ export function RecipientField({
     >
       <label htmlFor={id}>{label}</label>
       <div className="recipient-chips [&_input]:flex-1 [&_input]:min-w-30 [&_input]:py-1.25 [&_input]:px-0 flex-1 min-w-0 flex flex-wrap items-center gap-1">
-        {chips.map((chip, i) => (
-          <span
-            key={chip.email + i}
-            className={cn(
-              'recipient-chip inline-flex items-center gap-[3px] h-6 max-w-65 py-0 pr-1 pl-2 overflow-hidden text-[12px]',
-              'whitespace-nowrap text-ellipsis text-foreground bg-hover border border-solid border-border-strong rounded-2xl',
-              'cursor-default [&.invalid]:text-danger [&.invalid]:border-danger/45 [&.invalid]:bg-danger/8 [&_button]:grid',
-              '[&_button]:place-items-center [&_button]:w-4 [&_button]:h-4 [&_button]:p-0 [&_button]:border-0',
-              '[&_button]:rounded-full [&_button]:bg-none [&_button]:bg-transparent [&_button]:text-muted',
-              '[&_button:hover]:text-strong [&_button:hover]:bg-border-strong',
-              valid(chip.email) ? '' : ' invalid',
-            )}
-            title={valid(chip.email) ? chip.email : chip.email + ' is not a valid address'}
-            onDoubleClick={() => {
-              if (disabled) return
-              set(
-                chips.filter((_, index) => index !== i),
-                format(chip),
-              )
-              input.current?.focus()
-            }}
-          >
-            {chip.name || chip.email}
-            {!disabled && (
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={'Remove ' + (chip.name || chip.email)}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  set(
-                    chips.filter((_, index) => index !== i),
-                    text,
-                  )
-                }}
-              >
-                <X size={11} />
-              </button>
-            )}
-          </span>
-        ))}
+        {chips.map((chip, i) => {
+          const secure = valid(chip.email) ? security?.(chip) : undefined
+          return (
+            <span
+              key={chip.email + i}
+              className={cn(
+                'recipient-chip inline-flex items-center gap-[3px] h-6 max-w-65 py-0 pr-1 pl-2 overflow-hidden text-[12px]',
+                'whitespace-nowrap text-ellipsis text-foreground bg-hover border border-solid border-border-strong rounded-2xl',
+                'cursor-default [&.invalid]:text-danger [&.invalid]:border-danger/45 [&.invalid]:bg-danger/8 [&_button]:grid',
+                '[&_button]:place-items-center [&_button]:w-4 [&_button]:h-4 [&_button]:p-0 [&_button]:border-0',
+                '[&_button]:rounded-full [&_button]:bg-none [&_button]:bg-transparent [&_button]:text-muted',
+                '[&_button:hover]:text-strong [&_button:hover]:bg-border-strong',
+                valid(chip.email) ? '' : ' invalid',
+                secure && !secure.ready && 'invalid',
+                secure && '[&>svg]:shrink-0 pl-1.75',
+              )}
+              title={
+                valid(chip.email)
+                  ? chip.email + (secure ? ' · ' + secure.label : '')
+                  : chip.email + ' is not a valid address'
+              }
+              onDoubleClick={() => {
+                if (disabled) return
+                set(
+                  chips.filter((_, index) => index !== i),
+                  format(chip),
+                )
+                input.current?.focus()
+              }}
+            >
+              {secure &&
+                (secure.ready ? (
+                  <Lock size={11} className="text-primary" aria-label={secure.label} />
+                ) : (
+                  <LockOpen size={11} aria-label={secure.label} />
+                ))}
+              {chip.name || chip.email}
+              {!disabled && (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={'Remove ' + (chip.name || chip.email)}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    set(
+                      chips.filter((_, index) => index !== i),
+                      text,
+                    )
+                  }}
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </span>
+          )
+        })}
         <input
           ref={input}
           id={id}

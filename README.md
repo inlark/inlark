@@ -109,6 +109,8 @@ IMAP accounts build a local index in the background, newest Inbox mail first. Un
 
 Gmail and Microsoft sign-in (OAuth) aren't supported yet.
 
+Optional OpenPGP email encryption is available for each sending address under **Settings → Encryption**. Read the [encryption guide](docs/encryption.md) for setup, backups, protected drafts, key discovery and device transfer. Cross-platform and Thunderbird release checks remain required before publishing this feature.
+
 ## Build from source
 
 You'll need Node 24 and pnpm 12.3.4.
@@ -129,6 +131,8 @@ The desktop UI uses Tailwind CSS v4 through the Vite plugin, with its CSS-first 
 ```sh
 pnpm check             # formatting, types, tests and a production build
 pnpm test:stalwart     # real JMAP, IMAP and SMTP against a disposable Stalwart server (Podman or CONTAINER_RUNTIME=docker)
+pnpm test:packaged-crypto # bundled worker encryption and locking smoke test
+pnpm test:crypto-interop # independent GnuPG verification of Inlark output
 nix build path:.       # Nix package in ./result/bin/inlark
 pnpm package:linux     # AppImage, .deb and .rpm in apps/desktop/release
 pnpm test:deb          # Debian packaging smoke test (Podman)
@@ -158,6 +162,8 @@ Normal app data lives in Electron's `userData` directory, usually `~/.config/Inl
 | `packages/core`             | Platform-independent types, validation, search and merge logic                                       |
 | `packages/jmap`             | The JMAP provider                                                                                    |
 | `packages/imap`             | The IMAP/SMTP provider                                                                               |
+| `packages/mime`             | Shared composition and parsing of complete mail messages                                             |
+| `packages/crypto`           | OpenPGP, authenticated local vault, PGP/MIME and discovery rules                                     |
 | `packages/ui`               | Shared components and the Tailwind theme                                                             |
 | `tests`                     | Domain, protocol, storage and real-server tests                                                      |
 

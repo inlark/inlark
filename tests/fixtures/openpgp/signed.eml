@@ -1,0 +1,45 @@
+From: Alice Fixture <alice@encryption.test>
+To: Bob Fixture <bob@encryption.test>
+Subject: Visible fixture subject
+Date: Wed, 7 Oct 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pgp-signature"; micalg=pgp-sha256; boundary="fixture-sig"
+
+--fixture-sig
+Content-Type: multipart/mixed; boundary="fixture-mixed"
+
+--fixture-mixed
+Content-Type: multipart/alternative; boundary="fixture-alt"
+
+--fixture-alt
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+U2VjcmV0IGZpeHR1cmUgYm9keS4=
+--fixture-alt
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+
+PHA+U2VjcmV0IGZpeHR1cmUgYm9keS48L3A+
+--fixture-alt--
+
+--fixture-mixed
+Content-Type: text/plain; name="secret.txt"
+Content-Disposition: attachment; filename="secret.txt"
+Content-Transfer-Encoding: base64
+
+U2VjcmV0IGZpeHR1cmUgYXR0YWNobWVudC4=
+--fixture-mixed--
+
+--fixture-sig
+Content-Type: application/pgp-signature
+
+-----BEGIN PGP SIGNATURE-----
+
+iHUEABYKAB0WIQTpp44KYkr9f+EQIXDmV3Mx8NenbAUCasZ61wAKCRDmV3Mx8Nen
+bKIjAP42UQHn4WW6EmXeVzOdqeZR+FpOIuZ8hK5hSc5QCnp39gEArr2x8xWcySUe
+EVqGH27Z+3ug8/LmRJtmr3Su1G05iAM=
+=C+Qm
+-----END PGP SIGNATURE-----
+
+--fixture-sig--

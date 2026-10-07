@@ -18,6 +18,7 @@ import {
   Send,
   SquarePen,
   Keyboard,
+  LockKeyhole,
 } from '@inlark/ui/icons'
 import { Button, Dropdown, EmptyState, MenuItem, Modal, Select, Switch } from '@inlark/ui'
 import {
@@ -36,6 +37,7 @@ import { FolderMappingsDialog } from './FolderMappings'
 import { AliasesDialog } from './Aliases'
 import { IndexingMeter } from './IndexingMeter'
 import { ShortcutEditor } from './ShortcutEditor'
+import { EncryptionPanel } from './EncryptionSettings'
 import { newMessageAccount } from './compose-account'
 
 /** A miniature of the app window in one theme. */
@@ -252,6 +254,7 @@ export function SettingsPanel({
               ['general', 'General', SlidersHorizontal],
               ['accounts', 'Accounts', Mail],
               ['signatures', 'Signatures', PenLine],
+              ['encryption', 'Encryption', LockKeyhole],
               ['shortcuts', 'Shortcuts', Keyboard],
               ['about', 'About', Info],
             ].map(([id, name, Icon]) => {
@@ -751,6 +754,37 @@ export function SettingsPanel({
                 )}
               </>
             )}
+            {tab === 'encryption' &&
+              (bootstrap.accounts.length ? (
+                <EncryptionPanel
+                  accounts={bootstrap.accounts}
+                  secureStorage={bootstrap.secureStorage}
+                  notify={notify}
+                  portalContainer={modalRef}
+                />
+              ) : (
+                <>
+                  <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Encryption</h3>
+                  <div className="no-accounts [&_.empty-state]:pb-12 flex min-h-90">
+                    <EmptyState
+                      icon={LockKeyhole}
+                      title="Nothing to encrypt yet"
+                      description="Encryption is set up for each address you send from. Connect an account first."
+                    >
+                      <Button
+                        onClick={() => {
+                          setTab('accounts')
+                          setSetup({ mode: 'add' })
+                        }}
+                        variant="primary"
+                      >
+                        <Plus size={13} />
+                        Connect an account
+                      </Button>
+                    </EmptyState>
+                  </div>
+                </>
+              ))}
             {tab === 'shortcuts' && (
               <>
                 <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">Keyboard shortcuts</h3>

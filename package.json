@@ -16,7 +16,9 @@
     "test:stalwart": "node scripts/stalwart-test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:deb": "bash scripts/test-deb.sh"
+    "test:deb": "bash scripts/test-deb.sh",
+    "test:packaged-crypto": "pnpm build && node scripts/test-crypto-worker.mjs",
+    "test:crypto-interop": "pnpm build && node scripts/test-crypto-worker.mjs --gnupg"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -293,8 +293,13 @@ export class ImapFlowPort implements ImapPort {
     return this.wrap(async () => {
       const [size] = await this.fetch(String(uid), { size: true })
       if (!size || (size.size ?? 0) > maxBytes) return undefined
-      const message = await this.client.fetchOne(String(uid), { source: true }, { uid: true })
-      return message && message.source ? new Uint8Array(message.source) : undefined
+      // Omit the part to stream the exact RFC822 source, and consume one extra byte
+      // so a truncated download can never be mistaken for a complete signed message.
+      const { content } = await this.client.download(String(uid), undefined, {
+        uid: true,
+        maxBytes: maxBytes + 1,
+      })
+      return bytes(content, maxBytes, false)
     })
   }
   download(uid: number, part: string, maxBytes: number, truncate = false): Promise<Uint8Array> {

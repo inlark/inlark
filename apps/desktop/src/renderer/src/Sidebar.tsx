@@ -17,6 +17,7 @@ import {
   Star,
   Trash2,
   FileText,
+  Key,
   WifiOff,
 } from '@inlark/ui/icons'
 import { Button, Dropdown, IconButton, MenuItem, Spinner } from '@inlark/ui'
@@ -25,6 +26,7 @@ import type { Account, Mailbox, View } from '@inlark/core'
 import appIcon from '../../../resources/icon-mark.svg?no-inline'
 import { AccountMark } from './AccountMark'
 import { ShortcutHint, useShortcutText, type ShortcutId } from './shortcuts'
+import { useEncryption } from './encryption-ui'
 
 export const views: { id: View; title: string; icon: typeof Inbox; shortcut?: ShortcutId }[] = [
   { id: 'inbox', title: 'Inbox', icon: Inbox, shortcut: 'goInbox' },
@@ -75,7 +77,7 @@ export function Sidebar({
   onSearch: () => void
   onCompose: () => void
   onNavigate: (next: { view: View; account?: string; folder?: string }) => void
-  onSettings: (tab: 'accounts' | 'general') => void
+  onSettings: (tab: 'accounts' | 'general' | 'encryption') => void
   onFolderAction: (
     operation: 'create' | 'rename' | 'delete',
     accountId: string,
@@ -84,6 +86,14 @@ export function Sidebar({
 }) {
   const keys = useShortcutText()
   const go = onNavigate
+  // A private key without a backup stays visible here until it is backed up, even if postponed.
+  const encryption = useEncryption()
+  const needsBackup = encryption.data?.keys.some(
+    (key) =>
+      (key.sources.includes('own') || key.sources.includes('import')) &&
+      key.backup !== undefined &&
+      key.backup !== 'done',
+  )
   // Transient connecting states already show a spinner on the account row.
   const unavailable = accounts.filter((a) => a.status !== 'connected' && a.status !== 'connecting')
   const statusText =
@@ -429,6 +439,23 @@ export function Sidebar({
           'before:pointer-events-none [@media(max-height:700px)]:pt-2',
         )}
       >
+        {needsBackup && (
+          <button
+            className={cn(
+              'nav-item flex gap-2.5 items-center w-full h-8.5 py-0 px-2.5 border-0 bg-none bg-transparent rounded-md',
+              'text-[13px] text-left my-[2px] mx-0 transition-[color,background] duration-120 ease-[ease]',
+              'focus-visible:outline-offset-[-2px] [&>span]:flex-1 [&>span]:overflow-hidden [&>span]:text-ellipsis',
+              '[&>span]:whitespace-nowrap [&>span]:relative [&>span]:top-[1px] [.sidebar-collapsed_&]:justify-center',
+              '[.sidebar-collapsed_&]:p-1.75 sidebar-backup text-star [&>svg]:text-star hover:bg-star/10',
+            )}
+            title="Your encryption key isn’t backed up · back it up in Settings"
+            aria-label="Your encryption key isn’t backed up. Back it up in Settings."
+            onClick={() => onSettings('encryption')}
+          >
+            <Key size={15} strokeWidth={1.65} />
+            {!collapsed && <span>Back up your key</span>}
+          </button>
+        )}
         {sendingIssues > 0 && (
           <button
             className={cn(

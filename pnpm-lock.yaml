@@ -142,12 +142,18 @@ importers:
       '@inlark/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@inlark/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@inlark/imap':
         specifier: workspace:*
         version: link:../../packages/imap
       '@inlark/jmap':
         specifier: workspace:*
         version: link:../../packages/jmap
+      '@inlark/mime':
+        specifier: workspace:*
+        version: link:../../packages/mime
       '@inlark/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -286,11 +292,26 @@ importers:
         specifier: ^4.0.0
         version: 4.6.5
 
+  packages/crypto:
+    dependencies:
+      '@inlark/mime':
+        specifier: workspace:*
+        version: link:../mime
+      openpgp:
+        specifier: ^6.3.0
+        version: 6.3.2
+      zod:
+        specifier: ^4.0.0
+        version: 4.6.5
+
   packages/imap:
     dependencies:
       '@inlark/core':
         specifier: workspace:*
         version: link:../core
+      '@inlark/mime':
+        specifier: workspace:*
+        version: link:../mime
       imapflow:
         specifier: ^2.0.6
         version: 2.0.6
@@ -313,6 +334,28 @@ importers:
       '@inlark/core':
         specifier: workspace:*
         version: link:../core
+      '@inlark/mime':
+        specifier: workspace:*
+        version: link:../mime
+
+  packages/mime:
+    dependencies:
+      '@inlark/core':
+        specifier: workspace:*
+        version: link:../core
+      mailparser:
+        specifier: ^3.9.28
+        version: 3.9.28
+      nodemailer:
+        specifier: ^10.0.10
+        version: 10.0.10
+    devDependencies:
+      '@types/mailparser':
+        specifier: ^3.4.6
+        version: 3.4.6
+      '@types/nodemailer':
+        specifier: ^8.0.2
+        version: 8.0.2
 
   packages/ui:
     dependencies:
@@ -3929,6 +3972,15 @@ packages:
 
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
+
+  openpgp@6.3.2:
+    resolution: {integrity: sha512-wcZTzHz41LV8Y48zH/JlD1JT8YdNmpWOuMAjQ/podvvCwsjBEU37K3znJh4UQcj3hksE5z9TzvhbUbwzsGvlLQ==}
+    engines: {node: '>= 18.0.0', typescript: '>= 5.0.0'}
+    peerDependencies:
+      '@openpgp/web-stream-tools': ~0.3.0
+    peerDependenciesMeta:
+      '@openpgp/web-stream-tools':
+        optional: true
 
   orderedmap@2.1.1:
     resolution: {integrity: sha512-TvAWxi0nDe1j/rtMcWcIj94+Ffe6n7zhow33h40SKxmsmozs6dz/e+EajymfoFcHd7sxNn8yHM8839uixMOV6g==}
@@ -8523,6 +8575,8 @@ snapshots:
       oniguruma-parser: 0.12.2
       regex: 6.1.0
       regex-recursion: 6.0.2
+
+  openpgp@6.3.2: {}
 
   orderedmap@2.1.1: {}
 

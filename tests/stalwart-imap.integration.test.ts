@@ -1,3 +1,12 @@
+import {
+  CryptoEngine,
+  mimeContent,
+  replaceContent,
+  encryptedMime,
+  armoredPayload,
+  autocryptHeader,
+} from '../packages/crypto/src'
+import { composeMime, parseMime } from '../packages/mime/src'
 import { describe, it, expect } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -264,4 +273,87 @@ describe.skipIf(!ready)('disposable Stalwart IMAP/SMTP integration', () => {
       jmap.dispose()
     }
   }, 120000)
+  it('APPENDs encrypted drafts, retrieves byte-preserving sources and sends the same protected bytes through SMTP', async () => {
+    const provider = imap(),
+      [account] = await provider.connect(),
+      [identity] = await provider.identities(account),
+      engine = new CryptoEngine(),
+      key = await engine.generate('Integration', identity.email)
+    await engine.load([key])
+    const draft: Draft = {
+      id: randomUUID(),
+      accountId: account.id,
+      identityId: identity.id,
+      to: [{ name: 'Self', email: identity.email }],
+      cc: [],
+      bcc: [],
+      subject: 'Encrypted IMAP ' + randomUUID(),
+      html: '<p>SECRET IMAP MARKER</p>',
+      text: 'SECRET IMAP MARKER',
+      attachments: [],
+      updatedAt: new Date().toISOString(),
+      status: 'local',
+      encryption: 'encrypt',
+    }
+    const id = draft.id + '@inlark.test',
+      plain = await composeMime({
+        from: identity,
+        to: draft.to,
+        cc: [],
+        bcc: [],
+        subject: draft.subject,
+        text: draft.text,
+        html: draft.html,
+        messageId: id,
+        attachments: [
+          {
+            name: 'secret.txt',
+            type: 'text/plain',
+            content: Buffer.from('SECRET ATTACHMENT MARKER'),
+          },
+        ],
+      })
+    const encrypted = replaceContent(
+      plain,
+      encryptedMime(await engine.encrypt(mimeContent(plain), [key.publicKey], key.fingerprint)),
+      ['Autocrypt-Draft-State: encrypt=yes'],
+    )
+    let serverId: string | undefined
+    try {
+      serverId = await provider.createDraft(account, draft, id, encrypted)
+      const raw = await provider.rawMessage(account, serverId, 64 * 1024 * 1024)
+      expect(Buffer.from(raw)).toEqual(encrypted)
+      expect(Buffer.from(raw).toString()).not.toContain('MARKER')
+      const content = await engine.decrypt(armoredPayload(raw), [key.publicKey])
+      expect((await parseMime(content.data)).text).toContain('SECRET IMAP MARKER')
+      expect(content.signatures[0].valid).toBe(true)
+      const outgoing = await provider.prepareSubmission(
+        account,
+        draft,
+        id,
+        replaceContent(
+          plain,
+          encryptedMime(await engine.encrypt(mimeContent(plain), [key.publicKey], key.fingerprint)),
+          [
+            autocryptHeader(
+              identity.email,
+              await engine.autocryptKey(key.publicKey, identity.email),
+              true,
+            ),
+          ],
+        ),
+      )
+      expect((await provider.submit(account, outgoing)).accepted).toEqual([identity.email])
+      await provider.fileSentCopy(account, outgoing)
+      await sync(provider)
+      expect(
+        (await provider.encryptionHints(account, identity.email)).some((hint) =>
+          Buffer.from(hint.headers).toString().includes('prefer-encrypt=mutual'),
+        ),
+      ).toBe(true)
+    } finally {
+      if (serverId) await provider.update(account, {}, [serverId])
+      await provider.close()
+    }
+  }, 60000)
 })

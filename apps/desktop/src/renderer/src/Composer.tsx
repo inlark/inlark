@@ -1,6 +1,6 @@
 import { cn } from '@inlark/ui'
 import { useEffect, useRef, useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useForm } from '@tanstack/react-form'
 import { Dialog } from '@base-ui/react/dialog'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
@@ -19,6 +19,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   FileText,
+  Lock,
 } from '@inlark/ui/icons'
 import { Modal, Button, IconButton, Select, Spinner } from '@inlark/ui'
 import {
@@ -33,7 +34,10 @@ import {
 } from '@inlark/core'
 import { api, isDemo } from './api'
 import { localSaveDraft, localDeleteDraft } from './cache'
-import { RecipientField } from './RecipientField'
+import { RecipientField, type ChipSecurity } from './RecipientField'
+import { recipientProblems, useEncryption } from './encryption-ui'
+import { ContactKeyDialog, keysChanged, useUnlock } from './encryption-actions'
+import { ProtectionBar, ProtectionMenu, type Protection } from './ComposerProtection'
 import { formatBytes } from './mail-date'
 import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { SignatureNode } from './signature'
@@ -103,6 +107,7 @@ export function Composer({
   suggestions,
   onClose,
   onOpenAccounts,
+  onOpenEncryption,
   notify,
   onSaved,
 }: {
@@ -113,9 +118,16 @@ export function Composer({
   onClose: () => void
   /** Opens Settings → Accounts, e.g. to sign in to the outgoing server again. */
   onOpenAccounts: () => void
+  /** Opens Settings → Encryption, to set up or fix this address's key. */
+  onOpenEncryption: () => void
   notify: (message: string, tone?: 'error' | 'info') => void
   onSaved: () => void
 }) {
+  const [downgradeMode, setDowngradeMode] = useState<'none' | 'sign' | undefined>()
+  // Once someone picks a protection mode, the recommendation never overrides it.
+  const encryptionChoice = useRef(initial.encryption !== undefined)
+  const [unlock, unlockDialog] = useUnlock()
+  const [reviewKey, setReviewKey] = useState<string>()
   const shortcuts = useShortcuts()
   const keys = useShortcutText()
   const sendShortcut = shortcuts.bindings.send[0]
@@ -177,7 +189,40 @@ export function Composer({
       disabled: true,
     })
   const signature = identity ? identitySignature(settings, identity) : undefined
-  const locked = sending || changingFrom || draft.status === 'uncertain' || draft.status === 'sent'
+  const vault = useEncryption()
+  const recipientEmails = [...draft.to, ...draft.cc, ...draft.bcc].map((a) => a.email)
+  const encryptionReady = useQuery({
+    queryKey: ['recipient-encryption', draft.accountId, draft.identityId, recipientEmails],
+    queryFn: () => api.encryptionReadiness(draft.accountId, draft.identityId, recipientEmails),
+    enabled: !!draft.identityId && recipientEmails.every(validAddress),
+    staleTime: 10000,
+    retry: false,
+  })
+  const own = vault.data?.identities.find(
+    (i) => i.accountId === draft.accountId && i.identityId === draft.identityId,
+  )
+  const ownKey = own && vault.data?.keys.find((k) => k.fingerprint === own.fingerprint)
+  const protection: Protection = draft.encryption || 'none'
+  const blocked =
+    protection === 'encrypt'
+      ? encryptionReady.data?.recipients.filter((r) => r.status !== 'ready') || []
+      : []
+  const chipSecurity = (address: Address): ChipSecurity | undefined => {
+    if (protection !== 'encrypt' || !own?.enabled) return
+    const recipient = encryptionReady.data?.recipients.find(
+      (r) => r.email === address.email.trim().toLowerCase(),
+    )
+    if (!recipient) return
+    return recipient.status === 'ready'
+      ? { ready: true, label: recipient.confirmed ? 'Encrypted · verified key' : 'Encrypted' }
+      : { ready: false, label: 'Can’t encrypt · ' + recipientProblems[recipient.status] }
+  }
+  const locked =
+    sending ||
+    changingFrom ||
+    draft.status === 'uncertain' ||
+    draft.status === 'sent' ||
+    (draft.encryption === 'encrypt' && vault.data?.vault !== 'unlocked')
   const lockedRef = useRef(locked)
   lockedRef.current = locked
   // A failed send is kept apart from the draft, so a later autosave can't clear the explanation.
@@ -243,6 +288,30 @@ export function Composer({
       link: editor?.isActive('link') || false,
     }),
   })
+  useEffect(() => {
+    if (
+      encryptionReady.data?.recommend &&
+      !encryptionChoice.current &&
+      latest.current.encryption !== 'encrypt'
+    )
+      update({ encryption: 'encrypt', earlierPlaintext: persisted.current })
+  }, [encryptionReady.data?.recommend])
+  useEffect(() => {
+    const save = (event: Event) => {
+      const tasks = (event as CustomEvent<Promise<unknown>[]>).detail
+      tasks.push(
+        (async () => {
+          await sync.current
+          if (shouldSave()) {
+            await localSaveDraft(latest.current)
+            await api.saveDraft(latest.current)
+          }
+        })(),
+      )
+    }
+    window.addEventListener('inlark-before-lock', save)
+    return () => window.removeEventListener('inlark-before-lock', save)
+  }, [editor])
   useEffect(() => {
     // Locking for a send is not an edit, so it must not reset the draft or its error.
     editor?.setEditable(!locked, false)
@@ -335,8 +404,21 @@ export function Composer({
       notify('Your draft could not be saved. ' + friendlyError(e), 'error')
     }
   }
+  /** Changes how the message is protected; dropping encryption from decrypted content is confirmed. */
+  const setProtection = (mode: Protection) => {
+    encryptionChoice.current = true
+    if (mode === protection) return
+    if (mode !== 'encrypt' && (protection === 'encrypt' || draft.encryptionRequired))
+      setDowngradeMode(mode)
+    else
+      update({
+        encryption: mode,
+        downgradeConfirmed: false,
+        earlierPlaintext: mode === 'encrypt' && persisted.current,
+      })
+  }
   const send = async () => {
-    if (sending || changingFrom || account.status !== 'connected') return
+    if (locked || account.status !== 'connected') return
     const fields = ['to', 'cc', 'bcc'] as const
     if (!fields.some((field) => latest.current[field].length)) {
       notify('Add a recipient before sending.', 'error')
@@ -356,6 +438,22 @@ export function Composer({
       notify('Choose the address to send this message from.', 'error')
       document.getElementById('compose-from')?.focus()
       return
+    }
+    // Encryption is never dropped to send; the bar above the message explains what to fix.
+    if (latest.current.encryption === 'encrypt' && encryptionReady.data) {
+      if (!encryptionReady.data.senderReady) {
+        notify('Encryption isn’t ready for this address. Fix it, or stop encrypting.', 'error')
+        return
+      }
+      if (blocked.length) {
+        notify(
+          'Can’t encrypt to ' +
+            (blocked.length === 1 ? blocked[0].email : blocked.length + ' recipients') +
+            '. Review their keys, or stop encrypting.',
+          'error',
+        )
+        return
+      }
     }
     setSending(true)
     setSendError(undefined)
@@ -438,7 +536,7 @@ export function Composer({
   }
   const attachFiles = async () => {
     try {
-      const attachments = await api.stageAttachments()
+      const attachments = await api.stageAttachments(latest.current.encryption === 'encrypt')
       // The file picker can outlive the composer or a send. Never change a locked draft.
       if (!alive.current || lockedRef.current) return
       update({ attachments: [...latest.current.attachments, ...attachments] })
@@ -488,6 +586,10 @@ export function Composer({
       enabled: !linkOpen && !discardOpen && !sending && !changingFrom,
     },
     discardDraft: { run: () => setDiscardOpen(true), enabled: canEdit },
+    toggleEncryption: {
+      run: () => setProtection(protection === 'encrypt' ? 'none' : 'encrypt'),
+      enabled: canEdit && !!own,
+    },
   })
   const addressField = (name: 'to' | 'cc' | 'bcc', label: string) => (
     <RecipientField
@@ -499,6 +601,7 @@ export function Composer({
       autoFocus={name === 'to' && !initial.to.length}
       placeholder={name === 'to' ? 'Name or email address' : ''}
       onChange={(addresses) => update({ [name]: addresses })}
+      security={chipSecurity}
     >
       {name === 'to' && !showCc && (
         <button
@@ -531,7 +634,8 @@ export function Composer({
             'composer fixed right-6 bottom-6 w-[min(660px,_calc(100vw_-_48px))]',
             'h-[min(700px,_calc(100vh_-_48px_-_var(--titlebar-height)))]',
             'bg-surface border border-solid border-border-strong rounded-2xl shadow-popup z-71 flex flex-col overflow-hidden',
-            'transition-[opacity,transform] duration-160 ease-[ease] data-starting-style:opacity-0',
+            'transition-[opacity,transform,filter] duration-160 ease-[ease] data-starting-style:opacity-0',
+            'data-nested-dialog-open:brightness-[0.62]',
             'data-starting-style:transform-[translateY(10px)_scale(0.99)] data-ending-style:opacity-0',
             'data-ending-style:transform-[translateY(10px)_scale(0.99)]',
             expanded &&
@@ -677,6 +781,63 @@ export function Composer({
               )}
             </form.Field>
           </div>
+          <ProtectionBar
+            mode={protection}
+            vault={vault.data?.vault}
+            own={own}
+            ownKeyProblem={ownKey && !ownKey.usable ? ownKey.problem || 'unusable' : undefined}
+            email={identity?.email || account.email}
+            recipients={recipientEmails.length}
+            readiness={encryptionReady}
+            blocked={blocked}
+            nameOf={(email) =>
+              [...draft.to, ...draft.cc, ...draft.bcc].find(
+                (a) => a.email.trim().toLowerCase() === email,
+              )?.name || email
+            }
+            earlierPlaintext={!!draft.earlierPlaintext}
+            onUnlock={() => void unlock()}
+            onSetUp={onOpenEncryption}
+            onTurnOn={() =>
+              own &&
+              void api
+                .setEncryptionPreference(own.accountId, own.identityId, true, own.prefer)
+                .then(keysChanged)
+                .catch((e) => notify(friendlyError(e), 'error'))
+            }
+            onReview={setReviewKey}
+            onStop={() => setProtection('none')}
+          />
+          <Modal
+            open={!!downgradeMode}
+            onOpenChange={(open) => {
+              if (!open) setDowngradeMode(undefined)
+            }}
+            title={downgradeMode === 'sign' ? 'Sign without encrypting?' : 'Stop encrypting?'}
+            description={
+              (draft.encryptionRequired
+                ? 'This message includes content from encrypted mail. '
+                : '') +
+              'Its text and attachments will be saved and sent as readable mail that mail servers can read. Encrypted copies already saved are kept.'
+            }
+          >
+            <div className="modal-actions flex justify-end gap-2 mt-6">
+              <Button onClick={() => setDowngradeMode(undefined)}>Keep encrypting</Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  update({
+                    encryption: downgradeMode!,
+                    encryptionRequired: true,
+                    downgradeConfirmed: true,
+                  })
+                  setDowngradeMode(undefined)
+                }}
+              >
+                {downgradeMode === 'sign' ? 'Sign only' : 'Don’t encrypt'}
+              </Button>
+            </div>
+          </Modal>
           <div className="compose-body flex-1 overflow-auto py-5 px-6 min-h-0">
             <EditorContent editor={editor} />
             {draft.attachments.length > 0 && (
@@ -810,6 +971,14 @@ export function Composer({
             >
               <Paperclip size={15} />
             </IconButton>
+            {(own || protection !== 'none') && (
+              <ProtectionMenu
+                mode={protection}
+                shortcut={own ? keys('toggleEncryption') : undefined}
+                onChange={setProtection}
+                onSettings={onOpenEncryption}
+              />
+            )}
           </fieldset>
           <div className="compose-footer flex items-center gap-2.5 py-3.25 px-5 border-t border-solid border-t-border">
             <Button
@@ -817,7 +986,13 @@ export function Composer({
               onClick={() => void send()}
               disabled={sending || changingFrom || account.status !== 'connected'}
             >
-              {sending ? <Spinner size={14} /> : <Send size={13} />}{' '}
+              {sending ? (
+                <Spinner size={14} />
+              ) : protection === 'encrypt' && draft.status !== 'uncertain' ? (
+                <Lock size={13} />
+              ) : (
+                <Send size={13} />
+              )}{' '}
               {sending
                 ? draft.status === 'uncertain'
                   ? 'Checking delivery…'
@@ -826,7 +1001,11 @@ export function Composer({
                   ? 'Check delivery'
                   : isDemo
                     ? 'Simulate send'
-                    : 'Send message'}
+                    : protection === 'encrypt'
+                      ? 'Send encrypted'
+                      : protection === 'sign'
+                        ? 'Send signed'
+                        : 'Send message'}
               {sendShortcut && (
                 <span className="send-shortcut text-[11px] opacity-60 ml-2.5">
                   {bindingText(sendShortcut)}
@@ -847,6 +1026,8 @@ export function Composer({
           </div>
         </Dialog.Popup>
       </Dialog.Portal>
+      <ContactKeyDialog email={reviewKey} onClose={() => setReviewKey(undefined)} />
+      {unlockDialog}
       <Modal
         open={discardOpen}
         onOpenChange={setDiscardOpen}

@@ -762,7 +762,7 @@ export class ImapProvider implements MailProvider {
       // Display the matching representative, even if the thread has newer mail elsewhere.
       c.receivedAt = row.latest.receivedAt
       c.subject = row.latest.subject || '(No subject)'
-      c.preview = row.latest.preview
+      c.preview = toMessage(account.id, row.latest).preview
       c.count = row.count
       return c
     })
@@ -1188,6 +1188,64 @@ export class ImapProvider implements MailProvider {
     if (lost.length) await this.index.removeMessages(this.accountId, lost)
   }
 
+  async rawMessage(_account: Account, messageId: string, maxBytes: number): Promise<Uint8Array> {
+    const rows = await this.index.messages(this.accountId, [messageId])
+    const boxes = await this.index.listMailboxes(this.accountId)
+    for (const row of rows) {
+      const box = boxes.find((b) => b.id === row.mailboxId)
+      if (!box || row.size > maxBytes) continue
+      const raw = await this.run(async (port) => {
+        const selected = await port.select(box.path)
+        if (selected.uidValidity !== row.uidValidity) return
+        return port.source(row.uid, Math.min(maxBytes, 64 * 1024 * 1024))
+      })
+      if (raw) return raw
+    }
+    throw new ProviderError(
+      'rawMessage',
+      'The original message is unavailable or too large to open securely.',
+    )
+  }
+
+  async encryptionHints(account: Account, email: string) {
+    const page = await this.query(account, { view: 'all', from: email }, 0, 20)
+    const rows = (
+      await this.index.threadMessages(
+        this.accountId,
+        page.items.map((m) => m.id),
+      )
+    )
+      .filter(
+        (row) => row.from.length === 1 && row.from[0].email.toLowerCase() === email.toLowerCase(),
+      )
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .slice(0, 40)
+    const boxes = await this.index.listMailboxes(this.accountId)
+    const hints: { message: Message; headers: Uint8Array }[] = []
+    for (const [mailboxId, items] of byMailbox(rows)) {
+      const box = boxes.find((b) => b.id === mailboxId)
+      if (!box) continue
+      await this.run(async (port) => {
+        const selected = await port.select(box.path)
+        const valid = items.filter((row) => row.uidValidity === selected.uidValidity)
+        if (!valid.length) return
+        const fetched = await port.fetch(uidSet(valid.map((row) => row.uid)), {
+          headers: ['autocrypt'],
+        })
+        for (const row of valid) {
+          const headers =
+            fetched.find((m) => m.uid === row.uid)?.headers || 'Content-Type: text/plain'
+          if (Buffer.byteLength(headers) <= 20 * 1024)
+            hints.push({
+              message: toMessage(account.id, row),
+              headers: Buffer.from(headers.trimEnd() + '\r\n\r\n'),
+            })
+        }
+      })
+    }
+    return hints
+  }
+
   // Drafts and sending
 
   private async compose(account: Account, draft: Draft, messageId: string, keepBcc: boolean) {
@@ -1223,7 +1281,12 @@ export class ImapProvider implements MailProvider {
       .replace(/[^a-z0-9.-]/g, '')
     return randomUUID() + '@' + (domain || 'inlark.invalid')
   }
-  async createDraft(account: Account, draft: Draft, messageId?: string): Promise<string> {
+  async createDraft(
+    account: Account,
+    draft: Draft,
+    messageId?: string,
+    precomposed?: Uint8Array,
+  ): Promise<string> {
     const drafts = await this.roleBox('drafts')
     if (!drafts)
       throw new ProviderError(
@@ -1232,7 +1295,7 @@ export class ImapProvider implements MailProvider {
       )
     // Every saved revision gets its own Message-ID so it can be found unambiguously.
     const id = messageId || this.messageId(this.sender(account, draft.identityId).email)
-    const mime = await this.compose(account, draft, id, true)
+    const mime = precomposed ?? (await this.compose(account, draft, id, true))
     return this.run(async (port) => {
       // APPEND flags are checked against the selected folder's permanent flags.
       const selected = await port.select(drafts.path)
@@ -1259,10 +1322,11 @@ export class ImapProvider implements MailProvider {
     account: Account,
     draft: Draft,
     messageId: string,
+    precomposed?: Uint8Array,
   ): Promise<OutgoingMessage> {
     const recipients = [...new Set([...draft.to, ...draft.cc, ...draft.bcc].map((a) => a.email))]
     // Bcc recipients are only in the envelope, never in the transmitted headers.
-    const mime = await this.compose(account, draft, messageId, false)
+    const mime = precomposed ?? (await this.compose(account, draft, messageId, false))
     // Bounces go to the address the message is from, as recipients would expect.
     const from = this.sender(account, draft.identityId).email
     return { messageId, mime, envelope: { from, to: recipients } }

@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { previewText } from '../packages/imap/src/convert'
 
 describe('IMAP previews', () => {
+  it('excludes armored encrypted content from previews and the metadata index', () => {
+    expect(previewText('-----BEGIN PGP MESSAGE-----\r\n\r\nEncrypted packet bytes')).toBe('')
+  })
   it('normalizes whitespace and leaves quoted reply lines out', () => {
     expect(previewText(' Hello\tthere\r\n  > Old reply\n\nNew text ')).toBe('Hello there New text')
     expect(previewText('x'.repeat(300))).toHaveLength(256)

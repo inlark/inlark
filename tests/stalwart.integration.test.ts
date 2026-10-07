@@ -1,3 +1,12 @@
+import {
+  CryptoEngine,
+  mimeContent,
+  replaceContent,
+  encryptedMime,
+  armoredPayload,
+  autocryptHeader,
+} from '../packages/crypto/src'
+import { composeMime, parseMime } from '../packages/mime/src'
 import { describe, it, expect } from 'vitest'
 import { JmapProvider } from '../packages/jmap/src'
 import { randomUUID } from 'node:crypto'
@@ -114,7 +123,7 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
       const outgoing = {
         messageId: draft.id + '@inlark.test',
         emailId,
-        envelope: { from: '', to: [] },
+        envelope: { from: identities[0].email, to: [identities[0].email] },
       }
       expect((await provider.submit(account, outgoing, draft.identityId)).rejected).toEqual([])
       expect(await provider.submissionExists(account, outgoing)).toBe(true)
@@ -153,6 +162,114 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
         }
       }
       if (folderId) await provider.folder(account, 'delete', folderId)
+      provider.dispose()
+    }
+  }, 60000)
+  it('imports complete encrypted MIME, resumes ciphertext drafts and submits with an explicit Bcc envelope', async () => {
+    const provider = new JmapProvider({
+      serverUrl: serverUrl!,
+      authorization: 'Basic ' + Buffer.from(username + ':' + password).toString('base64'),
+      connectionId: 'encrypted-integration',
+      name: 'Encrypted integration',
+    })
+    const [account] = await provider.connect(),
+      [identity] = await provider.identities(account),
+      engine = new CryptoEngine(),
+      key = await engine.generate('Integration', identity.email)
+    await engine.load([key])
+    const draft: Draft = {
+      id: randomUUID(),
+      accountId: account.id,
+      identityId: identity.id,
+      to: [],
+      cc: [],
+      bcc: [{ name: 'Self', email: identity.email }],
+      subject: 'Encrypted integration ' + randomUUID(),
+      html: '<p>SECRET JMAP MARKER</p>',
+      text: 'SECRET JMAP MARKER',
+      attachments: [],
+      updatedAt: new Date().toISOString(),
+      status: 'local',
+      encryption: 'encrypt',
+    }
+    const id = draft.id + '@inlark.test',
+      plain = await composeMime({
+        from: identity,
+        to: [],
+        cc: [],
+        bcc: [],
+        subject: draft.subject,
+        text: draft.text,
+        html: draft.html,
+        messageId: id,
+        attachments: [
+          {
+            name: 'secret.txt',
+            type: 'text/plain',
+            content: Buffer.from('SECRET ATTACHMENT MARKER'),
+          },
+        ],
+      })
+    const encrypted = replaceContent(
+      plain,
+      encryptedMime(
+        await engine.encrypt(mimeContent(plain), [key.publicKey], key.fingerprint, true),
+      ),
+      ['Autocrypt-Draft-State: encrypt=yes; _by-choice=yes'],
+    )
+    const created: string[] = []
+    try {
+      const draftId = await provider.createDraft(account, draft, undefined, encrypted)
+      created.push(draftId)
+      const raw = await provider.rawMessage(account, draftId, 64 * 1024 * 1024)
+      expect(Buffer.from(raw)).toEqual(encrypted)
+      expect(Buffer.from(raw).toString()).not.toContain('MARKER')
+      expect(
+        (await parseMime((await engine.decrypt(armoredPayload(raw), [key.publicKey])).data))
+          .attachments,
+      ).toHaveLength(1)
+      const outgoingMime = replaceContent(
+        plain,
+        encryptedMime(
+          await engine.encrypt(mimeContent(plain), [key.publicKey], key.fingerprint, true),
+        ),
+        [
+          autocryptHeader(
+            identity.email,
+            await engine.autocryptKey(key.publicKey, identity.email),
+            true,
+          ),
+        ],
+      )
+      const outgoing = await provider.prepareSubmission(account, draft, id, outgoingMime)
+      created.push(outgoing.emailId!)
+      expect(outgoing.envelope.to).toEqual([identity.email])
+      expect(
+        Buffer.from(
+          await provider.rawMessage(account, outgoing.emailId!, 64 * 1024 * 1024),
+        ).toString(),
+      ).toContain('prefer-encrypt=mutual')
+      expect((await provider.submit(account, outgoing, identity.id)).accepted).toEqual([
+        identity.email,
+      ])
+      expect(await provider.submissionExists(account, outgoing)).toBe(true)
+      await expect
+        .poll(
+          async () =>
+            (await provider.encryptionHints(account, identity.email))
+              .map((hint) => Buffer.from(hint.headers).toString())
+              .join('\n'),
+          { timeout: 10000, interval: 250 },
+        )
+        .toContain('prefer-encrypt=mutual')
+      expect(
+        Buffer.from(
+          await provider.rawMessage(account, outgoing.emailId!, 64 * 1024 * 1024),
+        ).toString(),
+      ).not.toContain('MARKER')
+    } finally {
+      await provider.messages(account, created)
+      await provider.update(account, {}, created)
       provider.dispose()
     }
   }, 60000)

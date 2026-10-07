@@ -96,7 +96,9 @@ export function Modal({
             'modal fixed top-[calc(50%_+_var(--titlebar-height,0px)_/_2)] left-[50%] transform-[translate(-50%,_-50%)]',
             'w-[min(560px,_calc(100vw_-_40px))] max-h-[calc(100vh_-_70px_-_var(--titlebar-height,0px))] overflow-y-auto',
             'bg-surface border border-solid border-border-strong rounded-2xl',
-            'shadow-popup p-5.75 z-101 max-w-[calc(100vw_-_40px)] transition-[opacity,transform] duration-160 ease-[ease]',
+            'shadow-popup p-5.75 z-101 max-w-[calc(100vw_-_40px)] transition-[opacity,transform,filter] duration-160 ease-[ease]',
+            // A dialog opened from this one has no backdrop of its own, so this one recedes instead.
+            'data-nested-dialog-open:brightness-[0.62]',
             'data-starting-style:opacity-0 data-starting-style:transform-[translate(-50%,_-48%)_scale(0.98)]',
             'data-ending-style:opacity-0 data-ending-style:transform-[translate(-50%,_-48%)_scale(0.98)]',
             className,
@@ -138,7 +140,8 @@ export function Dropdown({
     <Menu.Root>
       <Menu.Trigger render={trigger} />
       <Menu.Portal container={container}>
-        <Menu.Positioner sideOffset={6} align="end">
+        {/* Above dialogs such as the composer; the popup's own z-index can't escape this. */}
+        <Menu.Positioner className="dropdown-positioner z-120" sideOffset={6} align="end">
           <Menu.Popup
             className={cn(
               'dropdown min-w-45 bg-raised border border-solid border-border-strong rounded-lg shadow-popup p-1.25 z-120',

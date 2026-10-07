@@ -10,6 +10,7 @@ import {
   ArrowUpRight as ArrowUpRightGlyph,
   AtIcon as AtSignGlyph,
   Bold as BoldGlyph,
+  CheckmarkBadge01Icon as BadgeCheckGlyph,
   Calendar as CalendarGlyph,
   CalendarAdd02Icon as CalendarAddGlyph,
   Check as CheckGlyph,
@@ -24,9 +25,11 @@ import {
   File as FileGlyph,
   FileArchive as FileArchiveGlyph,
   FileImage as FileImageGlyph,
+  FileImportIcon as FileImportGlyph,
   FileSpreadsheetIcon as FileSpreadsheetIconGlyph,
   FileText as FileTextGlyph,
   Folder as FolderGlyph,
+  FingerPrintIcon as FingerprintGlyph,
   FolderInputIcon as FolderInputIconGlyph,
   FolderPlus as FolderPlusGlyph,
   Forward as ForwardGlyph,
@@ -37,11 +40,15 @@ import {
   Info as InfoGlyph,
   Italic as ItalicGlyph,
   Keyboard as KeyboardGlyph,
+  Key01Icon as KeyGlyph,
   LaptopIcon as LaptopGlyph,
+  LaptopPhoneSyncIcon as DeviceSyncGlyph,
   Link2 as Link2Glyph,
   List as ListGlyph,
   LoaderCircle as LoaderCircleGlyph,
   LockKeyhole as LockKeyholeGlyph,
+  LockKeyholeOpenIcon as LockOpenGlyph,
+  LockKeyholeIcon as LockGlyph,
   Mail as MailGlyph,
   MailMinus01Icon as MailMinusGlyph,
   MailOpen as MailOpenGlyph,
@@ -66,8 +73,10 @@ import {
   Share08Icon as ShareGlyph,
   SettingsIcon as SettingsIconGlyph,
   ShieldCheck as ShieldCheckGlyph,
+  ShieldKeyIcon as ShieldKeyGlyph,
   ShieldX as ShieldXGlyph,
   Shuffle as ShuffleGlyph,
+  SignatureIcon as SignatureGlyph,
   SlidersHorizontal as SlidersHorizontalGlyph,
   SquarePenIcon as SquarePenGlyph,
   Star as StarGlyph,
@@ -96,6 +105,7 @@ export const ArrowUp = icon(ArrowUpGlyph)
 export const ArrowUpRight = icon(ArrowUpRightGlyph)
 export const AtSign = icon(AtSignGlyph)
 export const Bold = icon(BoldGlyph)
+export const BadgeCheck = icon(BadgeCheckGlyph)
 export const Calendar = icon(CalendarGlyph)
 export const CalendarAdd = icon(CalendarAddGlyph)
 export const Check = icon(CheckGlyph)
@@ -110,9 +120,11 @@ export const ExternalLink = icon(ExternalLinkGlyph)
 export const File = icon(FileGlyph)
 export const FileArchive = icon(FileArchiveGlyph)
 export const FileImage = icon(FileImageGlyph)
+export const FileImport = icon(FileImportGlyph)
 export const FileSpreadsheet = icon(FileSpreadsheetIconGlyph)
 export const FileText = icon(FileTextGlyph)
 export const Folder = icon(FolderGlyph)
+export const Fingerprint = icon(FingerprintGlyph)
 export const FolderInput = icon(FolderInputIconGlyph)
 export const FolderPlus = icon(FolderPlusGlyph)
 export const Forward = icon(ForwardGlyph)
@@ -123,11 +135,15 @@ export const Inbox = icon(InboxGlyph)
 export const Info = icon(InfoGlyph)
 export const Italic = icon(ItalicGlyph)
 export const Keyboard = icon(KeyboardGlyph)
+export const Key = icon(KeyGlyph)
 export const Laptop = icon(LaptopGlyph)
+export const DeviceSync = icon(DeviceSyncGlyph)
 export const Link2 = icon(Link2Glyph)
 export const List = icon(ListGlyph)
 export const LoaderCircle = icon(LoaderCircleGlyph)
 export const LockKeyhole = icon(LockKeyholeGlyph)
+export const Lock = icon(LockGlyph)
+export const LockOpen = icon(LockOpenGlyph)
 export const Mail = icon(MailGlyph)
 export const MailMinus = icon(MailMinusGlyph)
 export const MailOpen = icon(MailOpenGlyph)
@@ -152,8 +168,10 @@ export const Settings = icon(SettingsGlyph)
 export const Share = icon(ShareGlyph)
 export const SettingsIcon = icon(SettingsIconGlyph)
 export const ShieldCheck = icon(ShieldCheckGlyph)
+export const ShieldKey = icon(ShieldKeyGlyph)
 export const ShieldX = icon(ShieldXGlyph)
 export const Shuffle = icon(ShuffleGlyph)
+export const Signature = icon(SignatureGlyph)
 export const SlidersHorizontal = icon(SlidersHorizontalGlyph)
 export const SquarePen = icon(SquarePenGlyph)
 export const Star = icon(StarGlyph)
