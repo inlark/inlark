@@ -216,6 +216,8 @@ else {
   app
     .whenReady()
     .then(async () => {
+      // Remove the in-window menu entirely so Alt cannot reveal it in either title bar mode.
+      if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
       const rendererRoot = resolve(here, '../renderer')
       protocol.handle('inlark', (request) => {
         const url = new URL(request.url)
