@@ -105,7 +105,8 @@ export async function submitSmtp(
           },
         })
         conn.send({ from: envelope.from, to, size: mime.byteLength }, body, (error, info) => {
-          if (error || !info) return reject(sendFailure(settings, state, error ?? undefined))
+          if (error || !info)
+            return reject(sendFailure(settings, state, envelope.from, error ?? undefined))
           const reasons = new Map(
             (info.rejectedErrors ?? []).map((e) => [
               (e as SmtpFailure).recipient,
@@ -278,7 +279,12 @@ function connectionLost(
   )
 }
 
-function sendFailure(settings: SmtpSettings, state: State, error?: SmtpFailure): ProviderError {
+function sendFailure(
+  settings: SmtpSettings,
+  state: State,
+  from: string,
+  error?: SmtpFailure,
+): ProviderError {
   const host = settings.host
   const code = error?.responseCode || 0
   const said = error?.response ? ` The server said: “${clean(error.response)}”` : ''
@@ -286,7 +292,7 @@ function sendFailure(settings: SmtpSettings, state: State, error?: SmtpFailure):
   if (error?.code === 'EENVELOPE') {
     const message =
       error.command === 'MAIL FROM'
-        ? `${host} refused the sender address, so nothing was sent.`
+        ? `${host} refused to send from ${clean(from)}, so nothing was sent. If it's an alias, check that your provider lets this account send from it.`
         : error.command === 'RCPT TO'
           ? `${host} ${temporary ? 'temporarily ' : ''}rejected every recipient, so nothing was sent.`
           : error.command === 'DATA'

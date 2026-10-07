@@ -4,6 +4,7 @@ import { Wordmark } from '@inlark/ui/components/wordmark'
 import appIcon from '../../../resources/icon.svg?no-inline'
 import {
   Plus,
+  AtSign,
   ChevronDown,
   Mail,
   RefreshCw,
@@ -32,6 +33,7 @@ import { AccountAvatarPicker } from './AccountAvatarPicker'
 import { SignatureSettings } from './SignatureSettings'
 import { AccountSetup, type SetupMode } from './AccountSetup'
 import { FolderMappingsDialog } from './FolderMappings'
+import { AliasesDialog } from './Aliases'
 import { IndexingMeter } from './IndexingMeter'
 import { ShortcutEditor } from './ShortcutEditor'
 
@@ -168,7 +170,8 @@ export function SettingsPanel({
     [setup, setSetup] = useState<{ mode: SetupMode; account?: Account } | undefined>(initialSetup),
     [remove, setRemove] = useState<Account>(),
     [editing, setEditing] = useState<string>(),
-    [folders, setFolders] = useState<Account>()
+    [folders, setFolders] = useState<Account>(),
+    [aliases, setAliases] = useState<Account>()
   const modalRef = useRef<HTMLDivElement>(null)
   /** Leaves setup and puts focus back where the account list starts. */
   const closeSetup = () => {
@@ -543,6 +546,12 @@ export function SettingsPanel({
                               </strong>
                               <span className="settings-account-email block text-muted text-[12px] leading-[1.6]">
                                 {account.email}
+                                {!!account.aliases?.length &&
+                                  ' · ' +
+                                    account.aliases.length +
+                                    (account.aliases.length === 1
+                                      ? ' more address'
+                                      : ' more addresses')}
                               </span>
                               <small
                                 className={cn(
@@ -610,10 +619,16 @@ export function SettingsPanel({
                                   Edit connection…
                                 </MenuItem>
                                 {protocol === 'imap' && (
-                                  <MenuItem onClick={() => setFolders(account)}>
-                                    <Folder size={14} />
-                                    Folders…
-                                  </MenuItem>
+                                  <>
+                                    <MenuItem onClick={() => setAliases(account)}>
+                                      <AtSign size={14} />
+                                      Email addresses…
+                                    </MenuItem>
+                                    <MenuItem onClick={() => setFolders(account)}>
+                                      <Folder size={14} />
+                                      Folders…
+                                    </MenuItem>
+                                  </>
                                 )}
                                 <MenuItem
                                   onClick={() =>
@@ -815,6 +830,12 @@ export function SettingsPanel({
           </div>
         </div>
       </Modal>
+      <AliasesDialog
+        key={aliases?.id || 'aliases-closed'}
+        account={aliases}
+        onClose={() => setAliases(undefined)}
+        notify={notify}
+      />
       <FolderMappingsDialog
         key={folders?.id || 'folders-closed'}
         account={folders}

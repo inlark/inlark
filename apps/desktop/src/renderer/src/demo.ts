@@ -43,7 +43,11 @@ const palette = ['#a69aef', '#83bba8', '#e7ae7c', '#7caee4', '#d491ac']
  */
 const demoStates: Partial<Account>[] = [
   { protocol: 'jmap' },
-  { protocol: 'imap', indexing: { indexed: 12_340, total: 50_000, complete: false } },
+  {
+    protocol: 'imap',
+    indexing: { indexed: 12_340, total: 50_000, complete: false },
+    aliases: [{ id: 'studio-hello', email: 'hello@studio.example.com', name: 'Paul at Studio' }],
+  },
   {
     protocol: 'imap',
     limits: {
@@ -754,6 +758,14 @@ export const demoAPI: DesktopMailAPI = {
     listeners.forEach((fn) => fn({ type: 'accounts', accounts }))
     return accounts
   },
+  setAliases: async (accountId, aliases) => {
+    const account = demoAccounts.find((a) => a.id === accountId)
+    if (!account) throw new Error('Account not found.')
+    account.aliases = aliases.map((alias) => ({ ...alias, id: alias.id || crypto.randomUUID() }))
+    const accounts = demoAccounts.map((a) => ({ ...a }))
+    listeners.forEach((fn) => fn({ type: 'accounts', accounts }))
+    return accounts
+  },
   mailboxes: async (accountId) => {
     if (!folders.has(accountId))
       folders.set(
@@ -783,14 +795,19 @@ export const demoAPI: DesktopMailAPI = {
       .get(accountId)!
       .map((box) => (box.role === 'inbox' ? { ...box, unreadEmails: unreadCount } : box))
   },
-  identities: async (id) => [
-    {
-      id: 'identity',
-      accountId: id,
-      name: demoAccounts.find((a) => a.id === id)!.senderName || 'Paul',
-      email: demoAccounts.find((a) => a.id === id)!.email,
-    },
-  ],
+  identities: async (id) => {
+    const account = demoAccounts.find((a) => a.id === id)!
+    const name = account.senderName || 'Paul'
+    return [
+      { id: 'identity', accountId: id, name, email: account.email },
+      ...(account.aliases || []).map((alias) => ({
+        id: alias.id,
+        accountId: id,
+        name: alias.name || name,
+        email: alias.email,
+      })),
+    ]
+  },
   query: async (query, cursor) => {
     const pages = demoAccounts.flatMap((account, accountIndex) => {
       if (

@@ -943,6 +943,10 @@ export class ImapProvider implements MailProvider {
     return body
   }
   async identities(account: Account): Promise<Identity[]> {
+    return this.senders(account)
+  }
+  /** The account's own address first, then the aliases the user added in Inlark. */
+  private senders(account: Account): Identity[] {
     return [
       {
         id: 'default',
@@ -951,7 +955,24 @@ export class ImapProvider implements MailProvider {
         email: this.options.config.email,
         mayDelete: false,
       },
+      ...(account.aliases || []).map((alias) => ({
+        id: alias.id,
+        accountId: account.id,
+        name: alias.name || account.senderName || '',
+        email: alias.email,
+        mayDelete: true,
+      })),
     ]
+  }
+  /** Never falls back to another address: the user chose who the message is from. */
+  private sender(account: Account, identityId: string): Identity {
+    const identity = this.senders(account).find((i) => i.id === identityId)
+    if (!identity)
+      throw new ProviderError(
+        'identity',
+        'The address this message is from was removed from the account. Choose another From address.',
+      )
+    return identity
   }
   getStateToken() {
     return undefined
@@ -1170,8 +1191,9 @@ export class ImapProvider implements MailProvider {
   // Drafts and sending
 
   private async compose(account: Account, draft: Draft, messageId: string, keepBcc: boolean) {
+    const sender = this.sender(account, draft.identityId)
     return composeMime({
-      from: { name: account.senderName || '', email: this.options.config.email },
+      from: { name: sender.name, email: sender.email },
       to: draft.to,
       cc: draft.cc,
       bcc: draft.bcc,
@@ -1193,8 +1215,9 @@ export class ImapProvider implements MailProvider {
       keepBcc,
     })
   }
-  private messageId() {
-    const domain = this.options.config.email
+  /** On the sender's own domain, so a message from an alias doesn't name the account's. */
+  private messageId(email: string) {
+    const domain = email
       .split('@')[1]
       ?.toLowerCase()
       .replace(/[^a-z0-9.-]/g, '')
@@ -1208,7 +1231,7 @@ export class ImapProvider implements MailProvider {
         'Choose a Drafts folder in Settings → Accounts → Folders to save drafts on the server.',
       )
     // Every saved revision gets its own Message-ID so it can be found unambiguously.
-    const id = messageId || this.messageId()
+    const id = messageId || this.messageId(this.sender(account, draft.identityId).email)
     const mime = await this.compose(account, draft, id, true)
     return this.run(async (port) => {
       // APPEND flags are checked against the selected folder's permanent flags.
@@ -1240,7 +1263,9 @@ export class ImapProvider implements MailProvider {
     const recipients = [...new Set([...draft.to, ...draft.cc, ...draft.bcc].map((a) => a.email))]
     // Bcc recipients are only in the envelope, never in the transmitted headers.
     const mime = await this.compose(account, draft, messageId, false)
-    return { messageId, mime, envelope: { from: this.options.config.email, to: recipients } }
+    // Bounces go to the address the message is from, as recipients would expect.
+    const from = this.sender(account, draft.identityId).email
+    return { messageId, mime, envelope: { from, to: recipients } }
   }
   async submit(_account: Account, message: OutgoingMessage): Promise<SubmissionOutcome> {
     if (!message.mime) throw new ProviderError('submission', 'The message was not prepared.')

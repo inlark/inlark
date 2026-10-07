@@ -611,6 +611,46 @@ describe('IMAP drafts and sending', () => {
     expect(raw).toMatch(/^Message-ID: <attempt@example.com>/m)
     expect(server.commands).not.toContain('APPEND')
   })
+  it('sends from an alias in the From header, the envelope and the Message-ID', async () => {
+    const p = await connected()
+    const aliased = {
+      ...account,
+      senderName: 'Me',
+      aliases: [
+        { id: 'hello', email: 'hello@alias.example', name: 'Hello desk' },
+        { id: 'custom', email: 'me@custom.example' },
+      ],
+    }
+    expect((await p.identities(aliased)).map((i) => [i.id, i.name, i.email, i.mayDelete])).toEqual([
+      ['default', 'Me', 'me@example.com', false],
+      ['hello', 'Hello desk', 'hello@alias.example', true],
+      // Without a name of its own, an alias uses the account's.
+      ['custom', 'Me', 'me@custom.example', true],
+    ])
+    const outgoing = await p.prepareSubmission(
+      aliased,
+      { ...draft, accountId: account.id, identityId: 'hello' },
+      'attempt@alias.example',
+    )
+    expect(outgoing.envelope.from).toBe('hello@alias.example')
+    const raw = new TextDecoder().decode(outgoing.mime)
+    expect(raw).toMatch(/^From: Hello desk <hello@alias\.example>/m)
+    expect(raw).not.toContain('me@example.com')
+    // A saved draft gets a Message-ID on the alias's domain, never the account's.
+    await p.createDraft(aliased, { ...draft, accountId: account.id, identityId: 'custom' })
+    const stored = new TextDecoder().decode(server.box('Drafts').messages[0].raw)
+    expect(stored).toMatch(/^From: Me <me@custom\.example>/m)
+    expect(stored).toMatch(/^Message-ID: <[^@>]+@custom\.example>/m)
+  })
+  it('refuses to send from an address that is no longer set up', async () => {
+    const p = await connected()
+    const removed = { ...draft, accountId: account.id, identityId: 'removed' }
+    await expect(p.prepareSubmission(account, removed, 'attempt@x')).rejects.toMatchObject({
+      code: 'identity',
+    })
+    await expect(p.createDraft(account, removed)).rejects.toMatchObject({ code: 'identity' })
+    expect(server.box('Drafts').messages).toHaveLength(0)
+  })
   it('does not duplicate a Sent copy the server already filed', async () => {
     const p = await connected()
     const outgoing = await p.prepareSubmission(

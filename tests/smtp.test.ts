@@ -239,7 +239,9 @@ describe('SMTP submission', () => {
     })
     const refused = await failure(submitSmtp(settings(sender.port), envelope(), await message()))
     expect(refused.code).toBe('submissionRejected')
-    expect(refused.message).toMatch(/sender/)
+    // Names the address, which may be an alias the provider doesn't allow.
+    expect(refused.message).toContain('refused to send from me@example.test')
+    expect(refused.message).toContain('Not your address')
     expect(sender.log.rcptTo).toEqual([])
   })
 

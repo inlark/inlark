@@ -477,3 +477,73 @@ describe('IMAP drafts', () => {
     expect(server.box('Drafts').messages[0].input.text?.trim()).toBe('Hello')
   })
 })
+
+describe('IMAP aliases', () => {
+  beforeEach(() => service.connect(input))
+
+  it('saves aliases, keeps their IDs, and refuses the same address twice', async () => {
+    const [account] = await service.setAliases(accountId, [
+      { email: 'hello@alias.example', name: 'Hello desk' },
+      { email: 'me@custom.example', name: '  ' },
+    ])
+    expect(account.aliases).toEqual([
+      { id: expect.any(String), email: 'hello@alias.example', name: 'Hello desk' },
+      { id: expect.any(String), email: 'me@custom.example' },
+    ])
+    const hello = account.aliases![0]
+    // Renaming keeps the ID drafts and signatures refer to; an unknown ID is never adopted.
+    const foreign = '1b3c7e2a-9a4f-4d8e-bb11-0c2d3e4f5a6b'
+    const [renamed] = await service.setAliases(accountId, [
+      { id: hello.id, email: 'hello@alias.example', name: 'Hello' },
+      { id: foreign, email: 'new@alias.example' },
+    ])
+    expect(renamed.aliases![0]).toEqual({ ...hello, name: 'Hello' })
+    expect(renamed.aliases![1].id).not.toBe(foreign)
+    expect((await service.identities(accountId)).map((i) => [i.name, i.email])).toEqual([
+      ['', 'me@example.com'],
+      ['Hello', 'hello@alias.example'],
+      ['', 'new@alias.example'],
+    ])
+    await expect(service.setAliases(accountId, [{ email: 'ME@example.com' }])).rejects.toThrow(
+      'already one of this account’s addresses',
+    )
+    await expect(
+      service.setAliases(accountId, [{ email: 'a@x.example' }, { email: 'A@x.example' }]),
+    ).rejects.toThrow('already one of this account’s addresses')
+    expect(service.accounts[0].aliases).toEqual(renamed.aliases)
+  })
+  it('keeps aliases across a restart and when the connection is edited', async () => {
+    await service.setAliases(accountId, [{ email: 'hello@alias.example' }])
+    const aliases = service.accounts[0].aliases
+    await restart()
+    expect(service.accounts[0].aliases).toEqual(aliases)
+    await service.connect({ ...input, senderName: 'Me' })
+    expect(service.accounts[0].aliases).toEqual(aliases)
+    // An alias that becomes the account's own address is no longer an alias.
+    await service.connect({ ...input, config: { ...input.config, email: 'hello@alias.example' } })
+    expect(service.accounts[0].aliases).toBeUndefined()
+  })
+  it('sends from the chosen alias and files the Sent copy with it', async () => {
+    const [account] = await service.setAliases(accountId, [
+      { email: 'hello@alias.example', name: 'Hello desk' },
+    ])
+    const result = await service.send({ ...draft, identityId: account.aliases![0].id })
+    expect(result).toMatchObject({ status: 'sent', sentCopy: 'filed' })
+    expect(submit.mock.calls[0][1].from).toBe('hello@alias.example')
+    expect((await journal()).messageId).toMatch(/@alias\.example$/)
+    const sent = new TextDecoder().decode(server.box('Sent').messages[0].raw)
+    expect(sent).toMatch(/^From: Hello desk <hello@alias\.example>/m)
+  })
+  it('refuses to send from a removed alias, and sends nothing', async () => {
+    const [account] = await service.setAliases(accountId, [{ email: 'hello@alias.example' }])
+    const identityId = account.aliases![0].id
+    await service.setAliases(accountId, [])
+    await expect(service.send({ ...draft, identityId })).rejects.toMatchObject({
+      code: 'identity',
+    })
+    expect(submit).not.toHaveBeenCalled()
+    expect((await journal()).state).toBe('rejected')
+    // The draft keeps its address, so the composer asks for a new one instead of guessing.
+    expect((await service.drafts())[0]).toMatchObject({ status: 'error', identityId })
+  })
+})

@@ -8,6 +8,7 @@ import {
   ArrowLeft as ArrowLeftGlyph,
   ArrowUp as ArrowUpGlyph,
   ArrowUpRight as ArrowUpRightGlyph,
+  AtIcon as AtSignGlyph,
   Bold as BoldGlyph,
   Calendar as CalendarGlyph,
   CalendarAdd02Icon as CalendarAddGlyph,
@@ -93,6 +94,7 @@ export const ArrowDown = icon(ArrowDownGlyph)
 export const ArrowLeft = icon(ArrowLeftGlyph)
 export const ArrowUp = icon(ArrowUpGlyph)
 export const ArrowUpRight = icon(ArrowUpRightGlyph)
+export const AtSign = icon(AtSignGlyph)
 export const Bold = icon(BoldGlyph)
 export const Calendar = icon(CalendarGlyph)
 export const CalendarAdd = icon(CalendarAddGlyph)

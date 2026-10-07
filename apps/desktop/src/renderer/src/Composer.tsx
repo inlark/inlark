@@ -1,6 +1,6 @@
 import { cn } from '@inlark/ui'
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { useForm } from '@tanstack/react-form'
 import { Dialog } from '@base-ui/react/dialog'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
@@ -41,6 +41,8 @@ import { linkTarget } from './link-target'
 import { SignatureParagraph, hasDraftContent, replaceSignature } from './composer-document'
 
 const validAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+/** One From choice: an account and one of its sending addresses. */
+const senderKey = (accountId: string, identityId: string) => JSON.stringify([accountId, identityId])
 /** The editor's own formatting keys, which follow the platform (⌘ on macOS, Ctrl elsewhere). */
 const boldKeys = bindingText(['Mod+B'])
 const italicKeys = bindingText(['Mod+I'])
@@ -139,11 +141,41 @@ export function Composer({
     persisted = useRef(!!initial.serverId || initial.status !== 'local'),
     alive = useRef(true)
   const account = accounts.find((a) => a.id === draft.accountId)!
-  const identities = useQuery({
-    queryKey: ['identities', draft.accountId],
-    queryFn: () => api.identities(draft.accountId),
+  const senders = useQueries({
+    queries: accounts.map((a) => ({
+      queryKey: ['identities', a.id],
+      queryFn: () => api.identities(a.id),
+      enabled: a.id === draft.accountId || a.status === 'connected',
+    })),
   })
-  const identity = identities.data?.find((identity) => identity.id === draft.identityId)
+  const identities = senders[accounts.indexOf(account)]
+  const identity = identities?.data?.find((i) => i.id === draft.identityId)
+  // The address was removed since this draft was written; never swap in another one silently.
+  const senderMissing = !!identities?.data?.length && !identity
+  const fromOptions = accounts.flatMap((a, index) => {
+    const label = (email: string, name?: string) =>
+      [accounts.length > 1 && a.name, name ? name + ' <' + email + '>' : email]
+        .filter(Boolean)
+        .join(' · ')
+    // A draft saved on the server belongs to its account; only its address can change.
+    const disabled = a.id !== draft.accountId && !!draft.serverId
+    const list = senders[index]?.data
+    if (!list?.length) {
+      const identityId = a.id === draft.accountId ? draft.identityId : ''
+      return [{ value: senderKey(a.id, identityId), label: label(a.email), disabled }]
+    }
+    return list.map((i) => ({
+      value: senderKey(a.id, i.id),
+      label: label(i.email, i.name),
+      disabled,
+    }))
+  })
+  if (senderMissing)
+    fromOptions.unshift({
+      value: senderKey(draft.accountId, draft.identityId),
+      label: 'Choose an address to send from',
+      disabled: true,
+    })
   const signature = identity ? identitySignature(settings, identity) : undefined
   const locked = sending || changingFrom || draft.status === 'uncertain' || draft.status === 'sent'
   const lockedRef = useRef(locked)
@@ -320,8 +352,9 @@ export function Composer({
       else focusRecipient(field)
       return
     }
-    if (!latest.current.identityId) {
-      notify('Select a sending identity.', 'error')
+    if (!latest.current.identityId || senderMissing) {
+      notify('Choose the address to send this message from.', 'error')
+      document.getElementById('compose-from')?.focus()
       return
     }
     setSending(true)
@@ -386,7 +419,7 @@ export function Composer({
       text: editor.getText(),
     })
   }
-  const selectAccount = async (accountId: string) => {
+  const selectAccount = async (accountId: string, identityId?: string) => {
     if (lockedRef.current || latest.current.serverId || accountId === latest.current.accountId)
       return
     setChangingFrom(true)
@@ -396,7 +429,7 @@ export function Composer({
       // A sync already underway may have bound the draft to its original account.
       if (!alive.current || latest.current.serverId) return
       if (!identities.length) throw new Error('This account has no permitted sending identities.')
-      selectIdentity(identities[0])
+      selectIdentity(identities.find((i) => i.id === identityId) || identities[0])
     } catch (error) {
       notify(friendlyError(error), 'error')
     } finally {
@@ -589,47 +622,18 @@ export function Composer({
               <label htmlFor="compose-from">From</label>
               <Select
                 id="compose-from"
-                value={draft.accountId}
-                disabled={locked || !!draft.serverId}
-                options={accounts.map((a) => ({ value: a.id, label: a.name + ' · ' + a.email }))}
-                onValueChange={(accountId) => void selectAccount(accountId)}
+                value={senderKey(draft.accountId, draft.identityId)}
+                disabled={locked}
+                options={fromOptions}
+                onValueChange={(value) => {
+                  const [accountId, identityId] = JSON.parse(value) as [string, string]
+                  if (accountId !== draft.accountId)
+                    return void selectAccount(accountId, identityId)
+                  const identity = identities?.data?.find((i) => i.id === identityId)
+                  if (identity) selectIdentity(identity)
+                }}
               />
             </div>
-            {(identities.data?.length || 0) > 1 && (
-              <div
-                className={cn(
-                  'compose-field flex items-center min-h-10.5 border-b border-solid border-b-border gap-2.75 [&>label]:w-10.75',
-                  '[&>label]:shrink-0 [&>label]:text-[11px] [&>label]:text-muted [&>span]:w-10.75 [&>span]:shrink-0',
-                  '[&>span]:text-[11px] [&>span]:text-muted [&_input]:flex-1 [&_input]:border-0 [&_input]:py-1.75 [&_input]:px-0',
-                  '[&_input]:bg-none [&_input]:bg-transparent [&_input]:text-[12px] [&_input]:min-w-0 [&>.select-trigger]:flex-1',
-                  '[&>.select-trigger]:h-8 [&>.select-trigger]:py-0 [&>.select-trigger]:pr-1 [&>.select-trigger]:pl-0',
-                  '[&>.select-trigger]:border-0 [&>.select-trigger]:bg-none [&>.select-trigger]:bg-transparent',
-                  '[&>.select-trigger]:text-foreground [&>.select-trigger]:text-[12px] [&>.select-trigger]:whitespace-normal',
-                  '[&>.select-trigger:hover:not([data-disabled])]:bg-none',
-                  '[&>.select-trigger:hover:not([data-disabled])]:bg-transparent [&>button]:text-[11px] [&>button]:bg-none',
-                  '[&>button]:bg-transparent [&>button]:border-0 [&>button]:text-muted [&>button]:whitespace-nowrap',
-                  '[&_.subject-input]:font-medium [&_input:focus-visible]:outline-none',
-                  '[&>.select-trigger:focus-visible]:outline-none focus-within:border-b-primary-solid',
-                  '[&>.compose-cc-toggle]:self-start [&>.compose-cc-toggle]:mt-2.25 [&>.compose-cc-toggle]:py-0',
-                  '[&>.compose-cc-toggle]:px-[2px] [&>.compose-cc-toggle:hover]:text-foreground',
-                )}
-              >
-                <label htmlFor="compose-identity">Identity</label>
-                <Select
-                  disabled={locked}
-                  id="compose-identity"
-                  value={draft.identityId}
-                  options={(identities.data || []).map((i) => ({
-                    value: i.id,
-                    label: i.name + ' <' + i.email + '>',
-                  }))}
-                  onValueChange={(identityId) => {
-                    const identity = identities.data?.find((identity) => identity.id === identityId)
-                    if (identity) selectIdentity(identity)
-                  }}
-                />
-              </div>
-            )}
             {addressField('to', 'To')}
             {showCc && (
               <>
@@ -829,7 +833,7 @@ export function Composer({
               )}
             </Button>
             <span className="compose-account flex-1 text-right text-muted text-[11px] max-[700px]:text-[10px]">
-              {account.email}
+              {identity?.email ?? (senderMissing ? '' : account.email)}
             </span>
             <IconButton
               label="Discard draft"

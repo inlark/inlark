@@ -229,6 +229,7 @@ else {
         reconnect: service.reconnect,
         updateAccount: service.updateAccount,
         updateAccountDetails: service.updateAccountDetails,
+        setAliases: service.setAliases,
         mailboxes: service.mailboxes,
         identities: service.identities,
         query: service.query,
