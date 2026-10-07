@@ -173,6 +173,9 @@ export function SettingsPanel({
     [folders, setFolders] = useState<Account>(),
     [aliases, setAliases] = useState<Account>()
   const modalRef = useRef<HTMLDivElement>(null)
+  const [restartPrompt, setRestartPrompt] = useState(false),
+    [savingTitleBar, setSavingTitleBar] = useState(false),
+    [restarting, setRestarting] = useState(false)
   /** Leaves setup and puts focus back where the account list starts. */
   const closeSetup = () => {
     setSetup(undefined)
@@ -207,6 +210,14 @@ export function SettingsPanel({
     } catch (e) {
       notify(friendlyError(e), 'error')
       return false
+    }
+  }
+  const changeTitleBar = async (systemTitleBar: boolean) => {
+    setSavingTitleBar(true)
+    try {
+      if (await update({ systemTitleBar })) setRestartPrompt(true)
+    } finally {
+      setSavingTitleBar(false)
     }
   }
   return (
@@ -405,12 +416,13 @@ export function SettingsPanel({
                   >
                     <div>
                       <strong>Use system title bar</strong>
-                      <p>Use your desktop’s window frame. Quit and reopen Inlark to apply.</p>
+                      <p>Use your desktop’s window frame.</p>
                     </div>
                     <Switch
                       aria-label="Use system title bar"
                       checked={bootstrap.settings.systemTitleBar === true}
-                      onCheckedChange={(systemTitleBar) => void update({ systemTitleBar })}
+                      disabled={savingTitleBar}
+                      onCheckedChange={(systemTitleBar) => void changeTitleBar(systemTitleBar)}
                     />
                   </div>
                   <div
@@ -845,6 +857,35 @@ export function SettingsPanel({
               </>
             )}
           </div>
+        </div>
+      </Modal>
+      <Modal
+        open={restartPrompt}
+        onOpenChange={(value) => {
+          if (!restarting) setRestartPrompt(value)
+        }}
+        title="Restart Inlark to apply this change"
+        description="Your title bar preference has been saved. Restart now to apply it, or cancel and it will apply the next time you open Inlark."
+      >
+        <div className="modal-actions flex justify-end gap-2 mt-6">
+          <Button disabled={restarting} onClick={() => setRestartPrompt(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={restarting}
+            onClick={async () => {
+              setRestarting(true)
+              try {
+                await api.restart()
+              } catch (e) {
+                setRestarting(false)
+                notify(friendlyError(e), 'error')
+              }
+            }}
+          >
+            {restarting ? 'Restarting…' : 'Restart Inlark'}
+          </Button>
         </div>
       </Modal>
       <AliasesDialog

@@ -589,6 +589,7 @@ export interface DesktopMailAPI {
   ): Promise<{ kind: 'done' | 'mailto' | 'browser'; url?: string }>
   openExternal(url: string): Promise<void>
   settings(settings: Settings): Promise<Settings>
+  restart(): Promise<void>
   diagnostics(): Promise<string>
   onEvent(listener: (event: AppEvent) => void): () => void
 }

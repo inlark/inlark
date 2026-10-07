@@ -253,5 +253,6 @@ export const ipcSchemas = {
   unsubscribe: z.tuple([id, id]),
   openExternal: z.tuple([z.string().max(8192)]),
   settings: z.tuple([settingsSchema]),
+  restart: z.tuple([]),
   diagnostics: z.tuple([]),
 } satisfies Record<Exclude<keyof DesktopMailAPI, 'onEvent'>, z.ZodType>

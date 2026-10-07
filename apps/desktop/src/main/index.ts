@@ -43,6 +43,7 @@ let unreadCount = 0,
   rendererReady = false
 // Keep the current window's mode while a saved preference waits for the next restart.
 let windowUsesSystemTitleBar = false
+let restartQueued = false
 let service: MailService
 const updates = new UpdateManager((status) => send({ type: 'update', status }))
 const pendingEvents: AppEvent[] = []
@@ -293,6 +294,13 @@ else {
           nativeTheme.themeSource = saved.theme
           followTheme()
           return saved
+        },
+        restart: async () => {
+          if (restartQueued) return
+          app.relaunch()
+          restartQueued = true
+          // Reply to the renderer before quitting through the normal cleanup and tray path.
+          setImmediate(() => app.quit())
         },
         diagnostics: service.diagnostics,
       }
