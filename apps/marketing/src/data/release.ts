@@ -145,3 +145,13 @@ export async function fetchLatestRelease(token?: string): Promise<Release | null
     })),
   }
 }
+
+/** Refreshes static pages through the Worker's cached release endpoint. */
+export async function fetchCurrentRelease(): Promise<Release | null> {
+  try {
+    const response = await fetch('/api/release', { signal: AbortSignal.timeout(6000) })
+    return response.ok ? ((await response.json()) as Release) : null
+  } catch {
+    return null
+  }
+}

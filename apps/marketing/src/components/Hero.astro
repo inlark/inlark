@@ -3,7 +3,13 @@ import { ArrowUpRight, Download } from '@inlark/ui/icons'
 import InboxWindow from './InboxWindow.astro'
 import Stars from './Stars.astro'
 import { GitHubIcon } from './GitHubIcon'
-import { links, version } from '../data/links'
+import { links } from '../data/links'
+import { fetchLatestRelease, unconfirmedRelease } from '../data/release'
+
+const release = import.meta.env.PROD
+  ? ((await fetchLatestRelease(import.meta.env.GITHUB_TOKEN).catch(() => null)) ??
+    unconfirmedRelease)
+  : unconfirmedRelease
 ---
 
 <section id="top" class="relative isolate overflow-x-clip pt-32 sm:pt-44">
@@ -14,8 +20,11 @@ import { links, version } from '../data/links'
       href={links.releases}
       class="rise group inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-ink/[0.03] py-1.5 pr-3 pl-2 text-[0.8rem] text-ink-2 transition-colors hover:border-ink/20 hover:text-ink"
     >
-      <span class="rounded-full bg-dawn/15 px-2 py-0.5 font-mono text-[0.68rem] text-dawn">
-        v{version}
+      <span
+        data-release-version
+        class="rounded-full bg-dawn/15 px-2 py-0.5 font-mono text-[0.68rem] text-dawn"
+      >
+        v{release.version}
       </span>
       Early preview for desktop
       <ArrowUpRight
@@ -63,6 +72,17 @@ import { links, version } from '../data/links'
     </p>
   </div>
 </section>
+
+<script>
+  import { fetchCurrentRelease } from '../data/release'
+
+  const badge = document.querySelector('[data-release-version]')
+  if (badge) {
+    void fetchCurrentRelease().then((release) => {
+      if (release) badge.textContent = `v${release.version}`
+    })
+  }
+</script>
 
 <style>
   .stage {

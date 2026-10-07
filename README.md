@@ -136,6 +136,8 @@ pnpm test:deb          # Debian packaging smoke test (Podman)
 
 The Nix build is pinned by `flake.lock`, `pnpm-lock.yaml` and the dependency hash in `nix/package.nix`. After changing dependencies, replace that hash with the one Nix reports.
 
+Before tagging a release, update `apps/desktop/package.json` to the release version and commit it. The `v`-prefixed tag must match that committed version; release CI checks this before building. This keeps packaged, source and Nix builds on the same version. The website refreshes its version from the latest published GitHub release.
+
 To smoke-test the Nix package without opening a window:
 
 ```sh

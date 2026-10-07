@@ -102,6 +102,7 @@ import { SubmissionList } from './SendingStatus'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
+import { version as packagedVersion } from '../../../package.json'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
@@ -131,7 +132,7 @@ export function App() {
     settings: defaultSettings,
     secureStorage: false,
     demo: isDemo,
-    version: '0.1.0',
+    version: packagedVersion,
   }
   const { accounts, settings } = bootstrap
   const view = (
