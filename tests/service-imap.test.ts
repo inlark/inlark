@@ -461,6 +461,60 @@ describe('IMAP drafts', () => {
     expect(second).toMatchObject({ status: 'error', errorKind: 'conflict', text: 'Mine' })
     expect(server.box('Drafts').messages.map((m) => m.input.text)).toEqual(['Their edit'])
   })
+  it('retains the latest server revision when a delayed local save carries the replaced ID', async () => {
+    const first = await service.syncDraft(draft)
+    const second = await service.syncDraft({
+      ...first,
+      text: 'Second revision',
+      updatedAt: '2026-09-23T10:01:00.000Z',
+    })
+    // This edit started before the renderer received the replacement's server ID.
+    const edited = await service.saveDraft({
+      ...first,
+      text: 'Third revision',
+      updatedAt: '2026-09-23T10:02:00.000Z',
+      status: 'local',
+    })
+    expect(edited.serverId).toBe(second.serverId)
+    expect(edited.serverFingerprint).toBe(second.serverFingerprint)
+    const third = await service.syncDraft(edited)
+    expect(third.status).toBe('synced')
+    expect(server.box('Drafts').messages.map((m) => m.input.text?.trim())).toEqual([
+      'Third revision',
+    ])
+  })
+  it('retains a confirmed first server save when a delayed edit has no server ID yet', async () => {
+    const first = await service.syncDraft(draft)
+    const edited = await service.saveDraft({
+      ...draft,
+      text: 'Newer edit',
+      updatedAt: '2026-09-23T10:01:00.000Z',
+    })
+    expect(edited.serverId).toBe(first.serverId)
+    expect((await service.syncDraft(edited)).status).toBe('synced')
+    expect(server.box('Drafts').messages).toHaveLength(1)
+  })
+  it('allows explicitly keeping a separate copy after a real remote conflict', async () => {
+    const first = await service.syncDraft(draft)
+    server.setFlags('Drafts', server.box('Drafts').messages[0].uid, ['\\Seen'])
+    const conflict = await service.syncDraft({
+      ...first,
+      text: 'Mine',
+      updatedAt: '2026-09-23T10:01:00.000Z',
+    })
+    expect(conflict.errorKind).toBe('conflict')
+    const separate = await service.syncDraft({
+      ...conflict,
+      serverId: undefined,
+      serverFingerprint: undefined,
+      error: undefined,
+      errorKind: undefined,
+      status: 'local',
+      updatedAt: '2026-09-23T10:02:00.000Z',
+    })
+    expect(separate.status).toBe('synced')
+    expect(server.box('Drafts').messages).toHaveLength(2)
+  })
   it('keeps the previous server draft when the replacement cannot be confirmed', async () => {
     const first = await service.syncDraft(draft)
     server.hooks.set('APPEND:before', () => {

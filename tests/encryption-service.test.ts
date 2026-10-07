@@ -398,6 +398,9 @@ it('keeps protected main-process drafts and attachments encrypted through crash 
   await expect(
     readFile(join(directory, 'attachments', input.attachments[0].id)),
   ).rejects.toMatchObject({ code: 'ENOENT' })
+  // A first autosave can finish just before encryption is enabled in the composer.
+  const plaintext = await main.syncDraft({ ...input, encryption: undefined })
+  expect(plaintext.status).toBe('synced')
   await main.saveDraft(input)
   expect(await readFile(join(directory, 'drafts.json'), 'utf8')).not.toContain('MARKER')
   expect(await readFile(join(directory, 'encryption-vault.json'), 'utf8')).not.toContain('MARKER')
@@ -408,8 +411,25 @@ it('keeps protected main-process drafts and attachments encrypted through crash 
   await expect(main.saveDraft({ ...input, encryption: 'none' })).rejects.toThrow('Confirm')
   const saved = await main.syncDraft(input)
   expect(saved.status).toBe('synced')
+  expect(saved.earlierPlaintext).toBe(true)
   expect(saved.serverFingerprint).toMatch(/^[a-f0-9]{64}$/)
-  const sent = await main.send(saved)
+  expect(server.box('Drafts').messages).toHaveLength(1)
+  expect(saved.serverId).not.toBe(plaintext.serverId)
+  // A delayed edit still carries the plaintext revision we have already removed.
+  const edited = await main.syncDraft({
+    ...saved,
+    serverId: plaintext.serverId,
+    serverFingerprint: plaintext.serverFingerprint,
+    text: 'PRIVATE BODY MARKER edited',
+    html: '<p>PRIVATE BODY MARKER edited</p>',
+    updatedAt: new Date(Date.parse(saved.updatedAt) + 1000).toISOString(),
+  })
+  expect(edited.status).toBe('synced')
+  expect(edited.serverId).not.toBe(saved.serverId)
+  expect(edited.serverFingerprint).not.toBe(saved.serverFingerprint)
+  expect(server.box('Drafts').messages).toHaveLength(1)
+  expect(await readFile(join(directory, 'drafts.json'), 'utf8')).not.toContain('MARKER')
+  const sent = await main.send(edited)
   expect(sent.status).toBe('sent')
   expect(Buffer.from(submit.mock.calls[0][2]).toString()).not.toContain('MARKER')
   const tombstone = (await main.drafts()).find((d) => d.id === input.id)!

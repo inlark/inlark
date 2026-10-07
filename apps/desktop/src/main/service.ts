@@ -1141,6 +1141,19 @@ export class MailService {
     if (this.busyDrafts.has(draft.id) || old?.status === 'uncertain' || old?.status === 'sent')
       return old || draft
     if (old && old.updatedAt > draft.updatedAt) return old
+    // Server revisions belong to the main process. An edit captured before a sync reply
+    // must not restore an ID that we have already replaced and removed from the server.
+    // Clearing the link after a conflict is the explicit “Keep both versions” action.
+    if (
+      old?.serverId &&
+      old.accountId === draft.accountId &&
+      !(old.errorKind === 'conflict' && !draft.serverId)
+    )
+      draft = {
+        ...draft,
+        serverId: old.serverId,
+        serverFingerprint: old.serverFingerprint,
+      }
     if (
       draft.encryption !== 'encrypt' &&
       (old?.encryption === 'encrypt' || draft.encryptionRequired) &&
@@ -1156,6 +1169,7 @@ export class MailService {
         ...draft,
         earlierPlaintext:
           draft.earlierPlaintext ||
+          old?.earlierPlaintext ||
           (!!old && old.encryption !== 'encrypt') ||
           (!!draft.serverId && old?.encryption !== 'encrypt'),
       }
@@ -1460,15 +1474,15 @@ export class MailService {
   }
   send = async (input: Draft): Promise<SendResult> => {
     if (this.protectionTransition) throw new Error('The vault is locking.')
-    const draft = sendDraftSchema.parse(input)
+    let draft = sendDraftSchema.parse(input)
     if (!draft.to.length && !draft.cc.length && !draft.bcc.length)
       throw new Error('Add at least one recipient.')
     if (this.busyDrafts.has(draft.id))
       throw new Error('This draft is still saving. Try again in a moment.')
     const existing = this.journals.get(draft.id)
     if (existing && existing.state !== 'rejected') return this.reconcile(draft.id)
+    draft = sendDraftSchema.parse(await this.saveDraft(draft))
     const { provider, account } = this.provider(draft.accountId)
-    await this.saveDraft(draft)
     this.busyDrafts.add(draft.id)
     const journal: Journal = {
       draftId: draft.id,
