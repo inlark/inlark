@@ -23,10 +23,13 @@ import {
 import { Modal, Button, IconButton, Select, Spinner } from '@inlark/ui'
 import {
   friendlyError,
+  identitySignature,
   type Address,
   type Account,
   type Draft,
   type SendResult,
+  type Settings,
+  type Identity,
 } from '@inlark/core'
 import { api, isDemo } from './api'
 import { localSaveDraft, localDeleteDraft } from './cache'
@@ -35,6 +38,7 @@ import { formatBytes } from './mail-date'
 import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { SignatureNode } from './signature'
 import { linkTarget } from './link-target'
+import { SignatureParagraph, hasDraftContent, replaceSignature } from './composer-document'
 
 const validAddress = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 /** The editor's own formatting keys, which follow the platform (⌘ on macOS, Ctrl elsewhere). */
@@ -93,6 +97,7 @@ function draftProblem(draft: Draft): { text: string; detail?: string } | undefin
 export function Composer({
   initial,
   accounts,
+  settings,
   suggestions,
   onClose,
   onOpenAccounts,
@@ -102,6 +107,7 @@ export function Composer({
   initial: Draft
   suggestions: Address[]
   accounts: Account[]
+  settings: Settings
   onClose: () => void
   /** Opens Settings → Accounts, e.g. to sign in to the outgoing server again. */
   onOpenAccounts: () => void
@@ -120,6 +126,7 @@ export function Composer({
           : 'Saved on this device',
     ),
     [sending, setSending] = useState(false),
+    [changingFrom, setChangingFrom] = useState(false),
     [showCc, setShowCc] = useState(initial.cc.length > 0 || initial.bcc.length > 0),
     [expanded, setExpanded] = useState(false),
     [linkOpen, setLinkOpen] = useState(false),
@@ -129,13 +136,16 @@ export function Composer({
     [discardOpen, setDiscardOpen] = useState(false)
   const latest = useRef(draft),
     sync = useRef<Promise<unknown>>(Promise.resolve()),
+    persisted = useRef(!!initial.serverId || initial.status !== 'local'),
     alive = useRef(true)
   const account = accounts.find((a) => a.id === draft.accountId)!
   const identities = useQuery({
     queryKey: ['identities', draft.accountId],
     queryFn: () => api.identities(draft.accountId),
   })
-  const locked = sending || draft.status === 'uncertain' || draft.status === 'sent'
+  const identity = identities.data?.find((identity) => identity.id === draft.identityId)
+  const signature = identity ? identitySignature(settings, identity) : undefined
+  const locked = sending || changingFrom || draft.status === 'uncertain' || draft.status === 'sent'
   const lockedRef = useRef(locked)
   lockedRef.current = locked
   // A failed send is kept apart from the draft, so a later autosave can't clear the explanation.
@@ -171,6 +181,7 @@ export function Composer({
       }),
       Placeholder.configure({ placeholder: 'Write your message…' }),
       SignatureNode,
+      SignatureParagraph,
     ],
     content:
       initial.html ||
@@ -210,11 +221,19 @@ export function Composer({
       alive.current = false
     }
   }, [])
+  const shouldSave = () =>
+    persisted.current || (!!editor && hasDraftContent(latest.current, editor.getJSON(), signature))
   useEffect(() => {
     latest.current = draft
     if (['uncertain', 'sent', 'sending'].includes(draft.status)) return
+    if (!editor || changingFrom) return
+    if (!shouldSave()) {
+      setState('Not saved')
+      return
+    }
     setState('Saving…')
     const localTimer = setTimeout(() => {
+      persisted.current = true
       void localSaveDraft(latest.current)
         .then(() => api.saveDraft(latest.current))
         .then(() => {
@@ -269,20 +288,23 @@ export function Composer({
       clearTimeout(localTimer)
       clearTimeout(serverTimer)
     }
-  }, [draft.updatedAt])
+  }, [draft.updatedAt, editor, changingFrom, signature?.format, signature?.value])
   const close = async () => {
+    if (changingFrom) return
     try {
       await sync.current
-      await localSaveDraft(latest.current)
-      await api.saveDraft(latest.current)
-      onSaved()
+      if (shouldSave()) {
+        await localSaveDraft(latest.current)
+        await api.saveDraft(latest.current)
+        onSaved()
+      }
       onClose()
     } catch (e) {
       notify('Your draft could not be saved. ' + friendlyError(e), 'error')
     }
   }
   const send = async () => {
-    if (sending || account.status !== 'connected') return
+    if (sending || changingFrom || account.status !== 'connected') return
     const fields = ['to', 'cc', 'bcc'] as const
     if (!fields.some((field) => latest.current[field].length)) {
       notify('Add a recipient before sending.', 'error')
@@ -354,6 +376,33 @@ export function Composer({
       setSending(false)
     }
   }
+  const selectIdentity = (identity: Identity) => {
+    if (!editor) return
+    editor.commands.command(replaceSignature(identitySignature(settings, identity)))
+    update({
+      accountId: identity.accountId,
+      identityId: identity.id,
+      html: editor.getHTML(),
+      text: editor.getText(),
+    })
+  }
+  const selectAccount = async (accountId: string) => {
+    if (lockedRef.current || latest.current.serverId || accountId === latest.current.accountId)
+      return
+    setChangingFrom(true)
+    try {
+      const identities = await api.identities(accountId)
+      await sync.current
+      // A sync already underway may have bound the draft to its original account.
+      if (!alive.current || latest.current.serverId) return
+      if (!identities.length) throw new Error('This account has no permitted sending identities.')
+      selectIdentity(identities[0])
+    } catch (error) {
+      notify(friendlyError(error), 'error')
+    } finally {
+      if (alive.current) setChangingFrom(false)
+    }
+  }
   const attachFiles = async () => {
     try {
       const attachments = await api.stageAttachments()
@@ -390,7 +439,10 @@ export function Composer({
   useShortcutHandlers(shortcuts.bindings, {
     // Keep the library's input-aware defaults: modifier shortcuts work while writing,
     // but a custom letter or sequence must not send or discard a draft as someone types.
-    send: { run: () => void send(), enabled: !linkOpen && !discardOpen && !sending },
+    send: {
+      run: () => void send(),
+      enabled: !linkOpen && !discardOpen && !sending && !changingFrom,
+    },
     attachFiles: { run: () => void attachFiles(), enabled: canEdit },
     showCc: { run: () => focusRecipient('cc'), enabled: canEdit },
     showBcc: { run: () => focusRecipient('bcc'), enabled: canEdit },
@@ -398,7 +450,10 @@ export function Composer({
       run: () => setExpanded((current) => !current),
       enabled: !linkOpen && !discardOpen,
     },
-    saveClose: { run: () => void close(), enabled: !linkOpen && !discardOpen && !sending },
+    saveClose: {
+      run: () => void close(),
+      enabled: !linkOpen && !discardOpen && !sending && !changingFrom,
+    },
     discardDraft: { run: () => setDiscardOpen(true), enabled: canEdit },
   })
   const addressField = (name: 'to' | 'cc' | 'bcc', label: string) => (
@@ -433,7 +488,7 @@ export function Composer({
       open
       disablePointerDismissal
       onOpenChange={(open) => {
-        if (!open && !sending) void close()
+        if (!open && !sending && !changingFrom) void close()
       }}
     >
       <Dialog.Portal>
@@ -477,6 +532,8 @@ export function Composer({
               >
                 {sending || state === 'Saving…' ? (
                   <Spinner size={11} />
+                ) : state === 'Not saved' ? (
+                  <FileText size={11} />
                 ) : state.startsWith('Sav') || state === 'All changes saved' ? (
                   <Check size={11} />
                 ) : (
@@ -502,7 +559,7 @@ export function Composer({
                     size="icon"
                     aria-label="Save and close"
                     title={keys('saveClose')}
-                    disabled={sending}
+                    disabled={sending || changingFrom}
                   />
                 }
               >
@@ -535,19 +592,7 @@ export function Composer({
                 value={draft.accountId}
                 disabled={locked || !!draft.serverId}
                 options={accounts.map((a) => ({ value: a.id, label: a.name + ' · ' + a.email }))}
-                onValueChange={async (accountId) => {
-                  try {
-                    const identities = await api.identities(accountId)
-                    update({
-                      accountId,
-                      identityId: identities[0]?.id || '',
-                      serverId: undefined,
-                      serverFingerprint: undefined,
-                    })
-                  } catch (error) {
-                    notify(friendlyError(error), 'error')
-                  }
-                }}
+                onValueChange={(accountId) => void selectAccount(accountId)}
               />
             </div>
             {(identities.data?.length || 0) > 1 && (
@@ -578,7 +623,10 @@ export function Composer({
                     value: i.id,
                     label: i.name + ' <' + i.email + '>',
                   }))}
-                  onValueChange={(identityId) => update({ identityId })}
+                  onValueChange={(identityId) => {
+                    const identity = identities.data?.find((identity) => identity.id === identityId)
+                    if (identity) selectIdentity(identity)
+                  }}
                 />
               </div>
             )}
@@ -762,7 +810,7 @@ export function Composer({
             <Button
               variant="primary"
               onClick={() => void send()}
-              disabled={sending || account.status !== 'connected'}
+              disabled={sending || changingFrom || account.status !== 'connected'}
             >
               {sending ? <Spinner size={14} /> : <Send size={13} />}{' '}
               {sending

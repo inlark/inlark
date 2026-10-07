@@ -92,6 +92,7 @@ import {
 } from './AppDialogs'
 import { messageText } from './message-text'
 import { signatureBlock, signatureText } from './signature'
+import { textSignatureMarker } from './composer-document'
 import { selectConversation } from './selection'
 import { ShortcutHint, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { emptyListState } from './empty-states'
@@ -548,7 +549,11 @@ export function App() {
             ? signatureBlock(signature.value)
             : ''
           : signature.value
-            ? '<p><br/>' + escapeHtml(signature.value).replace(/\n/g, '<br/>') + '</p>'
+            ? '<p ' +
+              textSignatureMarker +
+              '=""><br/>' +
+              escapeHtml(signature.value).replace(/\n/g, '<br/>') +
+              '</p>'
             : '') +
         quote
       const text = [
@@ -589,7 +594,6 @@ export function App() {
         draft.attachments = (await api.stageRemoteAttachments(id, message.attachments)).map(
           (a) => ({ ...a, cid: undefined }),
         )
-      await localSaveDraft(draft)
       setComposer(draft)
     } catch (e) {
       fail(e)
@@ -2357,6 +2361,7 @@ export function App() {
             initial={composer}
             suggestions={suggestions}
             accounts={accounts}
+            settings={settings}
             onClose={() => setComposer(undefined)}
             onOpenAccounts={() => openSettings('accounts')}
             notify={notify}
