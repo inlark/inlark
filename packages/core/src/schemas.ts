@@ -85,6 +85,19 @@ export const accountDetailsSchema = z.object({
   name: z.string().max(100),
   senderName: z.string().max(100),
 })
+export const aliasesSchema = z
+  .array(
+    z.object({
+      id: z.string().uuid().optional(),
+      email: z.string().trim().pipe(z.email().max(320)),
+      name: z
+        .string()
+        .max(100)
+        .refine((value) => !/[\r\n]/.test(value))
+        .optional(),
+    }),
+  )
+  .max(50)
 export const appearanceSchema = z.object({
   seed: z.string().min(1).max(64).optional(),
   image: z
@@ -200,6 +213,7 @@ export const ipcSchemas = {
   reconnect: z.tuple([id]),
   updateAccount: z.tuple([id, appearanceSchema]),
   updateAccountDetails: z.tuple([id, accountDetailsSchema]),
+  setAliases: z.tuple([id, aliasesSchema]),
   mailboxes: z.tuple([id]),
   identities: z.tuple([id]),
   query: z.tuple([querySchema, z.record(z.string(), z.number().int().nonnegative()).optional()]),

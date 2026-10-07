@@ -2,7 +2,7 @@ import { Select as BaseSelect } from '@base-ui/react/select'
 import { cn } from '../lib/utils'
 import { Check, ChevronDown } from '../icons'
 
-export type SelectOption<Value extends string> = { value: Value; label: string }
+export type SelectOption<Value extends string> = { value: Value; label: string; disabled?: boolean }
 
 /** A single-choice picker that opens a menu styled like the app's dropdowns. */
 export function Select<Value extends string>({
@@ -68,6 +68,7 @@ export function Select<Value extends string>({
                 <BaseSelect.Item
                   key={option.value}
                   value={option.value}
+                  disabled={option.disabled}
                   className={cn(
                     'menu-item flex items-center gap-2.25 text-[12px] py-1.75 px-2.5 rounded-xs outline-none cursor-pointer',
                     'data-highlighted:bg-hover data-highlighted:text-strong data-disabled:opacity-40 [&.danger]:text-danger',

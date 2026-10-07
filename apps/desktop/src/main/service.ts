@@ -15,6 +15,8 @@ import {
   type Account,
   type AccountAppearance,
   type Address,
+  type Alias,
+  type AliasInput,
   type Settings,
   type ConnectInput,
   type ConnectionCheck,
@@ -440,6 +442,11 @@ export class MailService {
           account.name = known.name
           account.senderName = known.senderName
         } else account.senderName = input.senderName?.trim() || undefined
+        // Aliases belong to the account rather than its login, so editing the login keeps them.
+        const aliases = known?.aliases?.filter(
+          (a) => a.email.toLowerCase() !== account.email.toLowerCase(),
+        )
+        if (aliases?.length) account.aliases = aliases
         used.push(account.color)
       }
       const keep = (value?: string) =>
@@ -587,15 +594,10 @@ export class MailService {
     this.emit({ type: 'changed', accountId })
     return review
   }
-  updateAccount = async (accountId: string, appearance: AccountAppearance): Promise<Account[]> => {
+  /** Saves a change to one account's own settings, which never needs signing in again. */
+  private async editAccount(accountId: string, patch: (a: Account) => Partial<Account>) {
     const account = this.account(accountId)
-    if (appearance.image) {
-      const [, type, data] = appearance.image.match(/^data:([^;]+);base64,(.*)$/)!
-      if (rasterType(Buffer.from(data, 'base64')) !== type)
-        throw new Error('This picture could not be read. Choose a PNG, JPEG or WebP image.')
-    }
-    const apply = (a: Account): Account =>
-      a.id === accountId ? { ...a, seed: appearance.seed, image: appearance.image } : a
+    const apply = (a: Account): Account => (a.id === accountId ? { ...a, ...patch(a) } : a)
     this.accounts = this.accounts.map(apply)
     this.connections = this.connections.map((c) =>
       c.id === account.connectionId ? { ...c, accounts: c.accounts.map(apply) } : c,
@@ -604,23 +606,35 @@ export class MailService {
     this.emit({ type: 'accounts', accounts: this.accounts })
     return this.accounts
   }
-  updateAccountDetails = async (accountId: string, details: AccountDetails): Promise<Account[]> => {
+  updateAccount = async (accountId: string, appearance: AccountAppearance): Promise<Account[]> => {
+    if (appearance.image) {
+      const [, type, data] = appearance.image.match(/^data:([^;]+);base64,(.*)$/)!
+      if (rasterType(Buffer.from(data, 'base64')) !== type)
+        throw new Error('This picture could not be read. Choose a PNG, JPEG or WebP image.')
+    }
+    return this.editAccount(accountId, () => ({ seed: appearance.seed, image: appearance.image }))
+  }
+  updateAccountDetails = async (accountId: string, details: AccountDetails): Promise<Account[]> =>
+    this.editAccount(accountId, (a) => ({
+      name: details.name.trim() || a.name,
+      senderName: details.senderName.trim() || undefined,
+    }))
+  setAliases = async (accountId: string, input: AliasInput[]): Promise<Account[]> => {
     const account = this.account(accountId)
-    const apply = (a: Account): Account =>
-      a.id === accountId
-        ? {
-            ...a,
-            name: details.name.trim() || a.name,
-            senderName: details.senderName.trim() || undefined,
-          }
-        : a
-    this.accounts = this.accounts.map(apply)
-    this.connections = this.connections.map((c) =>
-      c.id === account.connectionId ? { ...c, accounts: c.accounts.map(apply) } : c,
-    )
-    await this.saveConnections()
-    this.emit({ type: 'accounts', accounts: this.accounts })
-    return this.accounts
+    if (account.protocol !== 'imap')
+      throw new Error('This server manages its own sending addresses.')
+    const taken = new Set([account.email.toLowerCase()])
+    const aliases = input.map((alias): Alias => {
+      const email = alias.email.trim()
+      if (taken.has(email.toLowerCase()))
+        throw new Error(email + ' is already one of this account’s addresses.')
+      taken.add(email.toLowerCase())
+      // Only a known ID is kept, so drafts and signatures stay with the alias they belong to.
+      const id = account.aliases?.some((a) => a.id === alias.id) ? alias.id! : randomUUID()
+      const name = alias.name?.trim()
+      return { id, email, ...(name ? { name } : {}) }
+    })
+    return this.editAccount(accountId, () => ({ aliases: aliases.length ? aliases : undefined }))
   }
   disconnect = async (id: string): Promise<void> => {
     const accountIds = new Set(this.accounts.filter((a) => a.connectionId === id).map((a) => a.id))
@@ -1097,9 +1111,10 @@ export class MailService {
       mime: journal.mime ? await readFile(this.mimePath(journal.draftId)) : undefined,
     }
   }
-  /** A unique Message-ID per attempt, on the sender's own domain. */
-  private messageIdFor(account: Account) {
-    const domain = account.email
+  /** A unique Message-ID per attempt, on the domain of the address the message is from. */
+  private messageIdFor(account: Account, identityId: string) {
+    const email = account.aliases?.find((a) => a.id === identityId)?.email || account.email
+    const domain = email
       .split('@')[1]
       ?.toLowerCase()
       .replace(/[^a-z0-9.-]/g, '')
@@ -1149,7 +1164,7 @@ export class MailService {
       subject: draft.subject,
       messageId:
         provider.capabilities.sentCopy === 'client'
-          ? this.messageIdFor(account)
+          ? this.messageIdFor(account, draft.identityId)
           : draft.id + '@inlark.local',
       state: 'preparing',
       at: new Date().toISOString(),

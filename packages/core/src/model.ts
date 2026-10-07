@@ -36,6 +36,11 @@ export interface Account {
   email: string
   /** The name recipients see in the From header; falls back to the server identity's name. */
   senderName?: string
+  /**
+   * Other addresses this account may send from, such as aliases set up with the provider. Only
+   * IMAP accounts keep them here; JMAP servers list their own identities.
+   */
+  aliases?: Alias[]
   color: string
   seed?: string
   image?: string
@@ -52,6 +57,16 @@ export interface Account {
   /** Present while the local index is still catching up with the server. */
   indexing?: IndexingProgress
 }
+/** An address the provider delivers to this account and lets it send from. */
+export interface Alias {
+  /** Identifies the alias as a sending identity, so drafts and signatures follow it. */
+  id: string
+  email: string
+  /** The name recipients see; falls back to the account's sender name. */
+  name?: string
+}
+/** An alias to save; one without an ID is new. */
+export type AliasInput = Omit<Alias, 'id'> & { id?: string }
 export interface AccountLimits {
   move?: string
   destroy?: string
@@ -289,7 +304,7 @@ export interface JmapConnectionConfig {
 }
 export interface ImapConnectionConfig {
   protocol: 'imap'
-  /** The single address this account sends from. */
+  /** The account's own address. Aliases are kept on the account. */
   email: string
   incoming: ServerSettings
   outgoing: ServerSettings
@@ -526,6 +541,8 @@ export interface DesktopMailAPI {
   reconnect(connectionId: string): Promise<void>
   updateAccount(accountId: string, appearance: AccountAppearance): Promise<Account[]>
   updateAccountDetails(accountId: string, details: AccountDetails): Promise<Account[]>
+  /** Replaces an IMAP account's aliases. The provider must already deliver and accept them. */
+  setAliases(accountId: string, aliases: AliasInput[]): Promise<Account[]>
   mailboxes(accountId: string): Promise<Mailbox[]>
   identities(accountId: string): Promise<Identity[]>
   query(query: MailQuery, cursor?: Record<string, number>): Promise<QueryPage>

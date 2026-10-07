@@ -14,6 +14,7 @@ const methods = [
   'reconnect',
   'updateAccount',
   'updateAccountDetails',
+  'setAliases',
   'mailboxes',
   'identities',
   'query',
