@@ -1,3 +1,4 @@
+import { clearDecryptedCache } from './cache'
 import { cn } from '@inlark/ui'
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
@@ -42,6 +43,9 @@ import {
   PanelLeftClose,
   UserRound,
   Info,
+  Lock,
+  LockOpen,
+  LockKeyhole,
 } from '@inlark/ui/icons'
 import { Button, Checkbox, Dropdown, MenuItem, IconButton, EmptyState, Spinner } from '@inlark/ui'
 import {
@@ -97,6 +101,8 @@ import { selectConversation } from './selection'
 import { ShortcutHint, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
 import { emptyListState } from './empty-states'
 import { AccountMark } from './AccountMark'
+import { lockVault, useEncryption } from './encryption-ui'
+import { useUnlock } from './encryption-actions'
 import { HintIconButton } from './HintIconButton'
 import { targetAccounts, targetLimit } from './account-limits'
 import { SubmissionList } from './SendingStatus'
@@ -143,6 +149,8 @@ export function App() {
   const [density, setDensity] = useState<'compact' | 'comfortable'>(() =>
     localStorage.getItem('mail-density') === 'comfortable' ? 'comfortable' : 'compact',
   )
+  const encryption = useEncryption()
+  const [unlock, unlockDialog] = useUnlock()
   const [settingsOpen, setSettingsOpen] = useState(false),
     [settingsTab, setSettingsTab] = useState('general')
   const [composer, setComposer] = useState<Draft>(),
@@ -268,11 +276,16 @@ export function App() {
     queryFn: async () => {
       const values = await Promise.all([api.drafts(), localDrafts()])
       const merged = new Map<string, Draft>()
+      for (const draft of values[0])
+        if (draft.encryption === 'encrypt') await localDeleteDraft(draft.id)
       for (const draft of values.flat()) {
         const old = merged.get(draft.id)
         if (
           !old ||
-          (old.status !== 'sent' && old.status !== 'uncertain' && old.updatedAt < draft.updatedAt)
+          (old.encryption !== 'encrypt' &&
+            old.status !== 'sent' &&
+            old.status !== 'uncertain' &&
+            old.updatedAt < draft.updatedAt)
         )
           merged.set(draft.id, draft)
       }
@@ -580,6 +593,9 @@ export function App() {
         attachments: [],
         updatedAt: new Date().toISOString(),
         status: 'local',
+        ...(message?.security?.encrypted
+          ? { encryption: 'encrypt' as const, encryptionRequired: true }
+          : {}),
         ...(message && kind !== 'forward'
           ? {
               inReplyTo: message.messageId,
@@ -592,9 +608,9 @@ export function App() {
         text,
       }
       if (kind === 'forward' && message?.attachments?.length)
-        draft.attachments = (await api.stageRemoteAttachments(id, message.attachments)).map(
-          (a) => ({ ...a, cid: undefined }),
-        )
+        draft.attachments = (
+          await api.stageRemoteAttachments(id, message.attachments, draft.encryption === 'encrypt')
+        ).map((a) => ({ ...a, cid: undefined }))
       setComposer(draft)
     } catch (e) {
       fail(e)
@@ -802,6 +818,12 @@ export function App() {
   }, [route.thread, route.threadAccount, thread.data, readerAccount?.status])
   useEffect(() => {
     const unsubscribe = api.onEvent((event) => {
+      if (event.type === 'encryption') {
+        if (event.locked) setComposer(undefined)
+        void clearDecryptedCache().then(() => refresh())
+        void queryClient.invalidateQueries({ queryKey: ['drafts'] })
+        void queryClient.invalidateQueries({ queryKey: ['encryption'] })
+      }
       if (event.type === 'changed') void refresh()
       if (event.type === 'accounts') {
         queryClient.setQueryData<Bootstrap>(
@@ -1375,6 +1397,40 @@ export function App() {
       run: () => openSettings('signatures'),
     },
     {
+      id: 'encryption',
+      group: 'Preferences',
+      label: 'Encryption settings',
+      icon: LockKeyhole,
+      keywords: 'openpgp pgp gpg keys security privacy backup',
+      run: () => openSettings('encryption'),
+    },
+    ...(encryption.data?.vault === 'unlocked'
+      ? [
+          {
+            id: 'lock-keys',
+            group: 'Preferences',
+            label: 'Lock encryption keys',
+            icon: Lock,
+            keywords: 'vault openpgp security',
+            run: () =>
+              void lockVault()
+                .then(() => notify('Encryption keys locked.'))
+                .catch((e) => notify(friendlyError(e), 'error')),
+          },
+        ]
+      : encryption.data?.vault === 'locked'
+        ? [
+            {
+              id: 'unlock-keys',
+              group: 'Preferences',
+              label: 'Unlock encryption keys',
+              icon: LockOpen,
+              keywords: 'vault openpgp security',
+              run: () => void unlock(),
+            },
+          ]
+        : []),
+    {
       id: 'shortcuts',
       group: 'Help',
       label: 'Keyboard shortcuts',
@@ -1552,6 +1608,8 @@ export function App() {
               onMailto={onMailto}
               unsubscribe={unsubscribeState}
               onUnsubscribe={() => void unsubscribe()}
+              onUnlock={() => void unlock()}
+              onOpenEncryption={() => openSettings('encryption')}
             />
           ) : (
             <EmptyState
@@ -2366,6 +2424,7 @@ export function App() {
             settings={settings}
             onClose={() => setComposer(undefined)}
             onOpenAccounts={() => openSettings('accounts')}
+            onOpenEncryption={() => openSettings('encryption')}
             notify={notify}
             onSaved={() => void queryClient.invalidateQueries({ queryKey: ['drafts'] })}
           />
@@ -2393,6 +2452,7 @@ export function App() {
         commands={commands}
       />
       <ShortcutDialog open={help} onClose={() => setHelp(false)} />
+      {unlockDialog}
       <FilterDialog
         key={filterOpen ? 'filter-open' : 'filter-closed'}
         open={filterOpen}

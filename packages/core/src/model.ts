@@ -108,6 +108,14 @@ export interface Attachment {
   cid?: string
   disposition?: string
 }
+export interface MailSecurity {
+  encrypted: boolean
+  state: 'decrypted' | 'locked' | 'missingKey' | 'integrityFailure' | 'signed'
+  signature: 'valid' | 'invalid' | 'unknown' | 'unsigned'
+  fingerprint?: string
+  confirmed: boolean
+  detail?: string
+}
 export interface Message {
   id: string
   accountId: string
@@ -132,6 +140,10 @@ export interface Message {
   inReplyTo?: string[]
   references?: string[]
   unsubscribe?: { url: string; oneClick: boolean }
+  security?: MailSecurity
+  /** Revision of ciphertext, never a decrypted-body fingerprint. */
+  protectedRevision?: string
+  encryptionIntent?: boolean
 }
 export interface Conversation {
   id: string
@@ -202,6 +214,10 @@ export interface Draft {
   replyThreadId?: string
   serverId?: string
   serverFingerprint?: string
+  encryption?: 'none' | 'encrypt' | 'sign'
+  encryptionRequired?: boolean
+  downgradeConfirmed?: boolean
+  earlierPlaintext?: boolean
   status: 'local' | 'saving' | 'synced' | 'error' | 'sending' | 'uncertain' | 'sent'
   error?: string
   /** What kind of problem `error` describes, so the composer can offer the right recovery. */
@@ -465,9 +481,25 @@ export interface MailProvider {
   ): Promise<void>
   upload(account: Account, data: Uint8Array, type: string): Promise<string>
   download(account: Account, attachment: Attachment): Promise<Uint8Array>
-  createDraft(account: Account, draft: Draft, messageId?: string): Promise<string>
+  rawMessage?(account: Account, messageId: string, maxBytes: number): Promise<Uint8Array>
+  /** Bounded recent header-only samples for Autocrypt, including messages without a key header. */
+  encryptionHints?(
+    account: Account,
+    email: string,
+  ): Promise<{ message: Message; headers: Uint8Array }[]>
+  createDraft(
+    account: Account,
+    draft: Draft,
+    messageId?: string,
+    mime?: Uint8Array,
+  ): Promise<string>
   /** Builds or stores the message to send. Must not transmit anything to recipients. */
-  prepareSubmission(account: Account, draft: Draft, messageId: string): Promise<OutgoingMessage>
+  prepareSubmission(
+    account: Account,
+    draft: Draft,
+    messageId: string,
+    mime?: Uint8Array,
+  ): Promise<OutgoingMessage>
   /**
    * Sends a prepared message once. Throws `submissionRejected` when nothing was accepted,
    * `submissionUncertain` when the outcome is unknown, and other codes when sending never began.
@@ -487,6 +519,7 @@ export interface MailProvider {
   dispose(): void
 }
 export type AppEvent =
+  | { type: 'encryption'; locked: boolean }
   | { type: 'unread'; count: number }
   | { type: 'changed'; accountId?: string }
   | { type: 'accounts'; accounts: Account[] }
@@ -526,7 +559,88 @@ export interface Bootstrap {
   demo: boolean
   version: string
 }
+export interface EncryptionKeySummary {
+  fingerprint: string
+  email: string
+  sources: ('own' | 'import' | 'wkd' | 'autocrypt' | 'gossip')[]
+  confirmed: boolean
+  accepted: boolean
+  usable: boolean
+  problem?: string
+  publicKey: string
+  retired?: boolean
+  backup?: 'needed' | 'postponed' | 'done'
+}
+export interface EncryptionIdentity {
+  accountId: string
+  identityId: string
+  email: string
+  fingerprint: string
+  enabled: boolean
+  prefer: boolean
+}
+export interface EncryptionStatus {
+  vault: 'absent' | 'locked' | 'unlocked'
+  protection?: 'os' | 'password'
+  identities: EncryptionIdentity[]
+  keys: EncryptionKeySummary[]
+}
+export interface RecipientReadiness {
+  email: string
+  status: 'ready' | 'missing' | 'expired' | 'revoked' | 'unusable' | 'changed' | 'conflict'
+  fingerprint?: string
+  confirmed: boolean
+  prefers: boolean
+}
+export interface EncryptionReadiness {
+  senderReady: boolean
+  recipients: RecipientReadiness[]
+  recommend: boolean
+}
 export interface DesktopMailAPI {
+  encryptionStatus(): Promise<EncryptionStatus>
+  setupEncryption(input: {
+    accountId: string
+    identityId: string
+    action: 'create' | 'import' | 'replace' | 'historical'
+    password?: string
+    keyPassword?: string
+    importReplacement?: boolean
+  }): Promise<EncryptionStatus>
+  setEncryptionPreference(
+    accountId: string,
+    identityId: string,
+    enabled: boolean,
+    prefer: boolean,
+  ): Promise<EncryptionStatus>
+  exportEncryptionKey(
+    fingerprint: string,
+    kind: 'public' | 'backup',
+    password?: string,
+  ): Promise<void>
+  revokeEncryptionKey(fingerprint: string): Promise<EncryptionStatus>
+  postponeEncryptionBackup(fingerprint: string): Promise<EncryptionStatus>
+  discoverEncryptionKeys(email: string, refresh?: boolean): Promise<EncryptionKeySummary[]>
+  acceptEncryptionKey(
+    email: string,
+    fingerprint: string,
+    confirmed: boolean,
+  ): Promise<EncryptionStatus>
+  encryptionReadiness(
+    accountId: string,
+    identityId: string,
+    recipients: string[],
+  ): Promise<EncryptionReadiness>
+  unlockEncryption(password?: string): Promise<EncryptionStatus>
+  lockEncryption(): Promise<void>
+  transferEncryption(input: {
+    accountId: string
+    identityId: string
+    action: 'export' | 'import'
+    code?: string
+    password?: string
+  }): Promise<{ code?: string }>
+
   bootstrap(): Promise<Bootstrap>
   updateStatus(): Promise<UpdateStatus>
   ready(): Promise<void>
@@ -559,7 +673,11 @@ export interface DesktopMailAPI {
   }): Promise<void>
   drafts(): Promise<Draft[]>
   resumeDraft(accountId: string, messageId: string): Promise<Draft>
-  stageRemoteAttachments(accountId: string, attachments: Attachment[]): Promise<StagedAttachment[]>
+  stageRemoteAttachments(
+    accountId: string,
+    attachments: Attachment[],
+    protectedDraft?: boolean,
+  ): Promise<StagedAttachment[]>
   saveDraft(draft: Draft): Promise<Draft>
   syncDraft(draft: Draft): Promise<Draft>
   deleteDraft(id: string): Promise<void>
@@ -575,10 +693,10 @@ export interface DesktopMailAPI {
   /** Starts a new draft from an unconfirmed send; the unconfirmed record is kept. */
   replaceUncertain(draftId: string): Promise<Draft>
   dismissSubmission(draftId: string): Promise<void>
-  stageAttachments(): Promise<StagedAttachment[]>
+  stageAttachments(protectedDraft?: boolean): Promise<StagedAttachment[]>
   attachment(accountId: string, attachment: Attachment, open: boolean): Promise<void>
   inlineImage(accountId: string, attachment: Attachment): Promise<string>
-  remoteImage(url: string): Promise<string | null>
+  remoteImage(url: string, userInitiated?: boolean): Promise<string | null>
   senderAvatar(email: string): Promise<string | null>
   unsubscribe(
     accountId: string,

@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 import { QueryClient, dehydrate, hydrate } from '@tanstack/react-query'
 import type { Draft } from '@inlark/core'
-import { isDemo } from './api'
+import { isDemo, api } from './api'
 
 const database = openDB(
   'inlark-' +
@@ -42,7 +42,11 @@ export function resumePersistence() {
 export async function restoreCache() {
   try {
     const value = await (await database).get('cache', 'queries-v1')
-    if (value && Date.now() - value.at < 7 * 86400_000) hydrate(queryClient, value.state)
+    if (value && Date.now() - value.at < 7 * 86400_000) {
+      for (const query of value.state.queries || [])
+        query.state.data = redactEncrypted(query.state.data)
+      hydrate(queryClient, value.state)
+    }
   } catch {
     /* A cache failure must not prevent the mail client starting. */
   }
@@ -63,6 +67,7 @@ export async function restoreCache() {
           ['mail', 'thread', 'mailboxes', 'identities'].includes(String(q.queryKey[0])) &&
           q.state.status === 'success',
       })
+      for (const query of state.queries) query.state.data = redactEncrypted(query.state.data)
       // Keep recent windows, not an ever-growing mailbox snapshot.
       state.queries.sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)
       state.queries = state.queries.slice(0, 80)
@@ -85,8 +90,32 @@ export async function restoreCache() {
     }, 500)
   })
 }
+export function redactEncrypted(value: unknown): any {
+  if (Array.isArray(value)) return value.map(redactEncrypted)
+  if (!value || typeof value !== 'object') return value
+  const record = value as Record<string, any>
+  if (record.security?.encrypted)
+    return {
+      ...record,
+      html: undefined,
+      text: undefined,
+      preview: '',
+      attachments: [],
+      security: { ...record.security, state: 'locked' },
+    }
+  return Object.fromEntries(
+    Object.entries(record).map(([key, data]) => [key, redactEncrypted(data)]),
+  )
+}
 export async function localSaveDraft(draft: Draft) {
-  await (await database).put('drafts', draft)
+  const db = await database
+  if (draft.encryption === 'encrypt') {
+    // Main-process durable protection must succeed before removing an earlier plaintext save.
+    await api.saveDraft(draft)
+    await db.delete('drafts', draft.id)
+    return
+  }
+  await db.put('drafts', draft)
 }
 export async function localDrafts(): Promise<Draft[]> {
   return (await database).getAll('drafts')
@@ -100,4 +129,17 @@ export async function purgeAccountCache(ids: string[]) {
   await db.clear('cache')
   for (const draft of await db.getAll('drafts'))
     if (ids.includes(draft.accountId)) await db.delete('drafts', draft.id)
+}
+
+export async function clearDecryptedCache() {
+  if (timer) clearTimeout(timer)
+  await queryClient.cancelQueries({
+    predicate: (q) =>
+      ['thread', 'mail', 'drafts', 'recipient-encryption'].includes(String(q.queryKey[0])),
+  })
+  queryClient.removeQueries({
+    predicate: (q) =>
+      ['thread', 'mail', 'drafts', 'recipient-encryption'].includes(String(q.queryKey[0])),
+  })
+  await (await database).clear('cache')
 }

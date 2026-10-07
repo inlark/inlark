@@ -38,7 +38,9 @@
     "idb": "^8.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@inlark/mime": "workspace:*",
+    "@inlark/crypto": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

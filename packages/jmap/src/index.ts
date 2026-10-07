@@ -85,6 +85,7 @@ const summaryProperties = [
   'messageId',
   'inReplyTo',
   'references',
+  'bodyStructure',
 ]
 function batches<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
@@ -181,6 +182,16 @@ function asMessage(account: Account, raw: Json, bodies: boolean): Message {
       raw['header:List-Unsubscribe:asText'],
       raw['header:List-Unsubscribe-Post:asText'],
     )
+  }
+  if (
+    raw.bodyStructure?.type?.toLowerCase() === 'multipart/encrypted' ||
+    /-----BEGIN PGP MESSAGE-----/.test(result.preview)
+  ) {
+    result.preview = ''
+    result.html = ''
+    result.text = ''
+    result.attachments = []
+    result.security = { encrypted: true, state: 'locked', signature: 'unknown', confirmed: false }
   }
   return result
 }
@@ -633,7 +644,11 @@ export class JmapProvider implements MailProvider {
       throw new JmapError('upload', 'The upload could not be verified.')
     return result.blobId
   }
-  async download(account: Account, attachment: Attachment): Promise<Uint8Array> {
+  async download(
+    account: Account,
+    attachment: Attachment,
+    maxBytes = 100_000_000,
+  ): Promise<Uint8Array> {
     if (!this.session) throw new JmapError('session', 'Reconnect the account.')
     let url = this.session.downloadUrl
     for (const [key, value] of Object.entries({
@@ -652,7 +667,7 @@ export class JmapProvider implements MailProvider {
       const part = await reader.read()
       if (part.done) break
       size += part.value.byteLength
-      if (size > 100_000_000) {
+      if (size > maxBytes) {
         await reader.cancel()
         throw new JmapError(
           'tooLarge',
@@ -669,13 +684,113 @@ export class JmapProvider implements MailProvider {
     }
     return bytes
   }
-  async createDraft(account: Account, draft: Draft, messageId?: string): Promise<string> {
+  async rawMessage(account: Account, messageId: string, maxBytes: number): Promise<Uint8Array> {
+    const [result] = await this.call([
+      [
+        'Email/get',
+        { accountId: account.remoteId, ids: [messageId], properties: ['id', 'blobId', 'size'] },
+        'raw',
+      ],
+    ])
+    const message = result.list?.find((m: Json) => m.id === messageId)
+    const limit = Math.min(maxBytes, 64 * 1024 * 1024)
+    if (!message?.blobId || message.size > limit)
+      throw new JmapError(
+        'rawMessage',
+        'The complete message is unavailable or too large to open securely.',
+      )
+    return this.download(
+      account,
+      { blobId: message.blobId, name: 'message.eml', type: 'message/rfc822', size: message.size },
+      limit,
+    )
+  }
+  async encryptionHints(account: Account, email: string) {
+    const mailboxes = await this.mailboxes(account)
+    const [, result] = await this.call([
+      [
+        'Email/query',
+        {
+          accountId: account.remoteId,
+          filter: jmapFilter({ view: 'all', from: email }, mailboxes),
+          sort: [{ property: 'receivedAt', isAscending: false }],
+          limit: Math.min(40, this.capabilities.maxObjectsInGet),
+        },
+        'hints',
+      ],
+      [
+        'Email/get',
+        {
+          accountId: account.remoteId,
+          '#ids': { resultOf: 'hints', name: 'Email/query', path: '/ids' },
+          properties: [
+            'id',
+            'threadId',
+            'from',
+            'to',
+            'cc',
+            'receivedAt',
+            'sentAt',
+            'keywords',
+            'mailboxIds',
+            'header:Autocrypt:all',
+          ],
+        },
+        'headers',
+      ],
+    ])
+    return (result.list || [])
+      .filter(
+        (raw: Json) =>
+          raw.from?.length === 1 && raw.from[0].email.toLowerCase() === email.toLowerCase(),
+      )
+      .map((raw: Json) => {
+        const values: string[] =
+          raw['header:Autocrypt:all'] || raw['header:Autocrypt:asRaw:all'] || []
+        const headers = values.length
+          ? values.map((v) => 'Autocrypt: ' + v).join('\r\n')
+          : 'Content-Type: text/plain'
+        return {
+          message: asMessage(account, raw, false),
+          headers: new TextEncoder().encode(headers.trimEnd() + '\r\n\r\n'),
+        }
+      })
+      .filter((hint: { headers: Uint8Array }) => hint.headers.byteLength <= 20 * 1024)
+  }
+  async createDraft(
+    account: Account,
+    draft: Draft,
+    messageId?: string,
+    precomposed?: Uint8Array,
+  ): Promise<string> {
     const boxes = await this.mailboxes(account)
     const drafts = boxes.find((b) => b.role === 'drafts')
     if (!drafts?.rights.mayAddItems)
       throw new JmapError('drafts', 'A writable Drafts folder is required.')
     const identity = (await this.identities(account)).find((i) => i.id === draft.identityId)
     if (!identity) throw new JmapError('identity', 'Choose a valid sending identity.')
+    if (precomposed) {
+      const blobId = await this.upload(account, precomposed, 'message/rfc822')
+      const [result] = await this.call([
+        [
+          'Email/import',
+          {
+            accountId: account.remoteId,
+            emails: {
+              protected: {
+                blobId,
+                mailboxIds: { [drafts.id]: true },
+                keywords: { $draft: true, $seen: true },
+              },
+            },
+          },
+          'import',
+        ],
+      ])
+      if (!result.created?.protected?.id)
+        throw new JmapError('draft', 'The server could not import the protected draft.')
+      return result.created.protected.id
+    }
     const [result] = await this.call([
       [
         'Email/set',
@@ -722,8 +837,9 @@ export class JmapProvider implements MailProvider {
     account: Account,
     draft: Draft,
     messageId: string,
+    precomposed?: Uint8Array,
   ): Promise<OutgoingMessage> {
-    const emailId = await this.createDraft(account, draft, messageId)
+    const emailId = await this.createDraft(account, draft, messageId, precomposed)
     const identity = (await this.identities(account)).find((i) => i.id === draft.identityId)
     return {
       messageId,
@@ -760,7 +876,16 @@ export class JmapProvider implements MailProvider {
             'EmailSubmission/set',
             {
               accountId: account.remoteId,
-              create: { send: { emailId: message.emailId, identityId } },
+              create: {
+                send: {
+                  emailId: message.emailId,
+                  identityId,
+                  envelope: {
+                    mailFrom: { email: message.envelope.from },
+                    rcptTo: message.envelope.to.map((email) => ({ email })),
+                  },
+                },
+              },
               onSuccessUpdateEmail: { '#send': patch },
             },
             's',

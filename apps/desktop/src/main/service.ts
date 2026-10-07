@@ -1,4 +1,6 @@
-import { randomUUID, X509Certificate } from 'node:crypto'
+import { EncryptionService, type CryptoTransport } from './encryption'
+import { securityKind, maxMessageBytes } from '@inlark/crypto'
+import { randomUUID, X509Certificate, createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile, copyFile, rm, stat, chmod, open } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
 import { app, dialog, shell, Notification } from 'electron'
@@ -147,6 +149,7 @@ export type ProviderFactory = (input: {
 export interface ServiceOptions {
   providers?: ProviderFactory
   discover?: (email: string) => Promise<DiscoveryResult>
+  crypto?: () => CryptoTransport
 }
 /** Fingerprints shown to the user are computed here from the certificate itself, never taken on trust. */
 function verifiedCertificates(config: ConnectionConfig): ConnectionConfig {
@@ -201,17 +204,29 @@ export class MailService {
   private timer?: ReturnType<typeof setInterval>
   private logs: { at: string; event: string; state?: string }[] = []
   private senderAvatars = new SenderAvatarResolver()
+  readonly encryption: EncryptionService
+  private protectedLoaded = new Set<string>()
+  private protectionTransition = false
+  private draftWrites: Promise<unknown> = Promise.resolve()
   constructor(
     private store: JsonStore,
     private emit: (event: AppEvent) => void,
     private options: ServiceOptions = {},
-  ) {}
+  ) {
+    this.encryption = new EncryptionService(store, options.crypto, (accountId, email) =>
+      this.guard(
+        accountId,
+        (provider, account) => provider.encryptionHints?.(account, email) || Promise.resolve([]),
+      ),
+    )
+  }
   private log(event: string, state?: string) {
     this.logs.push({ at: new Date().toISOString(), event, state })
     this.logs = this.logs.slice(-200)
   }
   async init() {
     await this.store.init()
+    await this.encryption.init()
     this.settings = await this.store.read('settings', defaultSettings)
     this.connections = await this.store.read<Connection[]>('connections', [], {
       version: CONNECTIONS_VERSION,
@@ -263,6 +278,118 @@ export class MailService {
     void Promise.allSettled(this.connections.map((c) => this.reconnect(c.id)))
     this.timer = setInterval(() => void this.refresh(), 60_000)
   }
+  encryptionStatus = () => this.encryption.status()
+  private async sendingIdentity(accountId: string, identityId: string) {
+    const identity = (await this.identities(accountId)).find((i) => i.id === identityId)
+    if (!identity) throw new Error('Choose a valid sending identity.')
+    return identity
+  }
+  setupEncryption = async (input: {
+    accountId: string
+    identityId: string
+    action: 'create' | 'import' | 'replace' | 'historical'
+    importReplacement?: boolean
+    password?: string
+    keyPassword?: string
+  }) =>
+    this.encryption.setup(
+      await this.sendingIdentity(input.accountId, input.identityId),
+      input.action,
+      input.password,
+      input.keyPassword,
+      input.importReplacement,
+    )
+  setEncryptionPreference = (
+    accountId: string,
+    identityId: string,
+    enabled: boolean,
+    prefer: boolean,
+  ) => this.encryption.preference(accountId, identityId, enabled, prefer)
+  exportEncryptionKey = (fingerprint: string, kind: 'public' | 'backup', password?: string) =>
+    this.encryption.exportKey(fingerprint, kind, password)
+  revokeEncryptionKey = (fingerprint: string) => this.encryption.revoke(fingerprint)
+  postponeEncryptionBackup = (fingerprint: string) => this.encryption.postpone(fingerprint)
+  discoverEncryptionKeys = (email: string, refresh?: boolean) =>
+    this.encryption.discover(email, refresh)
+  acceptEncryptionKey = (email: string, fingerprint: string, confirmed: boolean) =>
+    this.encryption.accept(email, fingerprint, confirmed)
+  encryptionReadiness = (accountId: string, identityId: string, recipients: string[]) =>
+    this.encryption.readiness(accountId, identityId, recipients)
+  unlockEncryption = async (password?: string) => {
+    const status = await this.encryption.unlock(password)
+    for (const id of this.encryption.vault.ids('attachment-meta:')) {
+      const attachment = this.encryption.vault.json<StagedAttachment>(id)!
+      if (this.staging.get(attachment.id)?.blobId?.startsWith('vault:'))
+        this.staging.set(attachment.id, attachment)
+    }
+    for (const id of this.encryption.vault.ids('draft:')) {
+      const draft = this.encryption.vault.json<Draft>(id)!
+      // Submission reconciliation is authoritative after a crash.
+      const stub = this.localDrafts.get(draft.id)
+      const journal = this.journals.get(draft.id)
+      if (
+        stub &&
+        stub.encryption !== 'encrypt' &&
+        (stub.status === 'sent' || stub.updatedAt >= draft.updatedAt)
+      )
+        continue
+      if (
+        stub?.status === 'sent' &&
+        (stub.encryption !== 'encrypt' || journal?.state === 'sent' || journal?.dismissed)
+      )
+        continue
+      this.localDrafts.set(draft.id, { ...draft, ...(stub ? { status: stub.status } : {}) })
+      this.protectedLoaded.add(draft.id)
+    }
+    this.emit({ type: 'encryption', locked: false })
+    return status
+  }
+  lockEncryption = async () => {
+    if (this.protectionTransition) throw new Error('The vault is already locking.')
+    this.protectionTransition = true
+    try {
+      await this.draftWrites
+      if (this.busyDrafts.size)
+        throw new Error('Wait for drafts and sends to finish before locking.')
+      await this.persistDrafts()
+      await this.encryption.lock()
+      this.localDrafts = new Map(
+        (await this.store.read<Draft[]>('drafts', [])).map((d) => [d.id, d]),
+      )
+      this.staging = new Map(
+        (await this.store.read<StagedAttachment[]>('staging', [])).map((a) => [a.id, a]),
+      )
+      this.protectedLoaded.clear()
+      this.emit({ type: 'encryption', locked: true })
+    } finally {
+      this.protectionTransition = false
+    }
+  }
+  transferEncryption = async (input: {
+    accountId: string
+    identityId: string
+    action: 'export' | 'import'
+    code?: string
+    password?: string
+  }) =>
+    this.encryption.transfer(
+      await this.sendingIdentity(input.accountId, input.identityId),
+      input.action,
+      input.code,
+      input.password,
+    )
+  private async protectedMime(draft: Draft, messageId: string, serverDraft = false) {
+    const { provider } = this.provider(draft.accountId)
+    if (!provider.rawMessage) throw new Error('This provider cannot safely support encrypted mail.')
+    const identity = await this.sendingIdentity(draft.accountId, draft.identityId)
+    const attachments = await Promise.all(
+      draft.attachments.map(async (a) => ({
+        ...a,
+        content: await this.readStagedAttachment(a.id),
+      })),
+    )
+    return this.encryption.compose(draft, identity, messageId, attachments, serverDraft)
+  }
   bootstrap = async () => ({
     accounts: this.accounts,
     settings: this.settings,
@@ -276,8 +403,23 @@ export class MailService {
   private saveConnections() {
     return this.store.write('connections', this.connections, CONNECTIONS_VERSION)
   }
-  private persistDrafts() {
-    return this.store.write('drafts', [...this.localDrafts.values()])
+  private async persistDrafts() {
+    const records: [string, Uint8Array | undefined][] = []
+    const saved = [...this.localDrafts.values()].map((draft) => {
+      if (draft.encryption !== 'encrypt') return draft
+      if (this.encryption.vault.unlocked && this.protectedLoaded.has(draft.id))
+        records.push(['draft:' + draft.id, Buffer.from(JSON.stringify(draft))])
+      return {
+        ...draft,
+        html: '',
+        text: '',
+        attachments: [],
+        serverFingerprint: draft.serverFingerprint?.match(/^[a-f0-9]{64}$/)?.[0],
+        error: 'Unlock the encryption vault to resume this draft.',
+      }
+    })
+    if (records.length) await this.encryption.vault.putMany(records)
+    await this.store.write('drafts', saved)
   }
   private async persistJournal() {
     await this.store.write('submissions', [...this.journals.values()])
@@ -671,8 +813,46 @@ export class MailService {
   }
   mailboxes = (id: string) => this.guard(id, (p, a) => p.mailboxes(a))
   identities = (id: string) => this.guard(id, (p, a) => p.identities(a))
+  private async serverMessages(
+    provider: MailProvider,
+    account: Account,
+    ids: string[],
+    bodies = true,
+    protectedMessage = false,
+  ) {
+    const messages = await provider.messages(account, ids, bodies)
+    if (!provider.rawMessage) return messages
+    return Promise.all(
+      messages.map(async (message) => {
+        if (
+          !protectedMessage &&
+          !message.security?.encrypted &&
+          !/-----BEGIN PGP MESSAGE-----/.test(message.text || '')
+        )
+          return message
+        const raw = await provider.rawMessage!(account, message.id, maxMessageBytes)
+        if (securityKind(raw))
+          return {
+            ...message,
+            html: '',
+            text: '',
+            preview: '',
+            protectedRevision: createHash('sha256').update(raw).digest('hex'),
+          }
+        return message
+      }),
+    )
+  }
   conversation = (id: string, threadId: string) =>
-    this.guard(id, (p, a) => p.conversation(a, threadId))
+    this.guard(id, async (p, a) => {
+      const messages = await p.conversation(a, threadId)
+      if (!p.rawMessage) return messages
+      return Promise.all(
+        messages.map(async (message) =>
+          this.encryption.read(message, await p.rawMessage!(a, message.id, maxMessageBytes)),
+        ),
+      )
+    })
   query = async (query: MailQuery, cursor?: Record<string, number>): Promise<QueryPage> => {
     const accounts = this.accounts.filter(
       (a) => (!query.accountId || query.accountId === a.id) && (!cursor || a.id in cursor),
@@ -843,12 +1023,14 @@ export class MailService {
   stageRemoteAttachments = async (
     accountId: string,
     attachments: Attachment[],
+    protectedDraft = false,
   ): Promise<StagedAttachment[]> => {
+    if (this.protectionTransition) throw new Error('The vault is locking.')
     const directory = join(this.store.directory, 'attachments')
     await mkdir(directory, { recursive: true, mode: 0o700 })
     const staged: StagedAttachment[] = []
     for (const attachment of attachments) {
-      const bytes = await this.guard(accountId, (p, a) => p.download(a, attachment))
+      const bytes = await this.attachmentBytes(accountId, attachment)
       const item: StagedAttachment = {
         id: randomUUID(),
         name: attachment.name,
@@ -856,17 +1038,48 @@ export class MailService {
         size: bytes.length,
         cid: attachment.cid,
       }
-      await writeFile(join(directory, item.id), bytes, { mode: 0o600 })
+      if (protectedDraft) {
+        await this.protectStagedAttachment(item, bytes)
+      } else await writeFile(join(directory, item.id), bytes, { mode: 0o600 })
       this.staging.set(item.id, item)
       staged.push(item)
-      await this.store.write('staging', [...this.staging.values()])
+      await this.persistStaging()
     }
     return staged
   }
   /** Reads a staged attachment. Only IDs recorded by this service resolve to files. */
+  private async protectStagedAttachment(attachment: StagedAttachment, bytes: Uint8Array) {
+    const protectedAttachment = { ...attachment, blobId: 'vault:' + attachment.id }
+    await this.encryption.vault.putMany([
+      ['attachment:' + attachment.id, bytes],
+      ['attachment-meta:' + attachment.id, Buffer.from(JSON.stringify(protectedAttachment))],
+    ])
+    Object.assign(attachment, protectedAttachment)
+  }
+  private persistStaging() {
+    return this.store.write(
+      'staging',
+      [...this.staging.values()].map((attachment) =>
+        attachment.blobId?.startsWith('vault:')
+          ? {
+              id: attachment.id,
+              size: attachment.size,
+              name: 'Protected attachment',
+              type: 'application/octet-stream',
+              blobId: attachment.blobId,
+            }
+          : attachment,
+      ),
+    )
+  }
   readStagedAttachment = async (id: string): Promise<Uint8Array> => {
     if (!this.staging.has(id))
       throw new Error('An attachment is missing. Remove it and attach the file again.')
+    if (this.staging.get(id)?.blobId?.startsWith('vault:')) {
+      const bytes = this.encryption.vault.read('attachment:' + id)
+      if (!bytes) throw new Error('The protected attachment is missing.')
+      return bytes
+    }
     return readFile(join(this.store.directory, 'attachments', id))
   }
   resumeDraft = async (accountId: string, messageId: string): Promise<Draft> => {
@@ -874,15 +1087,26 @@ export class MailService {
       (d) => d.accountId === accountId && d.serverId === messageId,
     )
     if (existing) return existing
-    const [message] = await this.guard(accountId, (p, a) => p.messages(a, [messageId], true))
+    const [message] = await this.guard(accountId, async (p, a) => {
+      const [m] = await p.messages(a, [messageId], true)
+      return m && p.rawMessage
+        ? [await this.encryption.read(m, await p.rawMessage(a, messageId, maxMessageBytes))]
+        : [m]
+    })
     if (!message?.keywords.$draft) throw new Error('This message is no longer a draft.')
+    if (message.security && !['decrypted', 'signed'].includes(message.security.state))
+      throw new Error(message.security.detail)
     const identities = await this.identities(accountId)
     const identity =
       identities.find((i) =>
         message.from.some((f) => f.email.toLowerCase() === i.email.toLowerCase()),
       ) || identities[0]
     if (!identity) throw new Error('No sending identity is available for this account.')
-    const attachments = await this.stageRemoteAttachments(accountId, message.attachments || [])
+    const attachments = await this.stageRemoteAttachments(
+      accountId,
+      message.attachments || [],
+      !!message.security?.encrypted,
+    )
     const draft: Draft = {
       id: randomUUID(),
       accountId,
@@ -896,6 +1120,8 @@ export class MailService {
       attachments,
       updatedAt: new Date().toISOString(),
       status: 'synced',
+      encryption: message.security?.encrypted ? 'encrypt' : undefined,
+      encryptionRequired: !!message.security?.encrypted,
       serverId: message.id,
       serverFingerprint: draftFingerprint(message),
       references: message.references,
@@ -903,14 +1129,54 @@ export class MailService {
     }
     return this.saveDraft(draft)
   }
-  saveDraft = async (draft: Draft): Promise<Draft> => {
+  saveDraft = (draft: Draft): Promise<Draft> => {
+    const operation = this.draftWrites.then(() => this.saveDraftNow(draft))
+    this.draftWrites = operation.catch(() => {})
+    return operation
+  }
+  private async saveDraftNow(draft: Draft): Promise<Draft> {
+    if (this.protectionTransition) throw new Error('Wait for the vault to finish locking.')
     this.account(draft.accountId)
     const old = this.localDrafts.get(draft.id)
     if (this.busyDrafts.has(draft.id) || old?.status === 'uncertain' || old?.status === 'sent')
       return old || draft
     if (old && old.updatedAt > draft.updatedAt) return old
+    if (
+      draft.encryption !== 'encrypt' &&
+      (old?.encryption === 'encrypt' || draft.encryptionRequired) &&
+      !draft.downgradeConfirmed
+    )
+      throw new Error('Confirm sending or saving this decrypted content without encryption first.')
+    if (old?.encryption === 'encrypt' && draft.encryption !== 'encrypt')
+      this.requireProtectedDraft(old)
+    if (draft.encryption === 'encrypt') {
+      if (!this.encryption.vault.unlocked)
+        throw new Error('Unlock the encryption vault to save this protected draft.')
+      draft = {
+        ...draft,
+        earlierPlaintext:
+          draft.earlierPlaintext ||
+          (!!old && old.encryption !== 'encrypt') ||
+          (!!draft.serverId && old?.encryption !== 'encrypt'),
+      }
+      for (const attachment of draft.attachments) {
+        const staged = this.staging.get(attachment.id)
+        if (!staged) throw new Error('An attachment is missing.')
+        if (!staged.blobId?.startsWith('vault:')) {
+          const bytes = await this.readStagedAttachment(attachment.id)
+          await this.protectStagedAttachment(staged, bytes)
+          await this.persistStaging()
+          await rm(join(this.store.directory, 'attachments', attachment.id), { force: true })
+        }
+      }
+      this.protectedLoaded.add(draft.id)
+    }
     this.localDrafts.set(draft.id, draft)
     await this.persistDrafts()
+    if (old?.encryption === 'encrypt' && draft.encryption !== 'encrypt') {
+      await this.encryption.vault.put('draft:' + draft.id, undefined)
+      this.protectedLoaded.delete(draft.id)
+    }
     return draft
   }
   /** Uploads attachments for providers that reference server blobs. Others read staged files. */
@@ -924,14 +1190,16 @@ export class MailService {
         attachments.push({ ...staged, cid: attachment.cid ?? staged.cid })
         continue
       }
-      const data = await readFile(join(this.store.directory, 'attachments', attachment.id))
+      const data = await this.readStagedAttachment(attachment.id)
       const blobId = await provider.upload(account, data, staged.type)
       attachments.push({ ...staged, blobId })
     }
     return { ...draft, attachments }
   }
   syncDraft = async (input: Draft): Promise<Draft> => {
+    if (this.protectionTransition) throw new Error('The vault is locking.')
     if (this.busyDrafts.has(input.id)) return this.localDrafts.get(input.id) || input
+    input = await this.saveDraft(input)
     this.busyDrafts.add(input.id)
     let committed: Draft | undefined
     try {
@@ -940,7 +1208,13 @@ export class MailService {
       if (current && current.updatedAt > input.updatedAt) return current
       if (current && ['uncertain', 'sent'].includes(current.status)) return current
       if (input.serverId) {
-        const [remote] = await provider.messages(account, [input.serverId], true)
+        const [remote] = await this.serverMessages(
+          provider,
+          account,
+          [input.serverId],
+          true,
+          input.encryption === 'encrypt',
+        )
         if (!remote || !remote.keywords.$draft)
           throw new ProviderError(
             'conflict',
@@ -956,9 +1230,19 @@ export class MailService {
             'This draft changed in another client. Your local copy is safe; save it as a new draft to keep both versions.',
           )
       }
-      const draft = await this.uploadDraft(input)
-      const serverId = await provider.createDraft(account, draft)
-      const [remote] = await provider.messages(account, [serverId], true)
+      const protectedMime =
+        input.encryption === 'encrypt'
+          ? await this.protectedMime(input, randomUUID() + '@inlark.local', true)
+          : undefined
+      const draft = protectedMime ? input : await this.uploadDraft(input)
+      const serverId = await provider.createDraft(account, draft, undefined, protectedMime)
+      const [remote] = await this.serverMessages(
+        provider,
+        account,
+        [serverId],
+        true,
+        input.encryption === 'encrypt',
+      )
       const saved: Draft = {
         ...draft,
         serverId,
@@ -990,7 +1274,13 @@ export class MailService {
   }
   /** Removes a replaced server draft only if nobody else changed it since it was read. */
   private async removePreviousDraft(provider: MailProvider, account: Account, draft: Draft) {
-    const [remote] = await provider.messages(account, [draft.serverId!], true)
+    const [remote] = await this.serverMessages(
+      provider,
+      account,
+      [draft.serverId!],
+      true,
+      draft.encryption === 'encrypt',
+    )
     const state = provider.getStateToken(account)
     if (!remote) return
     if (
@@ -1023,6 +1313,9 @@ export class MailService {
       status: 'sent',
     })
     await this.persistDrafts()
+    if (draft.encryption === 'encrypt' && this.encryption.vault.unlocked)
+      await this.encryption.vault.put('draft:' + draft.id, undefined)
+    this.protectedLoaded.delete(draft.id)
     await this.releaseAttachments(draft)
   }
   private async releaseAttachments(draft: Draft) {
@@ -1033,24 +1326,42 @@ export class MailService {
         )
       ) {
         await rm(join(this.store.directory, 'attachments', attachment.id), { force: true })
+        if (this.staging.get(attachment.id)?.blobId?.startsWith('vault:'))
+          await this.encryption.vault.putMany([
+            ['attachment:' + attachment.id, undefined],
+            ['attachment-meta:' + attachment.id, undefined],
+          ])
         this.staging.delete(attachment.id)
       }
     }
-    if (draft.attachments.length) await this.store.write('staging', [...this.staging.values()])
+    if (draft.attachments.length) await this.persistStaging()
   }
   private async deleteDraftLocal(id: string) {
     const draft = this.localDrafts.get(id)
+    if (draft?.encryption === 'encrypt') {
+      if (!this.encryption.vault.unlocked)
+        throw new Error('Unlock the vault before deleting this draft.')
+      await this.encryption.vault.put('draft:' + id, undefined)
+      this.protectedLoaded.delete(id)
+    }
     this.localDrafts.delete(id)
     if (draft) await this.releaseAttachments(draft)
   }
   deleteDraft = async (id: string) => {
     if (this.busyDrafts.has(id)) throw new Error('Wait for this draft to finish saving.')
     const draft = this.localDrafts.get(id)
+    if (draft?.encryption === 'encrypt') this.requireProtectedDraft(draft)
     if (draft?.status === 'uncertain')
       throw new Error('Check this message’s delivery status before deleting the draft.')
     if (draft?.serverId) {
       const result = await this.guard(draft.accountId, async (p, a) => {
-        const [remote] = await p.messages(a, [draft.serverId!], true)
+        const [remote] = await this.serverMessages(
+          p,
+          a,
+          [draft.serverId!],
+          true,
+          draft.encryption === 'encrypt',
+        )
         const state = p.getStateToken(a)
         // Discarding a local copy must never remove mail already sent or changed elsewhere.
         if (
@@ -1148,6 +1459,7 @@ export class MailService {
     }
   }
   send = async (input: Draft): Promise<SendResult> => {
+    if (this.protectionTransition) throw new Error('The vault is locking.')
     const draft = sendDraftSchema.parse(input)
     if (!draft.to.length && !draft.cc.length && !draft.bcc.length)
       throw new Error('Add at least one recipient.')
@@ -1177,7 +1489,13 @@ export class MailService {
     try {
       await this.persistJournal()
       if (draft.serverId) {
-        const [remote] = await provider.messages(account, [draft.serverId], true)
+        const [remote] = await this.serverMessages(
+          provider,
+          account,
+          [draft.serverId],
+          true,
+          draft.encryption === 'encrypt',
+        )
         if (!remote || !remote.keywords.$draft)
           throw new ProviderError(
             'conflict',
@@ -1189,8 +1507,18 @@ export class MailService {
             'This draft changed in another client. Save a separate copy before sending.',
           )
       }
-      uploaded = await this.uploadDraft(draft)
-      const outgoing = await provider.prepareSubmission(account, uploaded, journal.messageId!)
+      const protectedMime =
+        (draft.encryption && draft.encryption !== 'none') ||
+        this.encryption.identity(draft.accountId, draft.identityId)?.enabled
+          ? await this.protectedMime(draft, journal.messageId!)
+          : undefined
+      uploaded = protectedMime ? draft : await this.uploadDraft(draft)
+      const outgoing = await provider.prepareSubmission(
+        account,
+        uploaded,
+        journal.messageId!,
+        protectedMime,
+      )
       journal.emailId = outgoing.emailId
       journal.envelope = outgoing.envelope
       if (outgoing.mime) {
@@ -1397,55 +1725,82 @@ export class MailService {
       ...patch,
     }
   }
+  private requireProtectedDraft(draft: Draft) {
+    if (
+      draft.encryption === 'encrypt' &&
+      (this.protectionTransition ||
+        !this.encryption.vault.unlocked ||
+        !this.protectedLoaded.has(draft.id))
+    )
+      throw new Error('Unlock the vault before recovering or changing this protected draft.')
+  }
   recoverRejected = async (id: string): Promise<Draft> => {
     const journal = this.journals.get(id)
     const draft = this.localDrafts.get(id)
     if (journal?.state !== 'partial' || journal.dismissed || !draft)
       throw new Error('There are no refused recipients to recover for this message.')
-    const refused = new Set(
-      this.rejectedAddresses(draft, journal).map((a) => a.email.toLowerCase()),
-    )
-    const only = (list: Address[]) => list.filter((a) => refused.has(a.email.toLowerCase()))
-    const recovery = this.copyDraft(draft, {
-      to: only(draft.to),
-      cc: only(draft.cc),
-      bcc: only(draft.bcc),
-    })
-    this.localDrafts.set(recovery.id, recovery)
-    journal.dismissed = true
-    await this.completeDraft(draft)
-    await this.persistJournal()
-    return recovery
+    this.requireProtectedDraft(draft)
+    if (this.busyDrafts.has(id)) throw new Error('Wait for this draft to finish saving.')
+    this.busyDrafts.add(id)
+    try {
+      const refused = new Set(
+        this.rejectedAddresses(draft, journal).map((a) => a.email.toLowerCase()),
+      )
+      const only = (list: Address[]) => list.filter((a) => refused.has(a.email.toLowerCase()))
+      const recovery = this.copyDraft(draft, {
+        to: only(draft.to),
+        cc: only(draft.cc),
+        bcc: only(draft.bcc),
+      })
+      this.localDrafts.set(recovery.id, recovery)
+      if (recovery.encryption === 'encrypt') this.protectedLoaded.add(recovery.id)
+      journal.dismissed = true
+      await this.completeDraft(draft)
+      await this.persistJournal()
+      return recovery
+    } finally {
+      this.busyDrafts.delete(id)
+    }
   }
   replaceUncertain = async (id: string): Promise<Draft> => {
     const journal = this.journals.get(id)
     const draft = this.localDrafts.get(id)
     if (journal?.state !== 'uncertain' || !draft)
       throw new Error('Only an unconfirmed message can be replaced.')
-    // The unconfirmed record stays, so its evidence remains available for later checks.
-    const replacement = this.copyDraft(draft, {})
-    this.localDrafts.set(replacement.id, replacement)
-    await this.persistDrafts()
-    return replacement
+    this.requireProtectedDraft(draft)
+    if (this.busyDrafts.has(id)) throw new Error('Wait for this draft to finish saving.')
+    this.busyDrafts.add(id)
+    try {
+      // The unconfirmed record stays, so its evidence remains available for later checks.
+      const replacement = this.copyDraft(draft, {})
+      this.localDrafts.set(replacement.id, replacement)
+      if (replacement.encryption === 'encrypt') this.protectedLoaded.add(replacement.id)
+      await this.persistDrafts()
+      return replacement
+    } finally {
+      this.busyDrafts.delete(id)
+    }
   }
   dismissSubmission = async (id: string): Promise<void> => {
     const journal = this.journals.get(id)
     if (!journal) return
+    const draft = this.localDrafts.get(id)
+    if (draft && ['partial', 'uncertain'].includes(journal.state)) this.requireProtectedDraft(draft)
     journal.dismissed = true
     if (journal.sentCopy && journal.sentCopy !== 'filed' && journal.sentCopy !== 'server')
       journal.sentCopy = 'dismissed'
-    const draft = this.localDrafts.get(id)
     if (draft && ['partial', 'uncertain'].includes(journal.state)) await this.completeDraft(draft)
     await this.removeMime(id)
     journal.mime = undefined
     await this.persistJournal()
   }
-  stageAttachments = async (): Promise<StagedAttachment[]> => {
+  stageAttachments = async (protectedDraft = false): Promise<StagedAttachment[]> => {
     const result = await dialog.showOpenDialog({
       title: 'Attach files',
       properties: ['openFile', 'multiSelections'],
     })
     if (result.canceled) return []
+    if (this.protectionTransition) throw new Error('The vault is locking.')
     const directory = join(this.store.directory, 'attachments')
     await mkdir(directory, { recursive: true, mode: 0o700 })
     const attachments: StagedAttachment[] = []
@@ -1470,13 +1825,26 @@ export class MailService {
         size,
         type: types[extname(path).toLowerCase()] || 'application/octet-stream',
       }
-      await copyFile(path, join(directory, a.id))
-      await chmod(join(directory, a.id), 0o600)
+      if (protectedDraft) {
+        await this.protectStagedAttachment(a, await readFile(path))
+      } else {
+        await copyFile(path, join(directory, a.id))
+        await chmod(join(directory, a.id), 0o600)
+      }
       this.staging.set(a.id, a)
       attachments.push(a)
     }
-    await this.store.write('staging', [...this.staging.values()])
+    await this.persistStaging()
     return attachments
+  }
+  private async attachmentBytes(accountId: string, attachment: Attachment): Promise<Uint8Array> {
+    if (attachment.blobId.startsWith('decrypted:')) {
+      const data = this.encryption.attachments.get(attachment.blobId)
+      if (!this.encryption.vault.unlocked || data?.accountId !== accountId)
+        throw new Error('Unlock and reopen this message to access its attachment.')
+      return data.content
+    }
+    return this.guard(accountId, (p, a) => p.download(a, attachment))
   }
   attachment = async (accountId: string, attachment: Attachment, open: boolean): Promise<void> => {
     const result = await dialog.showSaveDialog({
@@ -1484,7 +1852,7 @@ export class MailService {
       defaultPath: basename(attachment.name),
     })
     if (result.canceled || !result.filePath) return
-    const bytes = await this.guard(accountId, (p, a) => p.download(a, attachment))
+    const bytes = await this.attachmentBytes(accountId, attachment)
     await writeFile(result.filePath, bytes, { mode: 0o600 })
     if (open) {
       const error = await shell.openPath(result.filePath)
@@ -1494,17 +1862,24 @@ export class MailService {
   inlineImage = async (accountId: string, attachment: Attachment): Promise<string> => {
     if (!/^image\/(png|jpeg|gif|webp|avif)$/i.test(attachment.type) || attachment.size > 10_000_000)
       throw new Error('Unsupported inline image.')
-    const bytes = await this.guard(accountId, (p, a) => p.download(a, attachment))
+    const bytes = await this.attachmentBytes(accountId, attachment)
     return 'data:' + attachment.type + ';base64,' + Buffer.from(bytes).toString('base64')
   }
-  remoteImage = async (value: string): Promise<string | null> =>
-    this.settings.remoteImages ? remoteImageData(value) : null
+  remoteImage = async (value: string, userInitiated = false): Promise<string | null> =>
+    this.settings.remoteImages || (userInitiated && this.encryption.vault.unlocked)
+      ? remoteImageData(value)
+      : null
   senderAvatar = async (email: string): Promise<string | null> => {
     if (!this.settings.remoteImages) return null
     return this.senderAvatars.get(email)
   }
   unsubscribe = async (accountId: string, messageId: string) => {
-    const [message] = await this.guard(accountId, (p, a) => p.messages(a, [messageId], true))
+    const [message] = await this.guard(accountId, async (p, a) => {
+      const [m] = await p.messages(a, [messageId], true)
+      return m && p.rawMessage
+        ? [await this.encryption.read(m, await p.rawMessage(a, messageId, maxMessageBytes))]
+        : [m]
+    })
     const info = message?.unsubscribe
     if (!info) throw new Error('This message has no supported unsubscribe method.')
     if (info.url.startsWith('mailto:')) return { kind: 'mailto' as const, url: info.url }
@@ -1657,6 +2032,7 @@ export class MailService {
     await this.syncPendingDrafts()
   }
   dispose() {
+    void this.encryption.lock()
     if (this.timer) clearInterval(this.timer)
     if (this.indexingEmit) clearTimeout(this.indexingEmit)
     for (const provider of this.providers.values()) {

@@ -1,6 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DesktopMailAPI, AppEvent } from '@inlark/core'
 const methods = [
+  'encryptionStatus',
+  'setupEncryption',
+  'setEncryptionPreference',
+  'exportEncryptionKey',
+  'revokeEncryptionKey',
+  'postponeEncryptionBackup',
+  'discoverEncryptionKeys',
+  'acceptEncryptionKey',
+  'encryptionReadiness',
+  'unlockEncryption',
+  'lockEncryption',
+  'transferEncryption',
   'bootstrap',
   'updateStatus',
   'ready',

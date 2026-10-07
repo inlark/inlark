@@ -15,6 +15,10 @@ import {
   type DesktopMailAPI,
   type DiscoveryCandidate,
   type Draft,
+  type EncryptionKeySummary,
+  type EncryptionReadiness,
+  type EncryptionStatus,
+  type RecipientReadiness,
   type FolderMappingReview,
   type FolderMappings,
   type Mailbox,
@@ -553,7 +557,8 @@ const threadDrafts = (accountId: string, threadId: string) =>
     .filter((m) => m.accountId === accountId && m.threadId === threadId)
     .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
 /** A list entry for a sample message, with any drafts filed in its conversation. */
-function listed(accountId: string, m: Message) {
+function listed(accountId: string, original: Message) {
+  const m = secured(original)
   const messages = [m, ...threadDrafts(accountId, m.threadId)]
   // Display the matching message, as the providers do, even when a draft is newer.
   return {
@@ -630,6 +635,198 @@ const unfileDraft = (draft: Draft | undefined) => {
   })
   drafts.set(draft.id, draft)
 }
+/* ——— Encryption: sample keys and states only; nothing is encrypted in the browser ——— */
+const sampleFingerprint = (seed: string) => {
+  let hash = 2166136261
+  let hex = ''
+  for (let round = 0; hex.length < 40; round++)
+    for (const char of seed + round) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0
+      hex += (hash & 15).toString(16)
+    }
+  return hex.slice(0, 40)
+}
+const sampleKey = (
+  email: string,
+  seed: string,
+  patch: Partial<EncryptionKeySummary> = {},
+): EncryptionKeySummary => ({
+  email,
+  fingerprint: sampleFingerprint(seed),
+  sources: ['autocrypt'],
+  confirmed: false,
+  accepted: true,
+  usable: true,
+  publicKey: '',
+  ...patch,
+})
+const encryption: EncryptionStatus = {
+  vault: 'unlocked',
+  protection: 'os',
+  identities: [
+    {
+      accountId: demoAccounts[0].id,
+      identityId: 'identity',
+      email: demoAccounts[0].email,
+      fingerprint: sampleFingerprint('personal'),
+      enabled: true,
+      prefer: true,
+    },
+  ],
+  keys: [
+    sampleKey(demoAccounts[0].email, 'personal', {
+      sources: ['own'],
+      confirmed: true,
+      backup: 'needed',
+    }),
+    sampleKey('maya.chen@gmail.com', 'maya', { sources: ['wkd', 'autocrypt'] }),
+    sampleKey('lena.weber@fastmail.com', 'lena', { confirmed: true }),
+    sampleKey('daniel.fischer@outlook.com', 'daniel', { confirmed: true }),
+    sampleKey('daniel.fischer@outlook.com', 'daniel-new', { accepted: false }),
+  ],
+}
+/** Contacts whose sample mail says they prefer encryption. */
+const prefersEncryption = new Set(['maya.chen@gmail.com'])
+const encryptionState = (): EncryptionStatus => structuredClone(encryption)
+const emitEncryption = (locked: boolean) =>
+  listeners.forEach((fn) => fn({ type: 'encryption', locked }))
+const identityEmail = (accountId: string, identityId: string) => {
+  const account = demoAccounts.find((a) => a.id === accountId)!
+  return (
+    identityId === 'identity'
+      ? account.email
+      : account.aliases?.find((alias) => alias.id === identityId)?.email || account.email
+  ).toLowerCase()
+}
+const installKey = (accountId: string, identityId: string, source: 'own' | 'import') => {
+  const email = identityEmail(accountId, identityId)
+  const current = encryption.identities.find(
+    (i) => i.accountId === accountId && i.identityId === identityId,
+  )
+  for (const key of encryption.keys)
+    if (key.email === email) {
+      key.accepted = false
+      key.retired = true
+    }
+  const key = sampleKey(email, email + Date.now(), {
+    sources: [source],
+    confirmed: true,
+    backup: 'needed',
+  })
+  encryption.keys.push(key)
+  encryption.identities = encryption.identities.filter((i) => i !== current)
+  encryption.identities.push({
+    accountId,
+    identityId,
+    email,
+    fingerprint: key.fingerprint,
+    enabled: true,
+    prefer: current?.prefer ?? false,
+  })
+  if (encryption.vault === 'absent') {
+    encryption.vault = 'unlocked'
+    encryption.protection = 'password'
+  }
+}
+const requireUnlocked = () => {
+  if (encryption.vault !== 'unlocked') throw new Error('Unlock the encryption vault first.')
+}
+function readiness(
+  accountId: string,
+  identityId: string,
+  addresses: string[],
+): EncryptionReadiness {
+  const own = encryption.identities.find(
+    (i) => i.accountId === accountId && i.identityId === identityId,
+  )
+  const emails = [...new Set(addresses.map((a) => a.trim().toLowerCase()))]
+  if (!own?.enabled)
+    return {
+      senderReady: false,
+      recommend: false,
+      recipients: emails.map((email) => ({
+        email,
+        status: 'missing',
+        confirmed: false,
+        prefers: false,
+      })),
+    }
+  const ownKey = encryption.keys.find((k) => k.fingerprint === own.fingerprint)
+  const senderReady = !!ownKey?.usable && encryption.vault === 'unlocked'
+  const recipients = emails.map((email): RecipientReadiness => {
+    const keys = encryption.keys.filter((k) => k.email === email && !k.retired)
+    const usable = keys.filter((k) => k.usable)
+    let key = keys.find((k) => k.accepted)
+    let status: RecipientReadiness['status'] = 'missing'
+    if (key)
+      status = usable.some((k) => k !== key)
+        ? 'changed'
+        : key.usable
+          ? 'ready'
+          : (key.problem as 'revoked') || 'unusable'
+    else if (usable.length > 1) status = 'conflict'
+    else if (usable.length === 1) {
+      key = usable[0]
+      key.accepted = true
+      status = 'ready'
+    }
+    return {
+      email,
+      status,
+      fingerprint: key?.fingerprint,
+      confirmed: !!key?.confirmed,
+      prefers: email === own.email ? own.prefer : prefersEncryption.has(email),
+    }
+  })
+  return {
+    senderReady,
+    recipients,
+    recommend:
+      senderReady &&
+      own.prefer &&
+      !!recipients.length &&
+      recipients.every((r) => r.status === 'ready' && r.prefers),
+  }
+}
+/** Sample mail from Maya is encrypted and Lena's is signed, so the reader can show both. */
+function secured(m: Message): Message {
+  const sender = m.from[0]?.email
+  const key = encryption.keys.find((k) => k.email === sender && k.accepted)
+  if (sender === 'maya.chen@gmail.com') {
+    if (encryption.vault !== 'unlocked')
+      return {
+        ...m,
+        html: '',
+        text: '',
+        preview: '',
+        attachments: [],
+        security: { encrypted: true, state: 'locked', signature: 'unknown', confirmed: false },
+      }
+    return {
+      ...m,
+      preview: '',
+      security: {
+        encrypted: true,
+        state: 'decrypted',
+        signature: 'valid',
+        fingerprint: key?.fingerprint,
+        confirmed: !!key?.confirmed,
+      },
+    }
+  }
+  if (sender === 'lena.weber@fastmail.com')
+    return {
+      ...m,
+      security: {
+        encrypted: false,
+        state: 'signed',
+        signature: 'valid',
+        fingerprint: key?.fingerprint,
+        confirmed: !!key?.confirmed,
+      },
+    }
+  return m
+}
 const copyOf = (source: Draft, patch: Partial<Draft>): Draft => ({
   ...source,
   id: crypto.randomUUID(),
@@ -639,6 +836,106 @@ const copyOf = (source: Draft, patch: Partial<Draft>): Draft => ({
 })
 export const demoAPI: DesktopMailAPI = {
   updateStatus: async () => ({ phase: 'idle' }),
+  encryptionStatus: async () => encryptionState(),
+  setupEncryption: async ({ accountId, identityId, action, password }) => {
+    await pause(action === 'create' || action === 'replace' ? 1200 : 500)
+    const email = identityEmail(accountId, identityId)
+    if (encryption.vault === 'absent' && (!password || password.length < 10))
+      throw new Error(
+        'Use a vault password of at least 10 characters when secure OS storage is unavailable.',
+      )
+    if (action === 'create' && encryption.keys.some((k) => k.email === email))
+      throw new Error(
+        'An existing key was discovered for this address. Import its private key instead of generating a replacement.',
+      )
+    // The desktop app asks for a key file here; the demo imports a sample key instead.
+    if (action === 'historical')
+      encryption.keys.push(
+        sampleKey(email, email + 'older' + Date.now(), {
+          sources: ['import'],
+          accepted: false,
+          retired: true,
+          backup: 'needed',
+        }),
+      )
+    else installKey(accountId, identityId, action === 'create' ? 'own' : 'import')
+    return encryptionState()
+  },
+  setEncryptionPreference: async (accountId, identityId, enabled, prefer) => {
+    const own = encryption.identities.find(
+      (i) => i.accountId === accountId && i.identityId === identityId,
+    )
+    if (!own) throw new Error('Create or import a key for this identity first.')
+    own.enabled = enabled
+    own.prefer = enabled && prefer
+    return encryptionState()
+  },
+  exportEncryptionKey: async (fingerprint, kind, password) => {
+    if (kind === 'public') return
+    requireUnlocked()
+    if ((password || '').length < 10)
+      throw new Error('Use a backup password of at least 10 characters.')
+    await pause(500)
+    for (const key of encryption.keys) if (key.fingerprint === fingerprint) key.backup = 'done'
+  },
+  revokeEncryptionKey: async (fingerprint) => {
+    requireUnlocked()
+    for (const key of encryption.keys)
+      if (key.fingerprint === fingerprint)
+        Object.assign(key, { usable: false, problem: 'revoked', retired: true })
+    for (const own of encryption.identities)
+      if (own.fingerprint === fingerprint) Object.assign(own, { enabled: false, prefer: false })
+    return encryptionState()
+  },
+  postponeEncryptionBackup: async (fingerprint) => {
+    for (const key of encryption.keys) if (key.fingerprint === fingerprint) key.backup = 'postponed'
+    return encryptionState()
+  },
+  discoverEncryptionKeys: async (email) => {
+    await pause(450)
+    return structuredClone(encryption.keys.filter((k) => k.email === email.toLowerCase()))
+  },
+  acceptEncryptionKey: async (email, fingerprint, confirmed) => {
+    const keys = encryption.keys.filter((k) => k.email === email.toLowerCase())
+    const selected = keys.find((k) => k.fingerprint === fingerprint)
+    if (!selected) throw new Error('Choose a discovered key for this address.')
+    for (const key of keys) {
+      key.accepted = key === selected
+      if (key !== selected) key.retired = true
+    }
+    selected.confirmed = confirmed
+    selected.retired = false
+    return encryptionState()
+  },
+  encryptionReadiness: async (accountId, identityId, recipients) => {
+    await pause(300)
+    return readiness(accountId, identityId, recipients)
+  },
+  unlockEncryption: async (password) => {
+    await pause(300)
+    if (encryption.protection === 'password' && !password)
+      throw new Error('Enter the vault password.')
+    encryption.vault = 'unlocked'
+    emitEncryption(false)
+    return encryptionState()
+  },
+  lockEncryption: async () => {
+    encryption.vault = 'locked'
+    emitEncryption(true)
+  },
+  transferEncryption: async ({ accountId, identityId, action }) => {
+    await pause(500)
+    if (action === 'export') {
+      requireUnlocked()
+      return {
+        code: Array.from({ length: 9 }, () =>
+          String(Math.floor(Math.random() * 10000)).padStart(4, '0'),
+        ).join('-'),
+      }
+    }
+    installKey(accountId, identityId, 'import')
+    return {}
+  },
   bootstrap: async () => ({
     accounts: demoAccounts,
     settings,
@@ -878,7 +1175,7 @@ export const demoAPI: DesktopMailAPI = {
     const accountIndex = demoAccounts.findIndex((a) => a.id === accountId)
     const m = get(accountIndex, Number(threadId.replace('thread-', '')))
     if (!m) throw new Error('Conversation not found.')
-    return [m, ...threadDrafts(accountId, threadId)]
+    return [secured(m), ...threadDrafts(accountId, threadId)]
   },
   mutate: async (input) => {
     const saved: [string, Message | null | undefined][] = []

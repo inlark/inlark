@@ -1,0 +1,15 @@
+From: Alice Fixture <alice@encryption.test>
+To: Bob Fixture <bob@encryption.test>
+Subject: Visible fixture subject
+Date: Wed, 7 Oct 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+-----BEGIN PGP MESSAGE-----
+
+hF4DpmEGRpxqMycSAQdAdx7xQEcQN85Drb3Pt0RNY1IRaiy1xCfTd6FOHV1HSXww
+A/dPDWB52SDKKHva/UzGlkuLGyqRLZD00qz6xkJcMAg3H8oD58d+SZGxry/Xl9/e
+0lcBIWXXrJnSDsM4aKbggI6CzyYszgRAYIFKfL8gM+8Wo3+d+D3hPq5GXOelJJ97
+6FvU2i0oVMNpcJAILM1ieh00WxfFTPIc7F8a8Cz1G4HPOT+A2CsXwwI=
+=FZZ0
+-----END PGP MESSAGE-----

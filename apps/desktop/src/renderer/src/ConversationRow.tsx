@@ -1,5 +1,5 @@
 import { cn } from '@inlark/ui'
-import { Archive, Mail, MailOpen, Paperclip, Star, Trash2 } from '@inlark/ui/icons'
+import { Archive, Lock, Mail, MailOpen, Paperclip, Star, Trash2 } from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
 import { isDraft, type Account, type Conversation } from '@inlark/core'
 import { shortDate } from './mail-date'
@@ -149,7 +149,14 @@ export function ConversationRow({
           {subject}
         </span>
         <span className="row-preview overflow-hidden text-ellipsis text-muted text-[12px] leading-[18px] @max-[900px]/mail:[.density-compact_&]:hidden @max-[440px]/mail:[.density-comfortable_&]:hidden">
-          {c.preview}
+          {c.preview ||
+            // Encrypted mail has no readable preview; say why the line is empty.
+            (c.messages.some((m) => m.security?.encrypted) && (
+              <span className="row-encrypted inline-flex items-center gap-1 text-faint">
+                <Lock size={11} />
+                Encrypted message
+              </span>
+            ))}
         </span>
       </div>
       <div

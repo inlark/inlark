@@ -86,6 +86,7 @@ export function mergePages(
 }
 /** Identifies a server draft's content, to detect edits made by another client. */
 export function draftFingerprint(message: Message): string {
+  if (message.protectedRevision) return message.protectedRevision
   return JSON.stringify([
     message.subject,
     message.to,

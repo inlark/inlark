@@ -1,0 +1,35 @@
+From: Alice Fixture <alice@encryption.test>
+To: Bob Fixture <bob@encryption.test>
+Subject: Visible fixture subject
+Date: Wed, 7 Oct 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="fixture-pgp"
+
+--fixture-pgp
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--fixture-pgp
+Content-Type: application/octet-stream
+
+-----BEGIN PGP MESSAGE-----
+
+hF4DPybE4lg1cQsSAQdANtMh9amz06ca0eZYn0ZsGF8SO1ftDQcP8pYv3lYPlVww
+32X1NQH6b2J5qIAFKyVDxeeAHvhD8VynkXDkmBVtZZSXQIz40QjXase0A1gbgnvE
+hF4DpmEGRpxqMycSAQdA56WcnMiVMak3lx+yNhw3+BRd/28HtJfSTWvDmYDZ0iIw
+Vge/LgiYPZFI+0TNZ9wP+ZUje/djokO8cg8HtU7QB+fDi8q+6lKYaFo75bx/QJXg
+0sEHAV2zp2PMi73rB2dcZPHAXp8tXUknPEQR+DoLjhRn+K/rt0NEWVg/g1eS/lnZ
+Os0cGewwwxdIxw+25XaIM24K34ZOb4f8e/jjporhpi8iMzosyjyHQ/d2os5xHxB2
+3e2iH3XoEjD7ZJl9KbvLzyFzpyZAE5/QLE/l9sTDMp8Lbs0+asMNIGugXpGsod+G
+Vw+0YUdHIoWINHdGz82/CL2KqDtMLqo9bzdPU2XRsp82rh/ob23NXZa2y1VnbKi8
+ZcMf/bFlJHffbmQy+u7C5pCeoCFSgEUd2yy4sJIsEo5jW/bylH931QyMpRCXWaAx
+ZWDyf6QFbDdodcNmUuU7goQH7tMqteCzbqrHs13ZdOf6Rf8xEmAJ48b2/LdY7zRM
+JPYcfOm69cVQhMtgrxiKD3Umc7RR42wJWN/qa3dw43Y2Q+nNKLmDvg6Hjuzq/yE8
+guQyOj6liTbF4NnOdtO20+tnLV0t2kJcfl5JHy4OVf4jqLxdg6nNBBMi0v4vhpCT
+aPgyrNU2KKi+OX7mtzTr8SibKB1c0Sg589PkAiivWU+6Pnegs+bwVbFOvHrYLhan
+MwyEY3iGfZG9ofsM+fnS7V67vWkQwi90yME=
+=JeAw
+-----END PGP MESSAGE-----
+
+--fixture-pgp--

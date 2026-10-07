@@ -349,4 +349,30 @@ describe('JMAP provider', () => {
     ).toEqual({ url: 'https://list.example/unsubscribe', oneClick: true })
     expect(parseUnsubscribe('<javascript:alert(1)>')).toBeUndefined()
   })
+  it('discovers bounded Autocrypt headers without requesting bodies or message blobs', async () => {
+    const { provider, calls } = fixture({
+      'Email/get': () => ({
+        list: [
+          {
+            ...raw('key'),
+            'header:Autocrypt:all': [
+              'addr=sender@example.com; prefer-encrypt=mutual; keydata=YWJj',
+            ],
+          },
+          { ...raw('wrong'), from: [{ email: 'other@example.com' }] },
+        ],
+      }),
+    })
+    const [account] = await provider.connect()
+    const hints = await provider.encryptionHints(account, 'sender@example.com')
+    expect(hints).toHaveLength(1)
+    expect(Buffer.from(hints[0].headers).toString()).toContain('prefer-encrypt=mutual')
+    const query = calls.find((call) => call.name === 'Email/query')!
+    expect(query.args.limit).toBeLessThanOrEqual(40)
+    const get = calls.find((call) => call.name === 'Email/get')!
+    expect(get.args.properties).not.toContain('blobId')
+    expect(get.args.properties).not.toContain('bodyValues')
+    expect(get.args.fetchAllBodyValues).toBeUndefined()
+    provider.dispose()
+  })
 })

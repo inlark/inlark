@@ -92,6 +92,7 @@ export function attachmentsOf(message: IndexedMessage): Attachment[] {
 }
 /** The body parts to render, preferring those not marked as attachments. */
 export function textParts(structure?: BodyPart): { html?: BodyPart; text?: BodyPart } {
+  if (structure?.type.toLowerCase() === 'multipart/encrypted') return {}
   const candidates = leaves(structure).filter((p) => isText(p) && p.disposition !== 'attachment')
   return {
     html: candidates.find((p) => p.type === 'text/html'),
@@ -133,6 +134,7 @@ export function previewText(value: string, html = false): string {
   // Opening a message supplies the full body. Bound work here for every caller,
   // before any HTML processing, entity decoding, or line splitting.
   value = value.slice(0, previewInputLimit)
+  if (value.includes('-----BEGIN PGP MESSAGE-----')) return ''
   const text = html
     ? withoutHiddenBlocks(value)
         .replace(/<[^<>]*>/g, ' ')
@@ -196,6 +198,9 @@ export function toNewMessage(
 }
 
 export function toMessage(accountId: string, m: IndexedMessage): Message {
+  const encrypted =
+    m.bodyStructure?.type.toLowerCase() === 'multipart/encrypted' ||
+    m.preview.includes('-----BEGIN PGP MESSAGE-----')
   return {
     id: m.id,
     accountId,
@@ -208,7 +213,17 @@ export function toMessage(accountId: string, m: IndexedMessage): Message {
     replyTo: m.replyTo,
     receivedAt: m.receivedAt,
     sentAt: m.sentAt,
-    preview: m.preview,
+    preview: encrypted ? '' : m.preview,
+    ...(encrypted
+      ? {
+          security: {
+            encrypted: true,
+            state: 'locked' as const,
+            signature: 'unknown' as const,
+            confirmed: false,
+          },
+        }
+      : {}),
     keywords: keywordsFromFlags(m.flags),
     mailboxIds: { [m.mailboxId]: true },
     size: m.size,

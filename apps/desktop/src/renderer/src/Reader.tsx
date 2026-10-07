@@ -29,6 +29,7 @@ import {
   Check,
   MailMinus,
   PencilEdit,
+  Lock,
 } from '@inlark/ui/icons'
 import { Tooltip } from '@base-ui/react/tooltip'
 import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
@@ -51,6 +52,7 @@ import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
 import { emailSanitizeOptions } from './email-html'
 import { offersAction } from './view-actions'
+import { SecuritySummary, WithheldBody, withheld } from './MessageSecurity'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
@@ -137,6 +139,8 @@ export function EmailBody({
   loading = false,
   onLinkHover,
   onMailto,
+  onUnlock,
+  onOpenEncryption,
 }: {
   message: Message
   remoteImages: boolean
@@ -144,6 +148,9 @@ export function EmailBody({
   loading?: boolean
   onLinkHover?: (href: string | null) => void
   onMailto?: (url: string) => void
+  /** Unlocks encryption keys, so an encrypted message can be read. */
+  onUnlock?: () => void
+  onOpenEncryption?: () => void
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const observer = useRef<ResizeObserver | null>(null)
@@ -152,6 +159,10 @@ export function EmailBody({
   const [source, setSource] = useState('')
   const [adaptive, setAdaptive] = useState(false)
   const adaptiveFrame = useRef(false)
+  const [remoteConsentMessage, setRemoteConsentMessage] = useState<string | null>(null)
+  const consentScope = JSON.stringify([message.accountId, message.id])
+  const permitDecryptedRemote = remoteConsentMessage === consentScope
+  const effectiveRemoteImages = message.security?.encrypted ? permitDecryptedRemote : remoteImages
   const [blocked, setBlocked] = useState(false)
   const [frameReady, setFrameReady] = useState(false)
   const [renderIssue, setRenderIssue] = useState<string | null>(null)
@@ -162,43 +173,49 @@ export function EmailBody({
   const mailto = useRef(onMailto)
   mailto.current = onMailto
   const describeIssue = (stage: string, error: string, currentSource = source) =>
-    JSON.stringify(
-      {
-        stage,
-        error,
-        htmlChars: message.html?.length ?? 0,
-        textChars: message.text?.length ?? 0,
-        sourceChars: currentSource.length,
-        sourceWritten: writtenSource.current === currentSource,
-        frame: (() => {
-          try {
-            const doc = frame.current?.contentDocument
-            return {
-              present: !!frame.current,
-              documentAccessible: !!doc,
-              documentKind: doc?.URL.startsWith('blob:')
-                ? 'blob'
-                : doc?.URL.startsWith('about:')
-                  ? doc.URL
-                  : doc
-                    ? 'other'
-                    : null,
-              readyState: doc?.readyState ?? null,
-              bodyPresent: !!doc?.body,
-              bodyTextChars: doc?.body?.textContent?.length ?? null,
-              bodyHtmlChars: doc?.body?.innerHTML.length ?? null,
-            }
-          } catch (cause) {
-            return {
-              inspectionError:
-                cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
-            }
-          }
-        })(),
-      },
-      null,
-      2,
-    )
+    message.security?.encrypted
+      ? JSON.stringify({
+          stage,
+          encrypted: true,
+          error: 'Encrypted message rendering failed. Content is excluded from diagnostics.',
+        })
+      : JSON.stringify(
+          {
+            stage,
+            error,
+            htmlChars: message.html?.length ?? 0,
+            textChars: message.text?.length ?? 0,
+            sourceChars: currentSource.length,
+            sourceWritten: writtenSource.current === currentSource,
+            frame: (() => {
+              try {
+                const doc = frame.current?.contentDocument
+                return {
+                  present: !!frame.current,
+                  documentAccessible: !!doc,
+                  documentKind: doc?.URL.startsWith('blob:')
+                    ? 'blob'
+                    : doc?.URL.startsWith('about:')
+                      ? doc.URL
+                      : doc
+                        ? 'other'
+                        : null,
+                  readyState: doc?.readyState ?? null,
+                  bodyPresent: !!doc?.body,
+                  bodyTextChars: doc?.body?.textContent?.length ?? null,
+                  bodyHtmlChars: doc?.body?.innerHTML.length ?? null,
+                }
+              } catch (cause) {
+                return {
+                  inspectionError:
+                    cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
+                }
+              }
+            })(),
+          },
+          null,
+          2,
+        )
   useEffect(() => {
     let active = true
     const run = async () => {
@@ -238,8 +255,11 @@ export function EmailBody({
             )
             if (attachment) image.src = await api.inlineImage(message.accountId, attachment)
             else image.replaceWith(document.createTextNode(image.alt || ''))
-          } else if (/^https?:/.test(original) && remoteImages) {
-            const source = await api.remoteImage(original)
+          } else if (/^https?:/.test(original) && effectiveRemoteImages) {
+            const source = await api.remoteImage(
+              original,
+              !!message.security?.encrypted && permitDecryptedRemote,
+            )
             if (source) image.src = source
             else image.replaceWith(document.createTextNode(image.alt || ''))
           } else if (/^https?:/.test(original) && active) setBlocked(true)
@@ -291,7 +311,7 @@ export function EmailBody({
     return () => {
       active = false
     }
-  }, [message.id, message.html, message.text, remoteImages, theme, loading])
+  }, [message.id, message.html, message.text, effectiveRemoteImages, theme, loading])
   useEffect(() => {
     if (!source || frameReady || renderIssue) return
     const timeout = window.setTimeout(() => {
@@ -419,12 +439,38 @@ export function EmailBody({
     if (frameReady) resizeFrame()
   }, [frameReady, source])
   useEffect(() => () => observer.current?.disconnect(), [])
+  if (message.security && withheld(message.security) && !loading)
+    return (
+      <WithheldBody
+        security={message.security}
+        onUnlock={onUnlock}
+        onOpenEncryption={onOpenEncryption}
+      />
+    )
   return (
     <>
+      {message.security && !withheld(message.security) && <SecuritySummary message={message} />}
       {blocked && (
         <div className="image-notice flex gap-1.75 items-center text-muted text-[11px] pt-2 pb-4.25 px-0">
           <ImageOff size={13} />
-          Remote images are off. You can enable them in Settings.
+          {message.security?.encrypted ? (
+            <>
+              <span>
+                Remote images are blocked in encrypted mail, since loading them can show the sender
+                when you read it.
+              </span>
+              <Button
+                size="small"
+                variant="ghost"
+                className="ml-auto -my-1"
+                onClick={() => setRemoteConsentMessage(consentScope)}
+              >
+                Load images
+              </Button>
+            </>
+          ) : (
+            'Remote images are off. You can enable them in Settings.'
+          )}
         </div>
       )}
       {source && (
@@ -530,6 +576,8 @@ interface ReaderProps {
   onUnsubscribe: () => void
   /** Messages are list summaries while the full conversation loads. */
   loading?: boolean
+  onUnlock?: () => void
+  onOpenEncryption?: () => void
 }
 export type UnsubscribeState = 'available' | 'pending' | 'done'
 const unsubscribeLabels = {
@@ -615,6 +663,8 @@ export function Reader({
   unsubscribe,
   onUnsubscribe,
   loading = false,
+  onUnlock,
+  onOpenEncryption,
 }: ReaderProps) {
   const keys = useShortcutText()
   // Unsent drafts sit below the conversation they would continue, never among what was said.
@@ -936,6 +986,13 @@ export function Reader({
                         className="message-attachment-hint text-muted shrink-0"
                       />
                     )}
+                    {message.security?.encrypted && (
+                      <Lock
+                        size={12}
+                        className="message-encrypted text-muted shrink-0"
+                        aria-label="Encrypted"
+                      />
+                    )}
                     <time dateTime={message.receivedAt} title={longDate(message.receivedAt)}>
                       {draft && 'Saved '}
                       {when.date}
@@ -999,6 +1056,8 @@ export function Reader({
                         loading={loading && !message.html && !message.text}
                         onLinkHover={setLink}
                         onMailto={onMailto}
+                        onUnlock={onUnlock}
+                        onOpenEncryption={onOpenEncryption}
                       />
                       {attachments.length > 0 && (
                         <div className="attachment-list flex gap-2.5 flex-wrap mt-5">
