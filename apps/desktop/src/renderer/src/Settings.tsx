@@ -36,6 +36,7 @@ import { FolderMappingsDialog } from './FolderMappings'
 import { AliasesDialog } from './Aliases'
 import { IndexingMeter } from './IndexingMeter'
 import { ShortcutEditor } from './ShortcutEditor'
+import { newMessageAccount } from './compose-account'
 
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
@@ -455,7 +456,11 @@ export function SettingsPanel({
                         aria-label="Default sending account"
                         className="setting-select w-auto min-w-60 shrink-0"
                         value={
-                          bootstrap.settings.defaultAccountId || bootstrap.accounts[0]?.id || ''
+                          newMessageAccount(
+                            bootstrap.accounts,
+                            undefined,
+                            bootstrap.settings.defaultAccountId,
+                          )?.id || ''
                         }
                         options={bootstrap.accounts.map((a) => ({
                           value: a.id,
