@@ -214,6 +214,8 @@ export interface Settings {
   remoteImages: boolean
   notifications: boolean
   closeToTray: boolean
+  /** Use the system window frame instead of Inlark's title bar, after restarting. */
+  systemTitleBar?: boolean
   defaultAccountId?: string
   signatures: Record<string, string>
   /** Identities whose signature is HTML code rather than plain text, keyed like `signatures`. */
@@ -231,6 +233,7 @@ export const defaultSettings: Settings = {
   remoteImages: true,
   notifications: true,
   closeToTray: true,
+  systemTitleBar: false,
   signatures: {},
 }
 export type MailAction =
@@ -586,6 +589,7 @@ export interface DesktopMailAPI {
   ): Promise<{ kind: 'done' | 'mailto' | 'browser'; url?: string }>
   openExternal(url: string): Promise<void>
   settings(settings: Settings): Promise<Settings>
+  restart(): Promise<void>
   diagnostics(): Promise<string>
   onEvent(listener: (event: AppEvent) => void): () => void
 }

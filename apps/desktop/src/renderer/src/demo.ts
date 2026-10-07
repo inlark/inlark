@@ -1152,6 +1152,7 @@ export const demoAPI: DesktopMailAPI = {
     settings = value
     return value
   },
+  restart: async () => location.reload(),
   diagnostics: async () =>
     JSON.stringify({ mode: 'demo', message: 'Mail data is generated locally.' }, null, 2),
   ready: async () => {},
