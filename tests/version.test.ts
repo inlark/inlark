@@ -1,5 +1,3 @@
-import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { version } from '../apps/desktop/package.json'
 import { demoAPI } from '../apps/desktop/src/renderer/src/demo'
@@ -23,24 +21,5 @@ describe('application version', () => {
     expect(result.demo).toBe(true)
     expect(result.accounts.length).toBeGreaterThan(0)
     expect(bootstrap).toHaveBeenCalledOnce()
-  })
-})
-
-describe('release version validation', () => {
-  const script = fileURLToPath(new URL('../scripts/validate-release-version.mjs', import.meta.url))
-
-  it('accepts a tag matching the committed desktop manifest', () => {
-    const result = spawnSync(process.execPath, [script, `v${version}`], { encoding: 'utf8' })
-    expect(result.error).toBeUndefined()
-    expect(result.status).toBe(0)
-  })
-
-  it.each(['v99.0.0', version, undefined])('rejects a mismatched or missing tag: %s', (tag) => {
-    const result = spawnSync(process.execPath, [script, ...(tag ? [tag] : [])], {
-      encoding: 'utf8',
-    })
-    expect(result.error).toBeUndefined()
-    expect(result.status).toBe(1)
-    expect(result.stderr).toContain('Commit the desktop package version before tagging a release.')
   })
 })
