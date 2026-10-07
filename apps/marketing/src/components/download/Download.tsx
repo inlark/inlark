@@ -9,6 +9,7 @@ import {
 import {
   buildById,
   downloadFor,
+  fetchCurrentRelease,
   osNames,
   type Build,
   type BuildId,
@@ -69,9 +70,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
 
   useEffect(() => {
     let cancelled = false
-    const live = fetch('/api/release')
-      .then((response) => (response.ok ? (response.json() as Promise<Release>) : null))
-      .catch(() => null)
+    const live = fetchCurrentRelease()
 
     live.then((latest) => !cancelled && latest && setRelease(latest))
     if (isMobile()) return

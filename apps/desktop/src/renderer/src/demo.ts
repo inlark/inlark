@@ -25,6 +25,7 @@ import {
   type SubmissionSummary,
 } from '@inlark/core'
 import { longDate } from './mail-date'
+import { version as packagedVersion } from '../../../package.json'
 
 const names = ['Personal', 'Studio', 'Projects', 'Community', 'Archive']
 const emails = [
@@ -639,7 +640,10 @@ export const demoAPI: DesktopMailAPI = {
     settings,
     secureStorage: false,
     demo: true,
-    version: '0.1.0',
+    version:
+      typeof window !== 'undefined' && window.mail
+        ? (await window.mail.bootstrap()).version
+        : packagedVersion,
   }),
   discover: async (email) => {
     await pause(700)
