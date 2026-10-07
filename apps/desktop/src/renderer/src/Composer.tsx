@@ -40,7 +40,13 @@ import { recipientProblems, useEncryption } from './encryption-ui'
 import { ContactKeyDialog, keysChanged, useUnlock } from './encryption-actions'
 import { ProtectionBar, ProtectionMenu, type Protection } from './ComposerProtection'
 import { formatBytes } from './mail-date'
-import { bindingText, useShortcutHandlers, useShortcutText, useShortcuts } from './shortcuts'
+import {
+  bindingText,
+  ignoreInputsForCommand,
+  useShortcutHandlers,
+  useShortcutText,
+  useShortcuts,
+} from './shortcuts'
 import { SignatureNode } from './signature'
 import { linkTarget } from './link-target'
 import { SignatureParagraph, hasDraftContent, replaceSignature } from './composer-document'
@@ -568,25 +574,44 @@ export function Composer({
   }
   const canEdit = !linkOpen && !discardOpen && !locked
   useShortcutHandlers(shortcuts.bindings, {
-    // Keep the library's input-aware defaults: modifier shortcuts work while writing,
-    // but a custom letter or sequence must not send or discard a draft as someone types.
+    // Composer commands deliberately work while writing; custom typing keys stay quiet.
     send: {
+      ignoreInputs: ignoreInputsForCommand,
       run: () => void send(),
       enabled: !linkOpen && !discardOpen && !sending && !changingFrom,
     },
-    attachFiles: { run: () => void attachFiles(), enabled: canEdit },
-    showCc: { run: () => focusRecipient('cc'), enabled: canEdit },
-    showBcc: { run: () => focusRecipient('bcc'), enabled: canEdit },
+    attachFiles: {
+      run: () => void attachFiles(),
+      enabled: canEdit,
+      ignoreInputs: ignoreInputsForCommand,
+    },
+    showCc: {
+      run: () => focusRecipient('cc'),
+      enabled: canEdit,
+      ignoreInputs: ignoreInputsForCommand,
+    },
+    showBcc: {
+      run: () => focusRecipient('bcc'),
+      enabled: canEdit,
+      ignoreInputs: ignoreInputsForCommand,
+    },
     expandComposer: {
+      ignoreInputs: ignoreInputsForCommand,
       run: () => setExpanded((current) => !current),
       enabled: !linkOpen && !discardOpen,
     },
     saveClose: {
+      ignoreInputs: ignoreInputsForCommand,
       run: () => void close(),
       enabled: !linkOpen && !discardOpen && !sending && !changingFrom,
     },
-    discardDraft: { run: () => setDiscardOpen(true), enabled: canEdit },
+    discardDraft: {
+      run: () => setDiscardOpen(true),
+      enabled: canEdit,
+      ignoreInputs: ignoreInputsForCommand,
+    },
     toggleEncryption: {
+      ignoreInputs: ignoreInputsForCommand,
       run: () => setProtection(protection === 'encrypt' ? 'none' : 'encrypt'),
       enabled: canEdit && !!own,
     },

@@ -5,6 +5,7 @@ import {
   formatForDisplay,
   normalizeHotkey,
   normalizeRegisterableHotkey,
+  parseHotkey,
   parseKeyboardEvent,
   useHotkeys,
   useHotkeySequences,
@@ -279,8 +280,16 @@ export type ShortcutHandler = {
   run: () => void
   /** Defaults to the hook's `enabled`. */
   enabled?: boolean
+  /** Defaults to true so focused fields keep their native editing shortcuts. */
   ignoreInputs?: boolean | ((binding: Binding) => boolean)
 }
+
+/** Opt intentional commands into fields without letting custom typing keys trigger them. */
+export const ignoreInputsForCommand = (binding: Binding) =>
+  !binding.every((chord) => {
+    const parsed = parseHotkey(chord as Hotkey, platform)
+    return parsed.ctrl || parsed.meta || parsed.key === 'Escape'
+  })
 
 /** Registers every binding of each handled shortcut. */
 export function useShortcutHandlers(
@@ -298,12 +307,10 @@ export function useShortcutHandlers(
     for (const binding of bindings[id]) {
       const bindingOptions = {
         ...options,
-        ...(handler.ignoreInputs !== undefined && {
-          ignoreInputs:
-            typeof handler.ignoreInputs === 'function'
-              ? handler.ignoreInputs(binding)
-              : handler.ignoreInputs,
-        }),
+        ignoreInputs:
+          typeof handler.ignoreInputs === 'function'
+            ? handler.ignoreInputs(binding)
+            : (handler.ignoreInputs ?? true),
       }
       if (binding.length === 1)
         hotkeys.push({
