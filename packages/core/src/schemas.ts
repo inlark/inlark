@@ -191,6 +191,7 @@ export const settingsSchema = z.object({
   remoteImages: z.boolean(),
   notifications: z.boolean(),
   closeToTray: z.boolean(),
+  systemTitleBar: z.boolean().optional(),
   defaultAccountId: id.optional(),
   signatures: z.record(z.string(), z.string().max(100_000)),
   htmlSignatures: z.record(z.string(), z.boolean()).optional(),

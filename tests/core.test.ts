@@ -272,6 +272,12 @@ describe('signatures', () => {
     expect(identitySignature(defaultSettings, identity)).toEqual({ format: 'text', value: '' })
   })
 
+  it('accepts settings saved before the system title bar preference existed', () => {
+    const { systemTitleBar: _, ...legacySettings } = defaultSettings
+    expect(settingsSchema.parse(legacySettings)).toEqual(legacySettings)
+    expect(settingsSchema.parse(legacySettings).systemTitleBar).toBeUndefined()
+  })
+
   it('accepts settings saved before HTML signatures existed', () => {
     expect(settingsSchema.parse({ ...defaultSettings, signatures: { [key]: 'Paul' } })).toEqual({
       ...defaultSettings,

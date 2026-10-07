@@ -41,6 +41,8 @@ let window: BrowserWindow | null = null,
   quitting = false
 let unreadCount = 0,
   rendererReady = false
+// Keep the current window's mode while a saved preference waits for the next restart.
+let windowUsesSystemTitleBar = false
 let service: MailService
 const updates = new UpdateManager((status) => send({ type: 'update', status }))
 const pendingEvents: AppEvent[] = []
@@ -101,11 +103,12 @@ function followTheme() {
   const colors = themeColors()
   window.setBackgroundColor(colors.color)
   // macOS styles its traffic lights from the window appearance, which follows themeSource.
-  if (process.platform !== 'darwin')
+  if (!windowUsesSystemTitleBar && process.platform !== 'darwin')
     window.setTitleBarOverlay({ height: titleBarHeight, ...colors })
 }
 function createWindow() {
   rendererReady = false
+  windowUsesSystemTitleBar = service.settings.systemTitleBar === true
   window = new BrowserWindow({
     width: 1380,
     height: 900,
@@ -115,9 +118,11 @@ function createWindow() {
     icon: join(here, '../../resources/icon.png'),
     backgroundColor: themeColors().color,
     title: 'Inlark',
-    titleBarStyle: 'hidden',
+    titleBarStyle: windowUsesSystemTitleBar ? 'default' : 'hidden',
     // Also centers the macOS traffic lights in the title bar and reports its size to the page.
-    titleBarOverlay: { height: titleBarHeight, ...themeColors() },
+    titleBarOverlay: windowUsesSystemTitleBar
+      ? false
+      : { height: titleBarHeight, ...themeColors() },
     webPreferences: {
       preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,

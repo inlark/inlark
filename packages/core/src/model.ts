@@ -214,6 +214,8 @@ export interface Settings {
   remoteImages: boolean
   notifications: boolean
   closeToTray: boolean
+  /** Use the system window frame instead of Inlark's title bar, after restarting. */
+  systemTitleBar?: boolean
   defaultAccountId?: string
   signatures: Record<string, string>
   /** Identities whose signature is HTML code rather than plain text, keyed like `signatures`. */
@@ -231,6 +233,7 @@ export const defaultSettings: Settings = {
   remoteImages: true,
   notifications: true,
   closeToTray: true,
+  systemTitleBar: false,
   signatures: {},
 }
 export type MailAction =

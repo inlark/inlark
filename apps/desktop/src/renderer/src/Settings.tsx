@@ -404,6 +404,23 @@ export function SettingsPanel({
                     )}
                   >
                     <div>
+                      <strong>Use system title bar</strong>
+                      <p>Use your desktop’s window frame. Quit and reopen Inlark to apply.</p>
+                    </div>
+                    <Switch
+                      aria-label="Use system title bar"
+                      checked={bootstrap.settings.systemTitleBar === true}
+                      onCheckedChange={(systemTitleBar) => void update({ systemTitleBar })}
+                    />
+                  </div>
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
+                    <div>
                       <strong>New mail notifications</strong>
                       <p>Get notified when new conversations arrive.</p>
                     </div>
