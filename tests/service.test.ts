@@ -113,6 +113,16 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 describe('durable mail operations', () => {
+  it('keeps the title bar preference across restarts in either mode', async () => {
+    for (const systemTitleBar of [true, false]) {
+      await service.setSettings({ ...service.settings, systemTitleBar })
+      service.dispose()
+      service = new MailService(new JsonStore(directory), () => {})
+      await service.init()
+      expect((await service.bootstrap()).settings.systemTitleBar).toBe(systemTitleBar)
+    }
+  })
+
   it('archives without removing unrelated folder memberships', async () => {
     const result = await service.mutate({
       targets: [{ accountId: account.id, threadId: 'thread' }],

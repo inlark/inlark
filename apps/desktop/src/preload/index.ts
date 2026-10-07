@@ -57,6 +57,7 @@ const methods = [
   'unsubscribe',
   'openExternal',
   'settings',
+  'restart',
   'diagnostics',
 ] as const satisfies readonly (keyof DesktopMailAPI)[]
 // Fails to compile when an API method is missing from the allowlist above.

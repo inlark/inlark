@@ -105,6 +105,7 @@ import { lockVault, useEncryption } from './encryption-ui'
 import { useUnlock } from './encryption-actions'
 import { HintIconButton } from './HintIconButton'
 import { targetAccounts, targetLimit } from './account-limits'
+import { newMessageAccount } from './compose-account'
 import { SubmissionList } from './SendingStatus'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
@@ -506,7 +507,9 @@ export function App() {
     kind: 'reply' | 'replyAll' | 'forward' = 'reply',
     partial: Partial<Draft> = {},
   ) => {
-    const id = message?.accountId || route.account || settings.defaultAccountId || accounts[0]?.id
+    const id =
+      message?.accountId ||
+      newMessageAccount(accounts, route.account, settings.defaultAccountId)?.id
     if (!id) {
       setSettingsTab('accounts')
       setSettingsOpen(true)
