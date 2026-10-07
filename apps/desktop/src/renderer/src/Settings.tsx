@@ -225,7 +225,7 @@ export function SettingsPanel({
         )}
         popupRef={modalRef}
       >
-        <div className="settings-layout flex min-h-0 h-[min(620px,_calc(100dvh_-_80px))] overflow-hidden rounded-[inherit]">
+        <div className="settings-layout flex min-h-0 h-[min(620px,_calc(100dvh_-_80px_-_var(--titlebar-height)))] overflow-hidden rounded-[inherit]">
           <nav
             className={cn(
               'settings-nav w-50 shrink-0 bg-sidebar pt-12.5 pb-3 px-2.5 flex flex-col gap-[2px] border-r border-solid',

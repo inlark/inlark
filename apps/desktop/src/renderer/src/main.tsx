@@ -90,6 +90,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
 void restoreCache().finally(() =>
   createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
+      {/* Drags the window like a native title bar, on every screen including the error page. */}
+      <div
+        aria-hidden
+        className="titlebar fixed inset-x-0 top-0 h-(--titlebar-height) bg-sidebar [app-region:drag]"
+      />
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider delay={500}>

@@ -7,11 +7,12 @@ import {
   Tray,
   Menu,
   nativeImage,
+  nativeTheme,
   powerMonitor,
 } from 'electron'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { ipcSchemas, type AppEvent } from '@inlark/core'
+import { ipcSchemas, type AppEvent, type Settings } from '@inlark/core'
 import { JsonStore } from './storage'
 import { MailService } from './service'
 import { imapProviders } from './imap-accounts'
@@ -87,6 +88,22 @@ function trusted(event: Electron.IpcMainInvokeEvent): boolean {
     return false
   }
 }
+// Inlark draws its own title bar and keeps the native window controls on it. These match
+// --sidebar and --secondary in packages/ui/src/styles.css so the controls blend in.
+const titleBarHeight = 36
+const titleBarColors = {
+  dark: { color: '#111112', symbolColor: '#b7b7bd' },
+  light: { color: '#f7f8fa', symbolColor: '#5d6068' },
+}
+const themeColors = () => titleBarColors[nativeTheme.shouldUseDarkColors ? 'dark' : 'light']
+function followTheme() {
+  if (!window) return
+  const colors = themeColors()
+  window.setBackgroundColor(colors.color)
+  // macOS styles its traffic lights from the window appearance, which follows themeSource.
+  if (process.platform !== 'darwin')
+    window.setTitleBarOverlay({ height: titleBarHeight, ...colors })
+}
 function createWindow() {
   rendererReady = false
   window = new BrowserWindow({
@@ -96,9 +113,11 @@ function createWindow() {
     minHeight: 620,
     show: false,
     icon: join(here, '../../resources/icon.png'),
-    backgroundColor: '#121214',
+    backgroundColor: themeColors().color,
     title: 'Inlark',
-    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    // Also centers the macOS traffic lights in the title bar and reports its size to the page.
+    titleBarOverlay: { height: titleBarHeight, ...themeColors() },
     webPreferences: {
       preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,
@@ -212,6 +231,9 @@ else {
         discover,
       })
       await service.init()
+      // Native surfaces such as the window controls and menus follow Inlark's theme setting.
+      nativeTheme.themeSource = service.settings.theme
+      nativeTheme.on('updated', followTheme)
       const handlers: Record<keyof typeof ipcSchemas, (...args: any[]) => unknown> = {
         ready: () => {
           rendererReady = true
@@ -260,7 +282,12 @@ else {
           : service.senderAvatar,
         unsubscribe: service.unsubscribe,
         openExternal: service.openExternal,
-        settings: service.setSettings,
+        settings: async (settings: Settings) => {
+          const saved = await service.setSettings(settings)
+          nativeTheme.themeSource = saved.theme
+          followTheme()
+          return saved
+        },
         diagnostics: service.diagnostics,
       }
       for (const [name, schema] of Object.entries(ipcSchemas))

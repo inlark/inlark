@@ -1453,7 +1453,8 @@ export function App() {
   return (
     <div
       className={cn(
-        'app-shell flex h-full min-w-0 py-2 pr-2 pl-0 bg-sidebar [--row-height:64px] [--rail:224px]',
+        'app-shell flex h-full min-w-0 pt-[max(8px,var(--titlebar-height))] pb-2 pr-2 pl-0 bg-sidebar',
+        '[--row-height:64px] [--rail:224px]',
         '[&.sidebar-collapsed]:[--rail:64px] [&.density-compact]:[--row-height:44px]',
         'max-[1100px]:[&:not(.sidebar-collapsed)]:[--rail:204px] max-[700px]:[&:not(.sidebar-collapsed)]:[--rail:188px]',
         collapsed && 'sidebar-collapsed',
