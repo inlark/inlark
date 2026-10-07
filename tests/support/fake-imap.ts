@@ -11,6 +11,7 @@ import type {
 } from '../../packages/imap/src/port'
 
 export interface FakeMessageInput {
+  emailId?: string
   messageId?: string
   inReplyTo?: string
   references?: string[]
@@ -360,6 +361,7 @@ export class FakePort implements ImapPort {
         const raw = (m.raw ??= rfc822(i))
         return {
           uid: m.uid,
+          emailId: i.emailId,
           modseq: this.condstore ? String(m.modseq) : undefined,
           ...(query.flags ? { flags: [...m.flags] } : {}),
           ...(query.envelope

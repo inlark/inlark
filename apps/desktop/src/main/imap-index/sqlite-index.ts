@@ -49,7 +49,7 @@ const methodTable: Record<keyof MetadataIndex, true> = {
 }
 export const indexMethods = Object.keys(methodTable) as (keyof MetadataIndex)[]
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 const MAX_REFERENCES = 50
 
 const migrations = [
@@ -137,6 +137,10 @@ const migrations = [
     value TEXT NOT NULL,
     PRIMARY KEY (account_id, key)
   ) WITHOUT ROWID;`,
+  `ALTER TABLE messages ADD COLUMN email_id TEXT;
+  CREATE INDEX messages_email_id ON messages (account_id, email_id) WHERE email_id IS NOT NULL;
+  -- Refresh metadata for existing locations without discarding their stable IDs or threads.
+  UPDATE mailboxes SET uid_next = NULL, highest_modseq = NULL, indexed_from = NULL, complete = 0;`,
 ]
 
 interface MailboxRow {
@@ -165,6 +169,7 @@ interface MessageRow {
   uid: number
   modseq: string | null
   message_id: string | null
+  email_id: string | null
   in_reply_to: string
   refs: string
   thread_id: string
@@ -247,13 +252,14 @@ function toMessage(row: MessageRow): IndexedMessage {
     preview: row.preview,
   }
   if (row.modseq !== null) message.modseq = row.modseq
+  if (row.email_id !== null) message.emailId = row.email_id
   if (row.sent_at !== null) message.sentAt = row.sent_at
   if (row.body_structure !== null) message.bodyStructure = JSON.parse(row.body_structure)
   if (row.unsubscribe !== null) message.unsubscribe = JSON.parse(row.unsubscribe)
   return message
 }
 
-const MESSAGE_COLUMNS = `seq, id, mailbox_id, uid_validity, uid, modseq, message_id, in_reply_to, refs,
+const MESSAGE_COLUMNS = `seq, id, mailbox_id, uid_validity, uid, modseq, message_id, email_id, in_reply_to, refs,
   thread_id, subject, from_addr, to_addr, cc_addr, bcc_addr, reply_to, received_at, sent_at, size,
   flags, has_attachment, preview, body_structure, unsubscribe`
 
@@ -531,16 +537,24 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
   }
 
   /**
-   * Finds every thread already known for the message's own ID or its parents. Several threads
-   * mean the message links them, so they merge into the oldest; the others become aliases.
+   * Finds every thread already known for the server identity, Message-ID or parents. Several
+   * threads mean the message links them, so they merge into the oldest; others become aliases.
    */
-  private assignThread(accountId: string, keys: string[]) {
-    if (!keys.length) return this.newThread(accountId)
+  private assignThread(accountId: string, keys: string[], emailId?: string) {
+    if (!keys.length && !emailId) return this.newThread(accountId)
+    // UNION's ordering can make SQLite prefer a scan of the account's thread index. Force
+    // the server-identity lookup to stay bounded as the mailbox grows.
     const found = this.all<{ id: string; seq: number | null }>(
-      `SELECT DISTINCT r.thread_id AS id, t.seq AS seq FROM json_each(?) j
-        CROSS JOIN thread_refs r ON r.account_id = ? AND r.message_id = j.value
-        LEFT JOIN threads t ON t.account_id = r.account_id AND t.id = r.thread_id`,
+      `SELECT DISTINCT r.thread_id AS id, t.seq AS seq FROM (
+          SELECT r.thread_id FROM json_each(?) j
+            CROSS JOIN thread_refs r ON r.account_id = ? AND r.message_id = j.value
+          UNION SELECT thread_id FROM messages INDEXED BY messages_email_id
+            WHERE account_id = ? AND email_id = ?
+        ) r LEFT JOIN threads t ON t.account_id = ? AND t.id = r.thread_id`,
       list(keys),
+      accountId,
+      accountId,
+      emailId ?? null,
       accountId,
     )
     found.sort((a, b) => (a.seq ?? Infinity) - (b.seq ?? Infinity) || (a.id < b.id ? -1 : 1))
@@ -601,15 +615,28 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
         if (existing) {
           this.run(
             `UPDATE messages SET flags = ?, seen = ?, flagged = ?, modseq = coalesce(?, modseq),
+              email_id = coalesce(?, email_id),
               preview = CASE WHEN ? <> '' THEN ? ELSE preview END WHERE id = ?`,
             list(message.flags),
             seen,
             flagged,
             message.modseq ?? null,
+            message.emailId ?? null,
             message.preview,
             message.preview,
             existing.id,
           )
+          // Backfilling the server identity can join locations whose headers lacked Message-ID.
+          if (message.emailId)
+            this.assignThread(
+              accountId,
+              messageIds([
+                message.messageId,
+                ...message.inReplyTo,
+                ...message.references.slice(-MAX_REFERENCES),
+              ]),
+              message.emailId,
+            )
           return existing.id
         }
         const [messageId = null] = messageIds([message.messageId])
@@ -617,14 +644,18 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
         const parents = messageIds([...message.inReplyTo, ...references]).filter(
           (id) => id !== messageId,
         )
-        const threadId = this.assignThread(accountId, messageId ? [messageId, ...parents] : parents)
+        const threadId = this.assignThread(
+          accountId,
+          messageId ? [messageId, ...parents] : parents,
+          message.emailId,
+        )
         const id = randomUUID()
         this.run(
           `INSERT INTO messages (id, account_id, mailbox_id, uid_validity, uid, modseq, message_id,
             in_reply_to, refs, thread_id, subject, from_addr, to_addr, cc_addr, bcc_addr, reply_to,
             received_at, received_ms, sent_at, size, flags, seen, flagged, has_attachment, preview,
-            body_structure, unsubscribe)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            body_structure, unsubscribe, email_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           id,
           accountId,
           message.mailboxId,
@@ -652,6 +683,7 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
           message.preview,
           message.bodyStructure ? json(message.bodyStructure) : null,
           message.unsubscribe ? json(message.unsubscribe) : null,
+          message.emailId ?? null,
         )
         return id
       })
@@ -899,7 +931,8 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
     )
     const counts = new Map(
       this.all<{ thread_id: string; n: number }>(
-        `SELECT thread_id, count(*) AS n FROM messages WHERE account_id = ?
+        `SELECT thread_id, count(DISTINCT email_id) + sum(email_id IS NULL) AS n
+          FROM messages WHERE account_id = ?
           AND thread_id IN (SELECT value FROM json_each(?)) GROUP BY thread_id`,
         accountId,
         list(picked.map(([thread]) => thread)),

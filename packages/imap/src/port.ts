@@ -115,6 +115,8 @@ export interface Envelope {
 
 export interface FetchedMessage {
   uid: number
+  /** Account-wide server identity (OBJECTID EMAILID or Gmail X-GM-MSGID). */
+  emailId?: string
   modseq?: string
   flags?: string[]
   envelope?: Envelope

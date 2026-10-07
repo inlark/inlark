@@ -109,6 +109,15 @@ describe('IMAP connection and folders', () => {
 })
 
 describe('IMAP TLS policy', () => {
+  it('preserves the account-wide email ID returned by ImapFlow', async () => {
+    const port = new ImapFlowPort({ ...config.incoming, password: 'x' }, 'command')
+    vi.spyOn((port as any).client, 'fetch').mockImplementation(async function* () {
+      yield { uid: 17, emailId: '18446744073709551615' }
+    })
+    expect(await port.fetch('17', { envelope: true })).toEqual([
+      expect.objectContaining({ uid: 17, emailId: '18446744073709551615' }),
+    ])
+  })
   it('verifies certificates and never falls back to plaintext', () => {
     const tls = imapFlowOptions({ ...config.incoming, password: 'x' }, 'command')
     expect(tls).toMatchObject({
@@ -143,6 +152,96 @@ describe('IMAP TLS policy', () => {
 })
 
 describe('IMAP indexing and reading', () => {
+  it('shows and counts Gmail emails once across Inbox, All Mail and labels', async () => {
+    server.capabilities.add('X-GM-EXT-1')
+    server.addMailbox('[Gmail]/All Mail', '\\All')
+    server.addMailbox('Personal')
+    const input = {
+      emailId: '18446744073709551615',
+      messageId: 'root@x',
+      subject: 'Plans',
+      from: [alex],
+      date: at(1),
+      text: 'Shall we?',
+      attachments: [{ name: 'plans.txt', type: 'text/plain', content: 'Plan A' }],
+    }
+    for (const path of ['INBOX', '[Gmail]/All Mail', 'Personal']) server.deliver(path, input)
+    const reply = {
+      emailId: '18446744073709551614',
+      messageId: 'reply@x',
+      references: ['root@x'],
+      subject: 'Re: Plans',
+      date: at(2),
+      text: 'Yes.',
+    }
+    for (const path of ['Sent', '[Gmail]/All Mail']) server.deliver(path, reply)
+    const p = await connected()
+    await sync(p)
+    for (const query of [{ view: 'inbox' }, { view: 'all' }, { view: 'all', text: 'Plans' }]) {
+      const page = await p.query(account, query)
+      expect(page.total).toBe(1)
+      expect(page.items[0].count).toBe(2)
+    }
+    const [thread] = (await p.query(account, { view: 'inbox' })).items
+    const messages = await p.conversation(account, thread.id)
+    expect(messages.map((m) => m.text?.trim())).toEqual(['Shall we?', 'Yes.'])
+    expect(new TextDecoder().decode(await p.download(account, messages[0].attachments![0]))).toBe(
+      'Plan A',
+    )
+    // Actions still receive all five verified mailbox + UID locations.
+    const locations = await p.conversationMetadata(account, [thread.id])
+    expect(locations).toHaveLength(5)
+    const updated = await p.update(
+      account,
+      Object.fromEntries(locations.map((m) => [m.id, { keywords: { $seen: true } }])),
+    )
+    expect(updated.failures).toEqual([])
+    expect(updated.updated).toHaveLength(5)
+  })
+  it('deduplicates by server identity when Message-ID is absent and preserves distinct emails', async () => {
+    const same = { emailId: '123', subject: 'No header ID', date: at(1), text: 'One email' }
+    server.deliver('INBOX', same)
+    server.deliver('Archive', same)
+    // Reused Message-ID headers are not proof that two emails are identical.
+    server.deliver('INBOX', { emailId: '124', messageId: 'shared@x', date: at(2), text: 'First' })
+    server.deliver('Archive', {
+      emailId: '125',
+      messageId: 'shared@x',
+      date: at(3),
+      text: 'Second',
+    })
+    server.deliver('INBOX', { messageId: 'plain@x', date: at(4), text: 'Plain first' })
+    server.deliver('Archive', { messageId: 'plain@x', date: at(5), text: 'Plain second' })
+    const p = await connected()
+    await sync(p)
+    const page = await p.query(account, { view: 'all' })
+    expect(page.total).toBe(3)
+    const noHeader = page.items.find((c) => c.subject === same.subject)!
+    expect(noHeader.count).toBe(1)
+    expect(await p.conversation(account, noHeader.id)).toHaveLength(1)
+    for (const thread of page.items.filter((c) => c.id !== noHeader.id)) {
+      expect(thread.count).toBe(2)
+      expect(await p.conversation(account, thread.id)).toHaveLength(2)
+    }
+  })
+  it('reads another location if the first Gmail location disappeared or became stale', async () => {
+    const input = { emailId: '123', messageId: 'same@x', date: at(1), text: 'Still here' }
+    const inboxUid = server.deliver('INBOX', input)
+    server.deliver('Archive', input)
+    const p = await connected()
+    await sync(p)
+    const [thread] = (await p.query(account, { view: 'inbox' })).items
+    server.remove('INBOX', inboxUid)
+    expect((await p.conversation(account, thread.id)).map((m) => m.text?.trim())).toEqual([
+      'Still here',
+    ])
+    server.deliver('INBOX', input)
+    await sync(p)
+    server.resetUidValidity('INBOX')
+    expect((await p.conversation(account, thread.id)).map((m) => m.text?.trim())).toEqual([
+      'Still here',
+    ])
+  })
   it('bounds an empty preview on opening while preserving the full HTML body', async () => {
     const html = ' '.repeat(4096) + '<p>Full message content</p>'
     server.deliver('INBOX', { messageId: 'html@x', subject: 'HTML', date: at(1), html })

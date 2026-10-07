@@ -173,6 +173,7 @@ export function toNewMessage(
   return {
     ...location,
     uid: fetched.uid,
+    emailId: fetched.emailId,
     modseq: fetched.modseq,
     messageId: messageIds(env.messageId)[0] ?? null,
     inReplyTo,
