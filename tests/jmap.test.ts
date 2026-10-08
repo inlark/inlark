@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { JmapProvider, jmapFilter, jmapPatch, parseUnsubscribe } from '../packages/jmap/src'
 import { ipcSchemas } from '../packages/core/src'
 const core = 'urn:ietf:params:jmap:core',
@@ -231,6 +232,88 @@ describe('JMAP provider', () => {
     })
     const [account] = await provider.connect()
     expect((await provider.messages(account, ['nested'], true))[0].html).toBe('<p>Visible body</p>')
+  })
+  it('preserves plain-text formatting when JMAP lists the part in both body preferences', async () => {
+    const text = readFileSync(new URL('./fixtures/plain-email.txt', import.meta.url), 'utf8')
+    const part = { type: 'text/plain', partId: 'plain' }
+    const { provider, fetch } = fixture({
+      'Email/get': () => ({
+        list: [
+          {
+            ...raw('plain'),
+            textBody: [part],
+            htmlBody: [part],
+            bodyStructure: part,
+            bodyValues: { plain: { value: text } },
+          },
+        ],
+      }),
+    })
+    const [account] = await provider.connect()
+    const [message] = await provider.messages(account, ['plain'], true)
+    expect(message.text).toBe(text)
+    expect(message.html).toContain('white-space:pre-wrap')
+    expect(message.html).toContain('Hi,\n\nI&#39;m Bartek')
+    expect(message.html).toContain('     _,\n__( `)&lt;\n\\____)')
+    expect(message.html).toContain('<a href="https://watchgoose.com/open-source/">')
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/download/'))).toBe(false)
+  })
+  it('renders mixed plain-text and HTML parts in their display order', async () => {
+    const parts = [
+      { type: 'text/plain', partId: 'intro' },
+      { type: 'text/html', partId: 'html' },
+      { type: 'text/plain', partId: 'signature' },
+    ]
+    const { provider } = fixture({
+      'Email/get': () => ({
+        list: [
+          {
+            ...raw('mixed'),
+            htmlBody: parts,
+            textBody: parts,
+            bodyValues: {
+              intro: { value: 'Hi,\n\nAn introduction.' },
+              html: { value: '<p>A <strong>formatted</strong> body.</p>' },
+              signature: { value: 'Kind regards,\nSender <sender@example.test>' },
+            },
+          },
+        ],
+      }),
+    })
+    const [account] = await provider.connect()
+    const [message] = await provider.messages(account, ['mixed'], true)
+    expect(message.html).toBe(
+      '<div style="white-space:pre-wrap">Hi,\n\nAn introduction.</div>\n' +
+        '<p>A <strong>formatted</strong> body.</p>\n' +
+        '<div style="white-space:pre-wrap">Kind regards,\nSender &lt;sender@example.test&gt;</div>',
+    )
+  })
+  it('keeps downloaded plain-text body parts formatted as plain text', async () => {
+    const { provider, fetch } = fixture(
+      {
+        'Email/get': () => ({
+          list: [
+            {
+              ...raw('plain-blob'),
+              htmlBody: [{ type: 'text/plain', blobId: 'plain-blob', size: 30 }],
+              bodyValues: {},
+            },
+          ],
+        }),
+      },
+      'Hi,\n\nA downloaded plain body.',
+    )
+    const [account] = await provider.connect()
+    const [message] = await provider.messages(account, ['plain-blob'], true)
+    expect(message.html).toBe(
+      '<div style="white-space:pre-wrap">Hi,\n\nA downloaded plain body.</div>',
+    )
+    expect(message.text).toBe('Hi,\n\nA downloaded plain body.')
+    expect(
+      fetch.mock.calls
+        .filter(([url]) => String(url).includes('/download/'))
+        .every(([url]) => String(url).includes('type=text%2Fplain')),
+    ).toBe(true)
   })
   it('recovers a missing body value from its JMAP part blob', async () => {
     const { provider, fetch } = fixture(

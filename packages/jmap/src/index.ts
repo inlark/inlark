@@ -4,6 +4,7 @@ import {
   conversationFromMessages,
   draftFingerprint,
   parseUnsubscribe,
+  plainTextHtml,
   ProviderError,
   type Account,
   type Address,
@@ -124,13 +125,27 @@ function structuredBodyParts(part: Json | undefined, type: string): Json[] {
   ]
 }
 function bodyParts(raw: Json, type: 'text/plain' | 'text/html'): Json[] {
-  return type === 'text/html' ? raw.htmlBody || [] : raw.textBody || []
+  // These are display preferences, not MIME types: htmlBody can include plain-text parts.
+  if (type === 'text/html')
+    return (raw.htmlBody || []).filter((part: Json) =>
+      ['text/html', 'text/plain'].includes(part.type?.toLowerCase()),
+    )
+  return raw.textBody?.length
+    ? raw.textBody
+    : (raw.htmlBody || []).filter((part: Json) => part.type?.toLowerCase() === type)
+}
+function renderBodyPart(part: Json, content: string, type: 'text/plain' | 'text/html'): string {
+  return type === 'text/html' && part.type?.toLowerCase() === 'text/plain'
+    ? plainTextHtml(content)
+    : content
 }
 function bodyValue(raw: Json, type: 'text/plain' | 'text/html'): string {
   const value = (parts: Json[]) =>
     parts
-      .map((part) => raw.bodyValues?.[part.partId]?.value || '')
-      .filter((content) => content.trim())
+      .flatMap((part) => {
+        const content = raw.bodyValues?.[part.partId]?.value || ''
+        return content.trim() ? [renderBodyPart(part, content, type)] : []
+      })
       .join('\n')
   return value(bodyParts(raw, type)) || value(structuredBodyParts(raw.bodyStructure, type))
 }
@@ -445,10 +460,14 @@ export class JmapProvider implements MailProvider {
               const bytes = await this.download(account, {
                 blobId: part.blobId,
                 name: 'body',
-                type,
+                type: part.type || type,
                 size: part.size || 0,
               })
-              message[field] = new TextDecoder(part.charset || 'utf-8').decode(bytes)
+              message[field] = renderBodyPart(
+                part,
+                new TextDecoder(part.charset || 'utf-8').decode(bytes),
+                type,
+              )
             } catch {
               // Keep the other body representation or the message preview available.
             }

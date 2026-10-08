@@ -1,0 +1,28 @@
+Hi,
+
+I'm Bartek, founder of Watchgoose.
+
+Watchgoose monitors cron jobs, backups, scheduled tasks, and recurring
+workflows that can signal their status. It's Europe hosted, operated & owned.
+
+I'd like to give BlinkDisk project a needs matched paid plan, free, for as long as the
+project is eligible via our Open Source support initiative:
+https://watchgoose.com/open-source/
+
+FreeBSD.org, Rclone.org and FreshBSD.org already participate by offering Watchgoose
+as a benefit to its committers and/or using it for monitoring of their infrastructure.
+
+Obviously any acknowledgment through your normal process is absoltely optional and
+never a condition for the donation.
+
+Let me know if you'd be interested or have any questions about it.
+
+Kind regards,
+Bartek Rutkowski
+
+--
+Watchgoose | Cron monitoring that honks when jobs go quiet
+https://watchgoose.com | support@watchgoose.com
+     _,
+__( `)<
+\____)
