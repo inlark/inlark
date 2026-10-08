@@ -99,7 +99,7 @@ jobs:
               exit 1
             fi
           done
-          bash .github/scripts/install-simplysign.sh
+          powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/install-simplysign.ps1
           powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/configure-simplysign.ps1
           powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/connect-simplysign.ps1
       - name: Package desktop app
