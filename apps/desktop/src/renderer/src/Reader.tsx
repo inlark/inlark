@@ -36,6 +36,7 @@ import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
 import {
   friendlyError,
   isDraft,
+  plainTextHtml,
   type Account,
   type Message,
   type Settings,
@@ -50,24 +51,13 @@ import { AccountMark } from './AccountMark'
 import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
-import { emailSanitizeOptions } from './email-html'
+import { emailBodyHtml, emailSanitizeOptions } from './email-html'
 import { offersAction } from './view-actions'
 import { SecuritySummary, WithheldBody, withheld } from './MessageSecurity'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
 
-const linkPattern = /\b(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g
-const escapeText = (value: string) => {
-  const holder = document.createElement('div')
-  holder.textContent = value
-  return holder.innerHTML
-}
-/** Plain text as HTML with web addresses made clickable. */
-const plainHtml = (value: string) =>
-  '<div style="white-space:pre-wrap">' +
-  escapeText(value).replace(linkPattern, (url) => '<a href="' + url + '">' + url + '</a>') +
-  '</div>'
 /**
  * Mail that paints its own backgrounds, lays itself out with tables, or carries images (logos
  * are usually drawn for white) is shown on white paper, as its sender designed it. Everything
@@ -220,14 +210,11 @@ export function EmailBody({
     let active = true
     const run = async () => {
       const template = document.createElement('template')
-      const plain = plainHtml(
+      const plain = plainTextHtml(
         (message.text?.trim() ? message.text : message.preview) ||
           'No readable message body is available.',
       )
-      template.innerHTML = DOMPurify.sanitize(
-        (message.html?.trim() ? message.html : '') || plain,
-        emailSanitizeOptions,
-      )
+      template.innerHTML = DOMPurify.sanitize(emailBodyHtml(message), emailSanitizeOptions)
       if (
         !template.content.textContent?.trim() &&
         (message.text?.trim() || message.preview?.trim())
@@ -410,6 +397,8 @@ export function EmailBody({
       observer.current?.disconnect()
       return
     }
+    // A refreshed body can produce identical HTML after preparation reset the frame.
+    if (writtenSource.current === source) return
     try {
       const doc = frame.current?.contentDocument
       if (!doc) {
@@ -434,7 +423,7 @@ export function EmailBody({
         cause instanceof Error ? (cause.stack ?? `${cause.name}: ${cause.message}`) : String(cause)
       setRenderIssue(describeIssue('Writing HTML frame', error, source))
     }
-  }, [source])
+  }, [source, frameReady])
   useLayoutEffect(() => {
     if (frameReady) resizeFrame()
   }, [frameReady, source])
