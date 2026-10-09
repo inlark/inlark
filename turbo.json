@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["pnpm_config_pm_on_fail", "pnpm_config_trust_lockfile"],
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["out/**", "dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
