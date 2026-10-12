@@ -10,7 +10,7 @@
         inlark = pkgs.callPackage ./nix/package.nix { };
         default = inlark;
       });
-      nixosModules.default = import ./nix/module.nix self;
+      nixosModules.default = import ./nix/module.nix;
       devShells = eachSystem (pkgs: {
         default = pkgs.mkShell {
           packages = with pkgs; [ nodejs_24 pnpm_12 electron_44 python3 ];
