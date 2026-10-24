@@ -94,9 +94,10 @@ export function redactEncrypted(value: unknown): any {
   if (Array.isArray(value)) return value.map(redactEncrypted)
   if (!value || typeof value !== 'object') return value
   const record = value as Record<string, any>
+  const { authCandidate: _, ...persistable } = record
   if (record.security?.encrypted)
     return {
-      ...record,
+      ...persistable,
       html: undefined,
       text: undefined,
       preview: '',
@@ -104,7 +105,7 @@ export function redactEncrypted(value: unknown): any {
       security: { ...record.security, state: 'locked' },
     }
   return Object.fromEntries(
-    Object.entries(record).map(([key, data]) => [key, redactEncrypted(data)]),
+    Object.entries(persistable).map(([key, data]) => [key, redactEncrypted(data)]),
   )
 }
 export async function localSaveDraft(draft: Draft) {

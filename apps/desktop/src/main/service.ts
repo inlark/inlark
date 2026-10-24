@@ -3,7 +3,8 @@ import { securityKind, maxMessageBytes } from '@inlark/crypto'
 import { randomUUID, X509Certificate, createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile, copyFile, rm, stat, chmod, open } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
-import { app, dialog, shell, Notification } from 'electron'
+import { app, clipboard, dialog, shell, Notification } from 'electron'
+import { selectAuthCandidate, type AuthCandidate } from './auth-detection'
 import {
   defaultSettings,
   mergePages,
@@ -43,6 +44,7 @@ import {
   type SendResult,
   type ServerSettings,
   type SubmissionSummary,
+  type Message,
 } from '@inlark/core'
 import { JmapProvider } from '@inlark/jmap'
 import { publicFetch } from './public-fetch'
@@ -200,6 +202,10 @@ export class MailService {
   private filing = new Set<string>()
   private unreadCounts = new Map<string, number>()
   private notificationBaseline = new Map<string, string>()
+  private authArrivals = new Map<string, { since: number; seen: Map<string, number> }>()
+  private authCopyQueue: Promise<unknown> = Promise.resolve()
+  private latestAuthCopy = 0
+  private disposed = false
   private indexingEmit?: ReturnType<typeof setTimeout>
   private timer?: ReturnType<typeof setInterval>
   private logs: { at: string; event: string; state?: string }[] = []
@@ -227,7 +233,7 @@ export class MailService {
   async init() {
     await this.store.init()
     await this.encryption.init()
-    this.settings = await this.store.read('settings', defaultSettings)
+    this.settings = { ...defaultSettings, ...(await this.store.read('settings', defaultSettings)) }
     this.connections = await this.store.read<Connection[]>('connections', [], {
       version: CONNECTIONS_VERSION,
       migrate: migrateConnections,
@@ -796,6 +802,7 @@ export class MailService {
       }
     for (const key of accountIds) {
       this.notificationBaseline.delete(key)
+      this.authArrivals.delete(key)
       this.unreadCounts.delete(key)
     }
     // The local message index belongs to this connection only.
@@ -846,11 +853,20 @@ export class MailService {
   conversation = (id: string, threadId: string) =>
     this.guard(id, async (p, a) => {
       const messages = await p.conversation(a, threadId)
-      if (!p.rawMessage) return messages
       return Promise.all(
-        messages.map(async (message) =>
-          this.encryption.read(message, await p.rawMessage!(a, message.id, maxMessageBytes)),
-        ),
+        messages.map(async (message) => {
+          const read = p.rawMessage
+            ? await this.encryption.read(
+                message,
+                await p.rawMessage(a, message.id, maxMessageBytes),
+              )
+            : message
+          const candidate = this.messageAuthCandidate(read)
+          return {
+            ...read,
+            authCandidate: candidate && { type: candidate.type, value: candidate.value },
+          }
+        }),
       )
     })
   query = async (query: MailQuery, cursor?: Record<string, number>): Promise<QueryPage> => {
@@ -1920,6 +1936,10 @@ export class MailService {
   setSettings = async (settings: Settings) => {
     await this.store.write('settings', settings)
     if (!settings.remoteImages) this.senderAvatars.clear()
+    if (this.settings.autoCopyAuth === false && settings.autoCopyAuth !== false) {
+      // Re-enabling applies to future arrivals, including mail beyond the visible page.
+      for (const baseline of this.authArrivals.values()) baseline.since = Date.now()
+    }
     this.settings = settings
     return settings
   }
@@ -1948,6 +1968,123 @@ export class MailService {
       null,
       2,
     )
+  private messageAuthCandidate(message: Message) {
+    if (
+      message.keywords.$draft ||
+      (message.security &&
+        ['locked', 'missingKey', 'integrityFailure'].includes(message.security.state)) ||
+      message.security?.signature === 'invalid' ||
+      /-----BEGIN PGP MESSAGE-----/.test(message.text || '')
+    )
+      return undefined
+    return selectAuthCandidate(message)
+  }
+  /** Track message IDs rather than conversation timestamps (which can tie or contain old mail). */
+  private authArrivalMessages(account: Account, messages: Message[], inboxIds: Set<string>) {
+    const now = Date.now(),
+      cutoff = now - 5 * 60_000
+    let baseline = this.authArrivals.get(account.id)
+    const initial = !baseline
+    if (!baseline) {
+      baseline = { since: Math.floor(now / 1000) * 1000, seen: new Map() }
+      this.authArrivals.set(account.id, baseline)
+    }
+    for (const [id, at] of baseline.seen) if (at < cutoff) baseline.seen.delete(id)
+    const arrivals: Message[] = []
+    for (const message of messages) {
+      const at = Date.parse(message.receivedAt)
+      if (!Number.isFinite(at) || at < cutoff || at > now + 60_000) continue
+      const seen = baseline.seen.has(message.id)
+      baseline.seen.set(message.id, at)
+      if (
+        !initial &&
+        !seen &&
+        at > baseline.since &&
+        !message.keywords.$draft &&
+        Object.keys(message.mailboxIds).some((id) => inboxIds.has(id) && message.mailboxIds[id])
+      )
+        arrivals.push(message)
+    }
+    return arrivals.sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
+  }
+  private authNotification(account: Account, message: Message, title: string, body: string) {
+    if (!Notification.isSupported()) return
+    try {
+      const notification = new Notification({ title, body, silent: false })
+      notification.on('click', () =>
+        this.emit({ type: 'open', accountId: account.id, threadId: message.threadId }),
+      )
+      // Notification errors must not change the account's connection status or log secrets.
+      notification.on('failed', () => this.log('auth-notification-failed'))
+      notification.show()
+    } catch {
+      this.log('auth-notification-failed')
+    }
+  }
+  private async copyIncomingAuth(provider: MailProvider, account: Account, arrivals: Message[]) {
+    if (this.settings.autoCopyAuth === false || !arrivals.length || this.disposed) return undefined
+    let selected: { message: Message; candidate: AuthCandidate } | undefined
+    // Limit body work to fresh arrivals; fetching never marks them as read or opens a URL.
+    for (const arrival of arrivals) {
+      try {
+        let [message] = await provider.messages(account, [arrival.id], true)
+        if (!message) continue
+        if (provider.rawMessage) {
+          const raw = await provider.rawMessage(account, message.id, maxMessageBytes)
+          message = await this.encryption.read(message, raw)
+        }
+        const candidate = this.messageAuthCandidate(message)
+        if (candidate) {
+          selected = { message, candidate }
+          break
+        }
+      } catch {
+        this.log('auth-extraction-failed')
+      }
+    }
+    if (!selected) return undefined
+    const { message, candidate } = selected
+    const copy = this.authCopyQueue.then(async () => {
+      const at = Date.parse(message.receivedAt)
+      // Recheck after asynchronous body/decryption work and while waiting behind another account.
+      if (
+        this.disposed ||
+        this.settings.autoCopyAuth === false ||
+        at <= (this.authArrivals.get(account.id)?.since ?? Infinity) ||
+        at < this.latestAuthCopy ||
+        Date.now() - at > 5 * 60_000 ||
+        this.providers.get(account.connectionId) !== provider ||
+        !this.accounts.some((a) => a.id === account.id) ||
+        (message.security?.encrypted && !this.encryption.vault.unlocked)
+      )
+        return undefined
+      const label = candidate.type === 'code' ? 'code' : 'link'
+      try {
+        await clipboard.writeText(candidate.value)
+        if ((await clipboard.readText()) !== candidate.value) throw new Error('Clipboard mismatch')
+      } catch {
+        this.log('auth-copy-failed')
+        this.authNotification(
+          account,
+          message,
+          `Couldn’t copy verification ${label}`,
+          `${account.name} · Open the email to copy it manually.`,
+        )
+        return undefined
+      }
+      this.latestAuthCopy = at
+      const sender = message.from[0]?.name || message.from[0]?.email || 'New email'
+      this.authNotification(
+        account,
+        message,
+        `Verification ${label} copied`,
+        `${candidate.value}\n${sender} · ${account.name}`,
+      )
+      return message.threadId
+    })
+    this.authCopyQueue = copy.catch(() => {})
+    return copy
+  }
   async refreshConnection(id: string) {
     if (this.refreshing.has(id)) return
     this.refreshing.add(id)
@@ -1965,10 +2102,35 @@ export class MailService {
             count: [...this.unreadCounts.values()].reduce((sum, n) => sum + n, 0),
           })
           const page = await provider.query(account, { view: 'inbox' }, 0, 25)
+          const authMessages = page.items.flatMap((conversation) => conversation.messages)
+          // A burst of normal mail must not hide an authentication email behind the first page.
+          let tail = page
+          if (this.authArrivals.has(account.id) && this.settings.autoCopyAuth !== false) {
+            const since = Math.max(
+              this.authArrivals.get(account.id)!.since,
+              Date.now() - 5 * 60_000,
+            )
+            while (
+              tail.next !== undefined &&
+              tail.items.length &&
+              Date.parse(tail.items.at(-1)!.receivedAt) >= since
+            ) {
+              const next = await provider.query(account, { view: 'inbox' }, tail.next, 25)
+              authMessages.push(...next.items.flatMap((conversation) => conversation.messages))
+              if (next.next !== undefined && next.next <= tail.next) break
+              tail = next
+            }
+          }
+          const arrivals = this.authArrivalMessages(
+            account,
+            authMessages,
+            new Set(mailboxes.filter((box) => box.role === 'inbox').map((box) => box.id)),
+          )
+          const copiedThread = await this.copyIncomingAuth(provider, account, arrivals)
           const current = page.items[0]?.receivedAt || new Date().toISOString(),
             previous = this.notificationBaseline.get(account.id)
           const newItems = previous
-            ? page.items.filter((c) => c.receivedAt > previous && c.unread)
+            ? page.items.filter((c) => c.receivedAt > previous && c.unread && c.id !== copiedThread)
             : []
           this.notificationBaseline.set(
             account.id,
@@ -2046,6 +2208,7 @@ export class MailService {
     await this.syncPendingDrafts()
   }
   dispose() {
+    this.disposed = true
     void this.encryption.lock()
     if (this.timer) clearInterval(this.timer)
     if (this.indexingEmit) clearTimeout(this.indexingEmit)

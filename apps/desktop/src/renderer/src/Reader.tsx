@@ -30,6 +30,8 @@ import {
   MailMinus,
   PencilEdit,
   Lock,
+  Copy,
+  ExternalLink,
 } from '@inlark/ui/icons'
 import { Tooltip } from '@base-ui/react/tooltip'
 import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
@@ -57,6 +59,70 @@ import { SecuritySummary, WithheldBody, withheld } from './MessageSecurity'
 
 const formatAddress = (a: { name: string; email: string }) =>
   a.name ? a.name + ' <' + a.email + '>' : a.email
+
+function AuthAction({ message }: { message: Message }) {
+  const [status, setStatus] = useState('')
+  const [copying, setCopying] = useState(false)
+  const candidate = message.authCandidate
+  useEffect(() => setStatus(''), [message.accountId, message.id, candidate?.value])
+  if (!candidate) return null
+  const label = candidate.type === 'code' ? 'code' : 'link'
+  return (
+    <div className="mb-5 rounded-lg border border-border bg-surface px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-muted text-[11px] mb-1">Verification {label}</p>
+          <p
+            className={cn(
+              'text-[13px] select-text break-all',
+              candidate.type === 'code' && 'font-mono tracking-wider',
+            )}
+          >
+            {candidate.type === 'code' ? candidate.value : new URL(candidate.value).host}
+          </p>
+        </div>
+        <Button
+          size="small"
+          disabled={copying}
+          onClick={async () => {
+            setCopying(true)
+            try {
+              await navigator.clipboard.writeText(candidate.value)
+              setStatus(`Verification ${label} copied.`)
+            } catch {
+              setStatus(`Couldn’t copy. Select the ${label} and copy it manually.`)
+            } finally {
+              setCopying(false)
+            }
+          }}
+        >
+          <Copy size={13} /> Copy {label}
+        </Button>
+        {candidate.type === 'link' && (
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() => {
+              void api
+                .openExternal(candidate.value)
+                .catch(() => setStatus('Couldn’t open this link.'))
+            }}
+          >
+            <ExternalLink size={13} /> Open link
+          </Button>
+        )}
+      </div>
+      {candidate.type === 'link' && (
+        <p className="mt-2 text-muted text-[11px] break-all select-text">{candidate.value}</p>
+      )}
+      {status && (
+        <p role="status" className="mt-2 text-muted text-[12px]">
+          {status}
+        </p>
+      )}
+    </div>
+  )
+}
 
 /**
  * Mail that paints its own backgrounds, lays itself out with tables, or carries images (logos
@@ -1039,6 +1105,9 @@ export function Reader({
                   )}
                   {open && (
                     <div className="message-content pt-6 pb-[2px] pr-0 pl-11.75 @max-[680px]/mail:pl-0">
+                      {!loading && !(message.security && withheld(message.security)) && (
+                        <AuthAction key={message.id} message={message} />
+                      )}
                       <EmailBody
                         message={message}
                         remoteImages={settings.remoteImages}

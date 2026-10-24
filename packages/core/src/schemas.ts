@@ -198,6 +198,7 @@ export const settingsSchema = z.object({
   theme: z.enum(['dark', 'light', 'system']),
   remoteImages: z.boolean(),
   notifications: z.boolean(),
+  autoCopyAuth: z.boolean().optional(),
   closeToTray: z.boolean(),
   systemTitleBar: z.boolean().optional(),
   defaultAccountId: id.optional(),
