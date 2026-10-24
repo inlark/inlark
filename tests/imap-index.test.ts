@@ -501,10 +501,9 @@ describe('SQLite metadata index', () => {
     }
   })
 
-  it('answers conversation pages quickly on a large mailbox', async () => {
+  it('pages and searches a large mailbox using indexed queries', async () => {
     const sync = new SqliteMetadataIndex(join(directory, 'large.sqlite'))
     const [inbox, archive] = sync.syncMailboxes('a', [folder('INBOX'), folder('Archive')])
-    const started = performance.now()
     for (let start = 0; start < 50_000; start += 500) {
       const batch: NewMessage[] = []
       for (let uid = start + 1; uid <= start + 500; uid++)
@@ -516,7 +515,6 @@ describe('SQLite metadata index', () => {
         )
       sync.upsertMessages('a', batch)
     }
-    const built = performance.now()
     const page = sync.conversations('a', { mailboxIds: [inbox!.id] }, { limit: 50 })
     const next = sync.conversations(
       'a',
@@ -530,7 +528,6 @@ describe('SQLite metadata index', () => {
       },
     )
     const unread = sync.conversations('a', { unseen: true }, { limit: 50 })
-    const done = performance.now()
     expect(page.items).toHaveLength(50)
     expect(page.total).toBe(10_000)
     expect(next.items[0]!.latest.receivedAt < page.items.at(-1)!.latest.receivedAt).toBe(true)
@@ -542,9 +539,7 @@ describe('SQLite metadata index', () => {
     )
     const searched = sync.conversations('a', { ids: ids.map((m) => m.id) }, { limit: 50 })
     expect(searched.items).toHaveLength(50)
-    // Generous bounds keep CI stable; typical runs are several times faster.
-    expect(built - started).toBeLessThan(10_000)
-    expect(done - built).toBeLessThan(1_500)
+    // Query plans catch full-scan regressions without depending on build-host speed.
     for (const filter of [
       { mailboxIds: [inbox!.id] },
       { mailboxIds: [inbox!.id, archive!.id] },

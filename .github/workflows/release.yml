@@ -128,6 +128,14 @@ jobs:
         env:
           CERTUM_CERTIFICATE_SHA1: ${{ secrets.CERTUM_CERTIFICATE_SHA1 }}
         run: ./.github/scripts/verify-windows-signatures.ps1
+      - name: Work around Apple ticket service HTTP/3 failures
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Force HTTPS over TCP on this disposable runner until the upstream network issue is fixed.
+          # https://github.com/actions/runner-images/issues/14924
+          echo "block return out quick proto udp from any to any port 443" | sudo pfctl -f -
+          sudo pfctl -E
       - name: Sign, notarize and package macOS app
         if: runner.os == 'macOS'
         env:
