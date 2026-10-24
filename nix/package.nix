@@ -12,7 +12,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm = pnpm_12;
     fetcherVersion = 4;
     postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
-    hash = "sha256-VKMs8tV1e+e2cvebQT8vptqqg56P4NOj0gaqW9xxFrw=";
+    hash = "sha256-eVgjZ0qBHtAgCkYRgVmFFli76oP5C0DCT/e5ITG2yDY=";
   };
   postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
