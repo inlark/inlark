@@ -454,6 +454,27 @@ export function SettingsPanel({
                     )}
                   >
                     <div>
+                      <strong>Copy verification codes and links</strong>
+                      <p>
+                        Copy sign-in, verification, and password reset codes or links when new email
+                        arrives. Replaces your clipboard and shows what was copied in a
+                        notification.
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label="Copy verification codes and links"
+                      checked={bootstrap.settings.autoCopyAuth !== false}
+                      onCheckedChange={(autoCopyAuth) => void update({ autoCopyAuth })}
+                    />
+                  </div>
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
+                    <div>
                       <strong>Keep running in the tray</strong>
                       <p>Keep checking for new mail after the window is closed.</p>
                     </div>

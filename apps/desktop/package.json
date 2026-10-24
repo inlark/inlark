@@ -20,8 +20,10 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@inlark/core": "workspace:*",
+    "@inlark/crypto": "workspace:*",
     "@inlark/imap": "workspace:*",
     "@inlark/jmap": "workspace:*",
+    "@inlark/mime": "workspace:*",
     "@inlark/ui": "workspace:*",
     "@tanstack/react-form": "^1.0.0",
     "@tanstack/react-hotkeys": "^0.11.0",
@@ -35,15 +37,15 @@
     "boring-avatars": "^2.0.4",
     "dompurify": "^3.2.0",
     "electron-updater": "^6.8.9",
+    "html-to-text": "^10.0.1",
     "idb": "^8.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^4.0.0",
-    "@inlark/mime": "workspace:*",
-    "@inlark/crypto": "workspace:*"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
+    "@types/html-to-text": "^9.0.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",

@@ -144,6 +144,8 @@ export interface Message {
   /** Revision of ciphertext, never a decrypted-body fingerprint. */
   protectedRevision?: string
   encryptionIntent?: boolean
+  /** Derived from this message after decryption; never persisted separately. */
+  authCandidate?: { type: 'code' | 'link'; value: string }
 }
 export interface Conversation {
   id: string
@@ -229,6 +231,8 @@ export interface Settings {
   theme: 'dark' | 'light' | 'system'
   remoteImages: boolean
   notifications: boolean
+  /** Copy fresh verification/reset codes and links on arrival, with a desktop notification. */
+  autoCopyAuth?: boolean
   closeToTray: boolean
   /** Use the system window frame instead of inlark's title bar, after restarting. */
   systemTitleBar?: boolean
@@ -248,6 +252,7 @@ export const defaultSettings: Settings = {
   theme: 'dark',
   remoteImages: true,
   notifications: true,
+  autoCopyAuth: true,
   closeToTray: true,
   systemTitleBar: false,
   signatures: {},
