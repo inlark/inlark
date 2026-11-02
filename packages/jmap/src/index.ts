@@ -194,8 +194,8 @@ function asMessage(account: Account, raw: Json, bodies: boolean): Message {
     for (const part of raw.attachments || []) visit(part)
     result.attachments = [...attachments.values()]
     result.unsubscribe = parseUnsubscribe(
-      raw['header:List-Unsubscribe:asText'],
-      raw['header:List-Unsubscribe-Post:asText'],
+      raw['header:List-Unsubscribe'],
+      raw['header:List-Unsubscribe-Post'],
     )
   }
   if (
@@ -417,8 +417,9 @@ export class JmapProvider implements MailProvider {
                   'textBody',
                   'htmlBody',
                   'attachments',
-                  'header:List-Unsubscribe:asText',
-                  'header:List-Unsubscribe-Post:asText',
+                  // RFC 8621 forbids asText for List-Unsubscribe; keep raw values for parsing.
+                  'header:List-Unsubscribe',
+                  'header:List-Unsubscribe-Post',
                 ]
               : summaryProperties,
             ...(bodies
