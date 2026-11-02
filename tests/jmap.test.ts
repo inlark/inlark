@@ -38,6 +38,10 @@ function fixture(overrides: Record<string, (args: any) => any> = {}, downloadBod
     return Response.json({
       methodResponses: request.methodCalls.map(([name, args, tag]: any) => {
         calls.push({ name, args })
+        // RFC 8621 §4.1.2.2 forbids Text form for RFC 2369 list headers.
+        // Stalwart validates this even when the message has no such header.
+        if (name === 'Email/get' && args.properties?.includes('header:List-Unsubscribe:asText'))
+          return ['error', { type: 'invalidArguments' }, tag]
         const response =
           overrides[name]?.(args) ??
           (
@@ -431,6 +435,50 @@ describe('JMAP provider', () => {
       parseUnsubscribe('<https://list.example/unsubscribe>', 'List-Unsubscribe=One-Click'),
     ).toEqual({ url: 'https://list.example/unsubscribe', oneClick: true })
     expect(parseUnsubscribe('<javascript:alert(1)>')).toBeUndefined()
+  })
+  it.each([
+    [undefined, undefined, undefined],
+    [
+      '<mailto:leave@list.example>',
+      undefined,
+      { url: 'mailto:leave@list.example', oneClick: false },
+    ],
+    [
+      '<mailto:leave@list.example>,\r\n <https://list.example/unsubscribe>',
+      'List-Unsubscribe=One-Click',
+      { url: 'https://list.example/unsubscribe', oneClick: true },
+    ],
+  ])('opens conversations with raw unsubscribe headers (%s)', async (value, post, expected) => {
+    const { provider, calls } = fixture({
+      'Email/get': (args) => ({
+        list: [
+          {
+            ...raw('newsletter'),
+            textBody: [{ partId: 'text', type: 'text/plain' }],
+            bodyValues: { text: { value: 'Newsletter content' } },
+            ...Object.fromEntries(
+              args.properties
+                .filter((property: string) => property.startsWith('header:'))
+                .map((property: string) => [
+                  property,
+                  {
+                    'header:List-Unsubscribe': value ?? null,
+                    'header:List-Unsubscribe-Post': post ?? null,
+                  }[property],
+                ]),
+            ),
+          },
+        ],
+      }),
+    })
+    const [account] = await provider.connect()
+    const [message] = await provider.conversation(account, 'thread-newsletter')
+    expect(message.text).toBe('Newsletter content')
+    expect(message.unsubscribe).toEqual(expected)
+    expect(calls.find((call) => call.name === 'Email/get')?.args.properties).toEqual(
+      expect.arrayContaining(['header:List-Unsubscribe', 'header:List-Unsubscribe-Post']),
+    )
+    provider.dispose()
   })
   it('discovers bounded Autocrypt headers without requesting bodies or message blobs', async () => {
     const { provider, calls } = fixture({

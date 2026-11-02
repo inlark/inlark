@@ -43,6 +43,12 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
             from: [{ name: 'Fixture', email: identities[0].email }],
             to: [{ name: 'Test', email: identities[0].email }],
             subject: tag + ' ' + i,
+            ...(i === 60
+              ? {
+                  'header:List-Unsubscribe': '<https://list.example/unsubscribe>',
+                  'header:List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                }
+              : {}),
             receivedAt: new Date(Date.UTC(2026, 8, 20, 0, i)).toISOString(),
             textBody: [{ partId: 'text', type: 'text/plain' }],
             bodyValues: { text: { value: 'Unicode: Grüße aus Wien. Search needle ' + i } },
@@ -76,6 +82,10 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
       expect(new Set([...first.items, ...second.items].map((c) => c.key)).size).toBe(61)
       const body = await provider.conversation(account, first.items[0].id)
       expect(body[0].text).toContain('Grüße')
+      expect(body[0].unsubscribe).toEqual({
+        url: 'https://list.example/unsubscribe',
+        oneClick: true,
+      })
       const result = await provider.update(account, {
         [body[0].id]: { keywords: { $flagged: true, $seen: false } },
       })
