@@ -1,19 +1,6 @@
 name: Build Flatpak
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/flatpak.yml'
-      - '.github/workflows/release.yml'
-      - 'scripts/*flatpak*'
-      - 'apps/desktop/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'package.json'
-      - 'tests/flatpak.test.ts'
-      - 'tests/updates.test.ts'
-      - 'vitest.config.ts'
   workflow_dispatch:
   workflow_call:
     inputs:
