@@ -1,4 +1,4 @@
-{ lib, stdenv, nodejs_24, pnpm_12, fetchPnpmDeps, pnpmConfigHook, makeWrapper, makeDesktopItem, copyDesktopItems, electron_44 }:
+{ lib, stdenv, nodejs_24, pnpm_12, fetchPnpmDeps, pnpmConfigHook, makeWrapper, makeDesktopItem, copyDesktopItems, electron_44, dbus }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "inlark";
   version = (builtins.fromJSON (builtins.readFile ../apps/desktop/package.json)).version;
@@ -6,13 +6,13 @@ stdenv.mkDerivation (finalAttrs: {
     src = ../.;
     filter = path: type: !(builtins.elem (baseNameOf path) [ "node_modules" ".pnpm-store" ".turbo" ".astro" ".wrangler" "out" "dist" "release" ".git" ".test-data" "result" "test-results" ]);
   };
-  nativeBuildInputs = [ nodejs_24 pnpm_12 pnpmConfigHook makeWrapper copyDesktopItems ];
+  nativeBuildInputs = [ nodejs_24 pnpm_12 pnpmConfigHook makeWrapper copyDesktopItems dbus ];
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     pnpm = pnpm_12;
     fetcherVersion = 4;
     postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
-    hash = "sha256-eVgjZ0qBHtAgCkYRgVmFFli76oP5C0DCT/e5ITG2yDY=";
+    hash = "sha256-21fDziofDzbkQXAC57wd7lbKQdRWDmkJvT4J2W5fBLI=";
   };
   postPatch = "sed -i /storeDir:/d pnpm-workspace.yaml";
   ELECTRON_SKIP_BINARY_DOWNLOAD = "1";

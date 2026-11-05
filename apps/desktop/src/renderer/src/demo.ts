@@ -835,6 +835,18 @@ const copyOf = (source: Draft, patch: Partial<Draft>): Draft => ({
   ...patch,
 })
 export const demoAPI: DesktopMailAPI = {
+  startupStatus: async () => ({
+    supported: false,
+    enabled: false,
+    startMinimized: true,
+    requiresApproval: false,
+  }),
+  setStartup: async () => ({
+    supported: false,
+    enabled: false,
+    startMinimized: true,
+    requiresApproval: false,
+  }),
   updateStatus: async () => ({ phase: 'idle' }),
   encryptionStatus: async () => encryptionState(),
   setupEncryption: async ({ accountId, identityId, action, password }) => {

@@ -210,6 +210,10 @@ export const settingsSchema = z.object({
     .optional(),
 })
 export const ipcSchemas = {
+  startupStatus: z.tuple([]),
+  setStartup: z.tuple([
+    z.object({ enabled: z.boolean().optional(), startMinimized: z.boolean().optional() }).strict(),
+  ]),
   encryptionStatus: z.tuple([]),
   setupEncryption: z.tuple([
     z.object({

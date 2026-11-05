@@ -69,3 +69,10 @@ The release workflow waits for Flatpak validation and publishes the tested bundl
 alongside native installers. Both stable and prerelease tags produce bundles.
 There is no dependency on Flathub app review or repository access. A signed
 inlark update repository can be added later using the same application ID.
+
+Startup uses the desktop’s Background portal, which may ask for permission on first launch.
+Settings → General lets you enable or disable startup and choose between the tray and an open window.
+Declining the request leaves startup off; inlark does not ask again automatically. The desktop must
+provide a Background portal backend. If it cannot grant permission, Settings reports the failure and
+lets you retry. The switch reflects the last portal response; permissions revoked outside inlark
+remain controlled by the desktop.

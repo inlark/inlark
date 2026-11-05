@@ -37,7 +37,7 @@ If you run your own mail server, or just have a few accounts at small providers,
 - **Sending you can trust.** Drafts survive crashes. If a send's response gets lost on the way back, inlark marks the message **unconfirmed** and doesn't retry it on its own, so nobody gets your message twice.
 - **Private by design.** inlark connects directly to your mail server. There's no inlark account, no sync service and no analytics.
 - **Dark and light, with equal care.** Both themes get the same attention to detail, and rich HTML mail keeps the look its sender designed.
-- **At home on your desktop.** Native notifications, a tray icon with your unread count, and inlark can be your default `mailto:` handler.
+- **At home on your desktop.** Native notifications, a tray icon with your unread count, and inlark can be your default `mailto:` handler. Launch automatically when you sign in, quietly in the tray or with an open window.
 
 <table>
   <tr>
