@@ -7,5 +7,7 @@ allowBuilds:
   esbuild: true
   workerd: true
   electron-winstaller: false
+  # The Flatpak portal uses Node sockets; its optional native module is not bundled.
+  usocket: false
 minimumReleaseAgeExclude:
   - electron@44.4.5
