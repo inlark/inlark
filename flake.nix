@@ -13,7 +13,7 @@
       nixosModules.default = import ./nix/module.nix;
       devShells = eachSystem (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [ nodejs_24 pnpm_12 electron_44 python3 ];
+          packages = with pkgs; [ nodejs_24 pnpm_12 electron_44 python3 dbus ];
           ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
           ELECTRON_EXEC_PATH = "${pkgs.electron_44}/bin/electron";
           shellHook = ''

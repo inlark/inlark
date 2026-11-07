@@ -36,6 +36,7 @@ import { AccountSetup, type SetupMode } from './AccountSetup'
 import { FolderMappingsDialog } from './FolderMappings'
 import { AliasesDialog } from './Aliases'
 import { IndexingMeter } from './IndexingMeter'
+import { StartupSettings } from './StartupSettings'
 import { ShortcutEditor } from './ShortcutEditor'
 import { EncryptionPanel } from './EncryptionSettings'
 import { newMessageAccount } from './compose-account'
@@ -484,6 +485,7 @@ export function SettingsPanel({
                       onCheckedChange={(closeToTray) => void update({ closeToTray })}
                     />
                   </div>
+                  <StartupSettings notify={notify} />
                 </div>
                 {bootstrap.accounts.length > 1 && (
                   <div

@@ -1,6 +1,7 @@
 import { openCryptoWorker } from './crypto-open'
 import {
   app,
+  dialog,
   BrowserWindow,
   ipcMain,
   protocol,
@@ -11,6 +12,9 @@ import {
   nativeTheme,
   powerMonitor,
 } from 'electron'
+import { homedir } from 'node:os'
+import { StartupManager, startInTray, startupArgument } from './startup'
+import { requestBackground } from './startup-portal'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { ipcSchemas, type AppEvent, type Settings } from '@inlark/core'
@@ -47,6 +51,9 @@ let unreadCount = 0,
 // Keep the current window's mode while a saved preference waits for the next restart.
 let windowUsesSystemTitleBar = false
 let restartQueued = false
+let hideInitialWindow = false
+let startupReady: Promise<void> = Promise.resolve()
+let startup: StartupManager
 let service: MailService
 const updates = new UpdateManager((status) => send({ type: 'update', status }))
 const pendingEvents: AppEvent[] = []
@@ -80,6 +87,7 @@ function send(event: AppEvent) {
   }
 }
 function show() {
+  hideInitialWindow = false
   if (!window) createWindow()
   window?.show()
   window?.focus()
@@ -137,7 +145,7 @@ function createWindow() {
     },
   })
   window.on('ready-to-show', () => {
-    if (!smoke) window?.show()
+    if (!smoke && !hideInitialWindow) window?.show()
   })
   window.on('close', (event) => {
     if (!quitting && service?.settings.closeToTray && tray) {
@@ -209,7 +217,7 @@ const lock = app.requestSingleInstanceLock()
 if (!lock) app.quit()
 else {
   app.on('second-instance', (_event, args) => {
-    show()
+    if (!args.includes(startupArgument) || args.some((arg) => /^mailto:/i.test(arg))) show()
     mailtoFromArgs(args)
   })
   app.on('open-url', (event, url) => {
@@ -255,10 +263,44 @@ else {
         discover,
       })
       await service.init()
+      startup = new StartupManager({
+        app,
+        store: new JsonStore(join(app.getPath('userData'), 'mail')),
+        platform: process.platform,
+        env: process.env,
+        execPath: process.execPath,
+        home: homedir(),
+        disabled: demo || smoke,
+        installed: app.isPackaged || app.getAppPath().startsWith('/nix/store/'),
+        requestBackground,
+        askMac: async () => {
+          const result = await dialog.showMessageBox(window!, {
+            type: 'question',
+            title: 'Open inlark when you sign in?',
+            message: 'Get new email notifications as soon as you sign in.',
+            detail:
+              'inlark will start quietly in the tray. You can change this in Settings. macOS may ask you to allow inlark in System Settings → General → Login Items.',
+            buttons: ['Enable startup', 'Not now'],
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true,
+          })
+          return result.response === 0
+        },
+      })
+      await startup.load()
       // Native surfaces such as the window controls and menus follow inlark's theme setting.
       nativeTheme.themeSource = service.settings.theme
       nativeTheme.on('updated', followTheme)
       const handlers: Record<keyof typeof ipcSchemas, (...args: any[]) => unknown> = {
+        startupStatus: async () => {
+          await startupReady
+          return startup.status()
+        },
+        setStartup: async (preferences) => {
+          await startupReady
+          return startup.set(preferences)
+        },
         ready: () => {
           rendererReady = true
           for (const event of pendingEvents.splice(0)) window?.webContents.send('mail:event', event)
@@ -341,7 +383,6 @@ else {
           if (!parsed.success) throw new Error('Invalid input. Check the fields and try again.')
           return handlers[name as keyof typeof ipcSchemas](...parsed.data)
         })
-      createWindow()
       try {
         tray = new Tray(trayImage())
         tray.setToolTip('inlark')
@@ -363,9 +404,25 @@ else {
       } catch {
         tray = null
       }
+      hideInitialWindow = startInTray({
+        automatic: startup.wasOpenedAtLogin(process.argv),
+        startMinimized: startup.startMinimized,
+        trayAvailable: tray !== null,
+        hasMailto: process.argv.some((arg) => /^mailto:/i.test(arg)),
+      })
+      createWindow()
+      // Let the window appear before any first-run consent dialog. Development, demo,
+      // and smoke runs never register with the host OS.
+      startupReady = new Promise<void>((resolve) => window!.once('ready-to-show', () => resolve()))
+        .then(() => startup.initialize())
+        .catch(() => {
+          /* Settings can retry without preventing mail from opening. */
+        })
       powerMonitor.on('resume', () => void service.refresh())
       if (!demo && !smoke) updates.start()
-      app.on('activate', show)
+      app.on('activate', () => {
+        if (!hideInitialWindow || rendererReady) show()
+      })
       mailtoFromArgs(process.argv)
       // The packaged desktop entry lets the user choose inlark as their mailto handler.
     })

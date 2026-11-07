@@ -605,7 +605,20 @@ export interface EncryptionReadiness {
   recipients: RecipientReadiness[]
   recommend: boolean
 }
+export interface StartupPreferences {
+  enabled?: boolean
+  startMinimized?: boolean
+}
+export interface StartupStatus {
+  supported: boolean
+  enabled: boolean
+  startMinimized: boolean
+  requiresApproval: boolean
+  error?: string
+}
 export interface DesktopMailAPI {
+  startupStatus(): Promise<StartupStatus>
+  setStartup(preferences: StartupPreferences): Promise<StartupStatus>
   encryptionStatus(): Promise<EncryptionStatus>
   setupEncryption(input: {
     accountId: string
