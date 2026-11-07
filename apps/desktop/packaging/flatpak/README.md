@@ -62,8 +62,11 @@ updates dependencies from their configured repositories.
 
 `.github/workflows/flatpak.yml` builds the directory archive and generated
 manifest, validates desktop/AppStream metadata, builds the bundle and runs the
-installed application smoke test. It runs for relevant PRs, supports manual
-dispatch, and is called by the tag release workflow with the tag's version.
+installed application smoke test. It supports manual dispatch and is called by
+the tag release workflow with the tag’s version. Pull requests run the separate
+CI workflow for formatting, type checks, unit tests and production builds;
+they do not build or install Flatpak bundles. Run the Flatpak workflow manually
+when changing the packaging or sandbox integration.
 
 The release workflow waits for Flatpak validation and publishes the tested bundle
 alongside native installers. Both stable and prerelease tags produce bundles.
