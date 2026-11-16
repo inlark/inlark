@@ -292,6 +292,20 @@ describe('email dark colours: converting a frame', () => {
     expect(written(banner, 'background-color')).toEqual(white)
     expect(banner.written('color')).toBe('rgb(0, 0, 0)')
   })
+  it('keeps a card’s own white under a see-through gradient inside a dark wrapper', () => {
+    const card = new FakeElement('DIV', {
+      background: 'rgb(255, 255, 255)',
+      image: 'linear-gradient(90deg, rgba(37, 99, 235, 0.6), rgba(37, 99, 235, 0.6))',
+      color: 'rgb(0, 0, 0)',
+    })
+    const wrapper = new FakeElement('DIV', { background: 'rgb(11, 11, 15)' }).append(card)
+    const { doc } = frame(wrapper)
+    darkenFrame(doc, surface)
+    expect(wrapper.written('background-color')).toBeUndefined()
+    expect(card.written('background-image')).toBeUndefined()
+    expect(written(card, 'background-color')).toEqual(white)
+    expect(card.written('color')).toBe('rgb(0, 0, 0)')
+  })
   it('flattens a see-through colour onto the paper it was designed on', () => {
     const tint = new FakeElement('DIV', {
       background: 'rgba(37, 99, 235, 0.6)',

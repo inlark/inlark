@@ -416,12 +416,13 @@ function planBackground(style: Snapshot, parent: Region, base: Rgb): BackgroundP
   const changed = original.filter((stop, index) => !same(stop, mapped[index])).length
   if (changed && changed < original.length) return keep()
   if (!changed)
-    // The gradient stays; see-through stops keep showing the paper they were designed on.
+    // The gradient stays, so see-through stops must keep showing the paper they were designed
+    // on, whether that paper is this element's own colour or the page's.
     return {
       keep: false,
       before: average(original),
       after: average(original),
-      color: repainted ? css(backing) : color,
+      color: repainted || color ? css(backing) : undefined,
     }
   let index = 0
   return {
