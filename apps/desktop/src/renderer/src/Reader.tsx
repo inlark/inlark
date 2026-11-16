@@ -65,6 +65,7 @@ import {
 } from './email-dark'
 import {
   colorKey,
+  defaultColors,
   publishColorSwitch,
   setColorOverrides,
   useColorOverrides,
@@ -731,6 +732,8 @@ interface ReaderProps {
   loading?: boolean
   onUnlock?: () => void
   onOpenEncryption?: () => void
+  /** Emails were switched to their white background by hand: the button, menu or shortcut. */
+  onSwitchedToLight?: () => void
 }
 export type UnsubscribeState = 'available' | 'pending' | 'done'
 const unsubscribeLabels = {
@@ -818,6 +821,7 @@ export function Reader({
   loading = false,
   onUnlock,
   onOpenEncryption,
+  onSwitchedToLight,
 }: ReaderProps) {
   const keys = useShortcutText()
   // Unsent drafts sit below the conversation they would continue, never among what was said.
@@ -873,16 +877,19 @@ export function Reader({
       else next.delete(key)
       return next
     })
-  const colorsOf = (message: Message) =>
-    overrides.get(colorKey(message)) ?? settings.messageColors ?? 'light'
+  const colorsOf = (message: Message) => overrides.get(colorKey(message)) ?? defaultColors(settings)
   const canSwitch = (message: Message) => theme === 'dark' && switchable.has(colorKey(message))
   // The shortcut and the menu act on every expanded email; usually that is just the latest one.
   const switchTargets = messages.filter(
     (m) => (expanded.has(m.id) || messages.length === 1) && canSwitch(m),
   )
   const showingDark = switchTargets.some((m) => colorsOf(m) === 'dark')
-  const switchColors = () =>
-    setColorOverrides(switchTargets.map(colorKey), showingDark ? 'light' : 'dark')
+  /** One switch by hand, however many emails it covers. */
+  const switchTo = (targets: Message[], colors: 'light' | 'dark') => {
+    setColorOverrides(targets.map(colorKey), colors)
+    if (colors === 'light') onSwitchedToLight?.()
+  }
+  const switchColors = () => switchTo(switchTargets, showingDark ? 'light' : 'dark')
   const latestSwitch = useRef(switchColors)
   latestSwitch.current = switchColors
   const offersSwitch = switchTargets.length > 0
@@ -1202,10 +1209,7 @@ export function Reader({
                           }
                           shortcut={keys('messageColors')}
                           onClick={() =>
-                            setColorOverrides(
-                              [colorKey(message)],
-                              colorsOf(message) === 'dark' ? 'light' : 'dark',
-                            )
+                            switchTo([message], colorsOf(message) === 'dark' ? 'light' : 'dark')
                           }
                         >
                           {colorsOf(message) === 'dark' ? <Sun size={14} /> : <Moon size={14} />}

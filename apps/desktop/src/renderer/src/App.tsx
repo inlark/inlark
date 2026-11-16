@@ -124,7 +124,12 @@ import type { LiveToast } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
-import { useColorSwitch } from './message-colors'
+import {
+  clearColorOverrides,
+  countLightSwitch,
+  defaultColors,
+  useColorSwitch,
+} from './message-colors'
 import {
   draftMatches,
   locationOptions,
@@ -1155,11 +1160,44 @@ export function App() {
   }, [conversations, accounts])
   const savePreferences = async (patch: Partial<typeof settings>) => {
     try {
-      const next = await api.settings({ ...settings, ...patch })
+      // The latest settings, in case this runs from a toast after other settings changed.
+      const latest = queryClient.getQueryData<Bootstrap>(['bootstrap'])?.settings ?? settings
+      const next = await api.settings({ ...latest, ...patch })
       queryClient.setQueryData<Bootstrap>(['bootstrap'], (old) => old && { ...old, settings: next })
     } catch (e) {
       fail(e)
     }
+  }
+  /**
+   * Switching an email back to its white background now and then is expected. The third time it
+   * happens with dark colours as the default, inlark asks once whether white should be the default.
+   */
+  const switchedToLight = () => {
+    if (defaultColors(settings) !== 'dark' || !countLightSwitch()) return
+    const previous = settings.messageColors
+    const id = toasts.show({
+      text: 'Prefer light backgrounds for emails?',
+      tone: 'info',
+      sticky: true,
+      action: {
+        label: 'Make default',
+        run: () => {
+          // A new default applies to every email again, like changing it in Settings.
+          clearColorOverrides()
+          void savePreferences({ messageColors: 'light' })
+          toasts.show(
+            {
+              text: 'Emails now use a light background.',
+              onUndo: () => {
+                clearColorOverrides()
+                void savePreferences({ messageColors: previous })
+              },
+            },
+            id,
+          )
+        },
+      },
+    })
   }
   const title = currentFolder?.name || views.find((v) => v.id === view)?.title || 'All mail'
   const location: MailLocation = { view, account: route.account, folder: route.folder }
@@ -1730,6 +1768,7 @@ export function App() {
               onUnsubscribe={() => void unsubscribe()}
               onUnlock={() => void unlock()}
               onOpenEncryption={() => openSettings('encryption')}
+              onSwitchedToLight={switchedToLight}
             />
           ) : (
             <EmptyState

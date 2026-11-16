@@ -506,12 +506,14 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
     for (const [element, style] of styles)
       if (style === null) element.removeAttribute('style')
       else element.setAttribute('style', style)
-    for (const [image, original] of sources)
-      for (const name of ['src', 'srcset'] as const) {
-        const value = original[name]
-        if (value === null) image.removeAttribute(name)
-        else image.setAttribute(name, value)
-      }
+    for (const [image, original] of sources) {
+      // Dropping both before restoring makes Chromium forget the recoloured copy's density;
+      // otherwise the original keeps being drawn at a third of its size.
+      image.removeAttribute('srcset')
+      image.removeAttribute('src')
+      if (original.src !== null) image.setAttribute('src', original.src)
+      if (original.srcset !== null) image.setAttribute('srcset', original.srcset)
+    }
     styles.clear()
     sources.clear()
   }

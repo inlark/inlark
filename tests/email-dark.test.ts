@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { settingsSchema, defaultSettings } from '../packages/core/src'
+import { countLightSwitch, defaultColors } from '../apps/desktop/src/renderer/src/message-colors'
 import {
   contrast,
   darkBackground,
@@ -217,14 +218,51 @@ describe('email dark colours: parsing and settings', () => {
     expect(parseColor('#fff')).toEqual({ r: 255, g: 255, b: 255, a: 1 })
     expect(parseColor('oklch(0.5 0.1 200)')).toBeNull()
   })
-  it('keeps the white background unless dark colours are chosen', () => {
-    expect(defaultSettings.messageColors).toBeUndefined()
-    expect(settingsSchema.safeParse({ ...defaultSettings, messageColors: 'dark' }).success).toBe(
-      true,
-    )
-    expect(settingsSchema.safeParse({ ...defaultSettings, messageColors: 'blue' }).success).toBe(
+  it('shows dark colours unless the white background is chosen', () => {
+    expect(defaultSettings.messageColors).toBe('dark')
+    // Settings saved before the option existed have no value, and get dark colours too.
+    const { messageColors: _, ...saved } = defaultSettings
+    expect(defaultColors({})).toBe('dark')
+    expect(defaultColors({ ...saved, messageColors: 'light' })).toBe('light')
+    expect(settingsSchema.safeParse(saved).success).toBe(true)
+    expect(settingsSchema.safeParse({ ...saved, messageColors: 'light' }).success).toBe(true)
+    expect(settingsSchema.safeParse({ ...saved, messageColors: 'blue' }).success).toBe(false)
+  })
+})
+
+describe('email dark colours: asking about the white background', () => {
+  const memory = () => {
+    const values = new Map<string, string>()
+    return {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+      removeItem: (key: string) => void values.delete(key),
+    }
+  }
+  it('asks once, on the third email switched to its white background by hand', () => {
+    const store = memory()
+    expect([1, 2, 3, 4, 5, 6].map(() => countLightSwitch(store))).toEqual([
       false,
-    )
+      false,
+      true,
+      false,
+      false,
+      false,
+    ])
+  })
+  it('keeps counting across restarts, and never asks without storage', () => {
+    const store = memory()
+    countLightSwitch(store)
+    countLightSwitch(store)
+    expect(countLightSwitch({ ...store })).toBe(true)
+    const broken = {
+      getItem: () => {
+        throw new Error('Storage is unavailable')
+      },
+      setItem: () => {},
+      removeItem: () => {},
+    }
+    expect([1, 2, 3, 4].some(() => countLightSwitch(broken))).toBe(false)
   })
 })
 

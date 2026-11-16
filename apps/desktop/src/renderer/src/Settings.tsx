@@ -43,7 +43,7 @@ import { ShortcutEditor } from './ShortcutEditor'
 import { EncryptionPanel } from './EncryptionSettings'
 import { newMessageAccount } from './compose-account'
 import { undoSendDelay } from './held-sends'
-import { clearColorOverrides } from './message-colors'
+import { clearColorOverrides, defaultColors } from './message-colors'
 import { useShortcutText } from './shortcuts'
 
 /** A miniature of the app window in one theme. */
@@ -163,8 +163,8 @@ const afterArchiveOptions: { value: NonNullable<Preferences['afterArchive']>; la
 ]
 
 const messageColorOptions: { value: NonNullable<Preferences['messageColors']>; label: string }[] = [
-  { value: 'light', label: 'White background' },
   { value: 'dark', label: 'Dark colors' },
+  { value: 'light', label: 'White background' },
 ]
 
 export function SettingsPanel({
@@ -405,7 +405,7 @@ export function SettingsPanel({
                     <Select
                       aria-label="Designed emails in dark mode"
                       className="setting-select w-auto min-w-60 shrink-0"
-                      value={bootstrap.settings.messageColors || 'light'}
+                      value={defaultColors(bootstrap.settings)}
                       options={messageColorOptions}
                       onValueChange={(messageColors) => {
                         // Emails switched by hand follow the new default again.

@@ -267,7 +267,7 @@ export interface Settings {
   afterArchive?: 'next' | 'previous' | 'list'
   /**
    * How emails with their own design (backgrounds, layout tables, images) look while the app is
-   * dark: on a white background as sent (the default), or converted to dark colours.
+   * dark: converted to dark colours (the default), or on a white background as sent.
    */
   messageColors?: 'light' | 'dark'
   /** Seconds a sent message waits before it leaves, so it can still be undone. 0 sends at once. */
@@ -289,6 +289,7 @@ export const defaultSettings: Settings = {
   systemTitleBar: false,
   signatures: {},
   undoSendSeconds: 5,
+  messageColors: 'dark',
 }
 export type MailAction =
   | 'archive'

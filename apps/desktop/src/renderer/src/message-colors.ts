@@ -1,8 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import type { Message, Settings } from '@inlark/core'
+import { defaultSettings, type Message, type Settings } from '@inlark/core'
 
-/** How a designed email looks while the app is dark: as sent on white, or in dark colours. */
+/** How a designed email looks while the app is dark: in dark colours, or as sent on white. */
 export type MessageColors = NonNullable<Settings['messageColors']>
+
+/** The chosen default, or dark colours for anyone who hasn't chosen. */
+export const defaultColors = (settings: Pick<Settings, 'messageColors'>): MessageColors =>
+  settings.messageColors ?? defaultSettings.messageColors ?? 'dark'
 
 /** What the open conversation offers, for the shortcut and the command menu. */
 export interface ColorSwitch {
@@ -47,4 +51,32 @@ export function publishColorSwitch(next: ColorSwitch | null) {
   if (current === next) return
   current = next
   emit()
+}
+
+type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+const lightSwitchesKey = 'message-colors-light-switches'
+const askedKey = 'message-colors-asked'
+/** Switching one email back to its white background is expected; a few in a row is a preference. */
+const askAfter = 3
+
+/**
+ * Counts an email switched to its white background by hand while dark colours are the default.
+ * Returns true exactly once, on the switch that makes it a pattern, so inlark can ask whether
+ * white should be the default. The count survives restarts; after asking, it never asks again.
+ */
+export function countLightSwitch(store: Store = localStorage): boolean {
+  try {
+    if (store.getItem(askedKey) === 'true') return false
+    const count = Number(store.getItem(lightSwitchesKey)) + 1 || 1
+    if (count < askAfter) {
+      store.setItem(lightSwitchesKey, String(count))
+      return false
+    }
+    store.setItem(askedKey, 'true')
+    store.removeItem(lightSwitchesKey)
+    return true
+  } catch {
+    // Without storage the question could repeat on every launch, so it isn't asked at all.
+    return false
+  }
 }
