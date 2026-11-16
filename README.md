@@ -194,6 +194,10 @@ Built with Electron, React, TypeScript, Tailwind CSS, Base UI, TanStack and Turb
 
 inlark tries to make everyday email excellent before adding more features. AI, snooze, scheduled sending, rules, calendars, a full address book and mobile apps are all deliberately out of scope for now. If you need your email client to also be your calendar, your CRM and your life coach, this isn't that client. Yet.
 
+## Support inlark
+
+inlark is free and made by one person, with no ads, subscriptions or tracking. If you'd like to say thanks, you can [buy me a coffee](https://buymeacoffee.com/poeck). No account needed.
+
 ## Credits
 
 inlark stands on the shoulders of two products that showed how good software can feel:
