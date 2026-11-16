@@ -825,7 +825,7 @@ export class ImapProvider implements MailProvider {
       const shown = new Set(distinctEmails(locations).map((m) => m.id))
       c.messages = c.messages.filter((m) => shown.has(m.id))
       // Display the matching representative, even if the thread has newer mail elsewhere.
-      const representative = toMessage(account.id, row.latest)
+      const representative = toMessage(account.id, row.latest, filed(row.latest))
       c.receivedAt = row.latest.receivedAt
       c.subject = row.latest.subject || '(No subject)'
       c.preview = representative.preview

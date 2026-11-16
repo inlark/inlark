@@ -630,10 +630,19 @@ describe('IMAP list codes and links', () => {
       text: 'Draft',
       flags: ['\\Draft'],
     })
+    // Gmail files drafts without the Draft flag.
+    server.deliver('Drafts', {
+      messageId: 'gmail-draft@x',
+      subject: 'Your verification code: 731904',
+      date: at(2),
+      text: 'Draft',
+    })
     const p = await connected({ detectAuth })
     await sync(p)
-    const [draft] = (await p.query(account, { view: 'drafts' })).items
-    expect(draft.auth).toEqual({ messageId: draft.messages[0].id })
+    const drafts = (await p.query(account, { view: 'drafts' })).items
+    expect(drafts).toHaveLength(2)
+    for (const draft of drafts) expect(draft.auth).toEqual({ messageId: draft.messages[0].id })
+    const [draft] = drafts
     const without = await connected()
     await sync(without)
     expect((await without.query(account, { view: 'drafts' })).items[0].auth).toBeUndefined()
