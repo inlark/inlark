@@ -282,6 +282,8 @@ export type ShortcutHandler = {
   enabled?: boolean
   /** Defaults to true so focused fields keep their native editing shortcuts. */
   ignoreInputs?: boolean | ((binding: Binding) => boolean)
+  /** Runs once per press, not again while a held key repeats. */
+  ignoreRepeat?: boolean
 }
 
 /** Opt intentional commands into fields without letting custom typing keys trigger them. */
@@ -315,7 +317,11 @@ export function useShortcutHandlers(
       if (binding.length === 1)
         hotkeys.push({
           hotkey: binding[0] as Hotkey,
-          callback: handler.run,
+          callback: handler.ignoreRepeat
+            ? (event) => {
+                if (!event.repeat) handler.run()
+              }
+            : handler.run,
           options: bindingOptions,
         })
       else

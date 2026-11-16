@@ -42,6 +42,7 @@
     "idb": "^8.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sonner": "^2.0.8",
     "zod": "^4.0.0"
   },
   "devDependencies": {
