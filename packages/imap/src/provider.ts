@@ -1044,9 +1044,12 @@ export class ImapProvider implements MailProvider {
             const key = JSON.stringify([add, flagFromKeyword(keyword), modseq])
             operations.set(key, { uids: [...(operations.get(key)?.uids || []), m.uid], modseq })
           })
+        // A refused STORE (NO or BAD) is not a concurrent change; [MODIFIED] still succeeds.
+        const refused = new Set<number>()
         for (const [key, operation] of operations) {
           const [add, flag] = JSON.parse(key) as [boolean, string]
-          await port.store(operation.uids, add ? 'add' : 'remove', [flag], operation.modseq)
+          if (!(await port.store(operation.uids, add ? 'add' : 'remove', [flag], operation.modseq)))
+            operation.uids.forEach((uid) => refused.add(uid))
         }
         const after = valid.length
           ? await port.fetch(uidSet(valid.map((m) => m.uid)), { flags: true })
@@ -1064,7 +1067,9 @@ export class ImapProvider implements MailProvider {
               ([keyword, add]) => flags.includes(flagFromKeyword(keyword).toLowerCase()) === add,
             )
           if (applied) updated.push(m.id)
-          else failures.push(m.id + (flags ? ': changed on the server' : ': no longer exists'))
+          else if (!flags) failures.push(m.id + ': no longer exists')
+          else if (refused.has(m.uid)) failures.push(m.id + ': the server refused the change')
+          else failures.push(m.id + ': changed on the server')
         }
       })
     }

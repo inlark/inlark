@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@inlark/core": "workspace:*",
-    "imapflow": "^2.0.6",
+    "imapflow": "^2.11.0",
     "mailparser": "^3.9.28",
     "nodemailer": "^10.0.10",
     "@inlark/mime": "workspace:*"

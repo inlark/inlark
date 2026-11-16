@@ -139,6 +139,8 @@ export class FakeImapServer {
   down = false
   /** Like servers whose search index lags behind APPEND: header searches find nothing. */
   laggingSearch = false
+  /** Answers STORE with NO or BAD, which ImapFlow reports as `false`; no flag changes. */
+  refuseStore = false
   modseq = 1
   ports: FakePort[] = []
   commands: string[] = []
@@ -421,6 +423,7 @@ export class FakePort implements ImapPort {
     unchangedSince?: string,
   ) {
     this.check('STORE')
+    if (this.server.refuseStore) return false
     for (const m of this.selectedBox().messages.filter((x) => uids.includes(x.uid))) {
       // CONDSTORE: a message changed after the given modseq is left alone ([MODIFIED]).
       if (unchangedSince && this.condstore && m.modseq > Number(unchangedSince)) continue

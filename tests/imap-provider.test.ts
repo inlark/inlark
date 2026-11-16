@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
+import type { AddressInfo, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createServer as createTlsServer } from 'node:tls'
 import { ProviderError, type Account, type ImapConnectionConfig } from '../packages/core/src'
 import { ImapProvider, limitsFor, imapFlowOptions, ImapFlowPort } from '../packages/imap/src'
 import { openInProcessIndex } from '../apps/desktop/src/main/imap-index/sqlite-index'
@@ -148,6 +151,111 @@ describe('IMAP TLS policy', () => {
     expect(() => port.move([1], 'Archive')).toThrow(ProviderError)
     expect(expunge).not.toHaveBeenCalled()
     expect(move).not.toHaveBeenCalled()
+  })
+  it('never mistakes a failed STATUS or a missing message for an empty result', async () => {
+    const port = new ImapFlowPort({ ...config.incoming, password: 'x' }, 'command')
+    const client = (port as any).client
+    // ImapFlow answers a failed STATUS with false and a missing message with no content.
+    vi.spyOn(client, 'status').mockResolvedValue(false)
+    vi.spyOn(client, 'download').mockResolvedValue({})
+    vi.spyOn(client, 'fetch').mockImplementation(async function* () {
+      yield { uid: 3, size: 10 }
+    })
+    await expect(port.status('Projects')).rejects.toMatchObject({ code: 'command' })
+    await expect(port.download(3, '1', 100)).rejects.toMatchObject({ code: 'notFound' })
+    expect(await port.source(3, 100)).toBeUndefined()
+  })
+})
+
+describe('ImapFlow adapter on the wire', () => {
+  const fixture = (name: string) => readFileSync(new URL('./fixtures/tls/' + name, import.meta.url))
+  // RFC 7162 section 3.1.3: store modifiers, when present, sit between the UIDs and the flags.
+  const validStore = /^UID STORE \S+ (\(UNCHANGEDSINCE \d+\) )?[+-]FLAGS(\.SILENT)? \([^()]*\)$/i
+  /**
+   * Just enough IMAP to select a folder and store flags. Strict where lenient servers are not: a
+   * malformed STORE is answered with BAD instead of having its modifier ignored. Records each STORE.
+   */
+  async function strictServer() {
+    const stores: string[] = []
+    const sockets = new Set<Socket>()
+    const server = createTlsServer(
+      { key: fixture('server.key'), cert: fixture('server.crt') },
+      (socket) => {
+        sockets.add(socket)
+        socket.on('error', () => socket.destroy())
+        socket.write('* OK [CAPABILITY IMAP4rev1 ENABLE CONDSTORE] Ready\r\n')
+        let buffer = ''
+        socket.on('data', (chunk: Buffer) => {
+          buffer += chunk.toString('latin1')
+          for (let end = buffer.indexOf('\r\n'); end >= 0; end = buffer.indexOf('\r\n')) {
+            const [tag, ...words] = buffer.slice(0, end).split(' ')
+            buffer = buffer.slice(end + 2)
+            const command = words.join(' ')
+            const name = words.slice(0, words[0]?.toUpperCase() === 'UID' ? 2 : 1).join(' ')
+            const reply = (...lines: string[]) =>
+              socket.write([...lines, tag + ' OK Done'].map((line) => line + '\r\n').join(''))
+            switch (name.toUpperCase()) {
+              case 'CAPABILITY':
+                reply('* CAPABILITY IMAP4rev1 ENABLE CONDSTORE')
+                break
+              case 'ENABLE':
+                reply('* ENABLED CONDSTORE')
+                break
+              case 'SELECT':
+                reply(
+                  '* 1 EXISTS',
+                  '* FLAGS (\\Seen \\Flagged)',
+                  '* OK [PERMANENTFLAGS (\\Seen \\Flagged \\*)] Flags permitted',
+                  '* OK [UIDVALIDITY 1] UIDs valid',
+                  '* OK [UIDNEXT 8] Predicted next UID',
+                  '* OK [HIGHESTMODSEQ 42] Highest',
+                )
+                break
+              case 'UID STORE':
+                stores.push(command)
+                if (validStore.test(command)) reply()
+                else socket.write(tag + ' BAD Could not parse command\r\n')
+                break
+              default:
+                reply()
+                if (name.toUpperCase() === 'LOGOUT') socket.end()
+            }
+          }
+        })
+      },
+    )
+    server.on('tlsClientError', () => undefined)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const close = async () => {
+      sockets.forEach((s) => s.destroy())
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+    return { port: (server.address() as AddressInfo).port, stores, close }
+  }
+
+  it('sends a conditional STORE a strict server accepts', async () => {
+    const { port, stores, close } = await strictServer()
+    const imap = new ImapFlowPort(
+      {
+        ...config.incoming,
+        host: '127.0.0.1',
+        port,
+        password: 'x',
+        timeoutMs: 3000,
+        tls: { ca: fixture('ca.crt') },
+      },
+      'command',
+    )
+    try {
+      await imap.connect()
+      expect(imap.condstore).toBe(true)
+      await imap.select('INBOX')
+      expect(await imap.store([7], 'add', ['\\Seen'], '42')).toBe(true)
+      expect(stores).toEqual(['UID STORE 7 (UNCHANGEDSINCE 42) +FLAGS (\\Seen)'])
+    } finally {
+      await imap.close()
+      await close()
+    }
   })
 })
 
@@ -548,6 +656,17 @@ describe('IMAP organization', () => {
     expect([...server.box('INBOX').messages[0].flags]).toEqual(['\\Flagged'])
     const [current] = await p.messages(account, [message.id])
     expect(current.keywords).toEqual({ $flagged: true })
+  })
+  it('reports a refused flag change as refused, not as a concurrent change', async () => {
+    server.deliver('INBOX', { messageId: 'a@x', subject: 'A', date: at(1) })
+    const p = await connected()
+    const message = await inboxMessage(p)
+    server.refuseStore = true
+    const result = await p.update(account, { [message.id]: { keywords: { $seen: true } } })
+    expect(result).toEqual({
+      updated: [],
+      failures: [message.id + ': the server refused the change'],
+    })
   })
   it('refuses to delete a folder that still has messages', async () => {
     server.addMailbox('Projects')
