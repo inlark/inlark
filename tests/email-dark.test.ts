@@ -92,6 +92,81 @@ describe('email dark colours: text and borders', () => {
   })
 })
 
+describe('email dark colours: contrast across realistic pairs', () => {
+  const backgrounds = [
+    '#ffffff',
+    '#fafafa',
+    '#f4f4f5',
+    '#eeeeee',
+    '#e5e7eb',
+    '#dddddd',
+    '#cccccc',
+    '#bbbbbb',
+    '#aaaaaa',
+    '#999999',
+    '#888888',
+    '#808080',
+    '#767676',
+    '#6b7280',
+    '#fef3c7',
+    '#dcfce7',
+    '#fee2e2',
+    '#e0f2fe',
+    '#ede9fe',
+    '#fff7ed',
+    '#ffe8d6',
+    '#f0fdf4',
+    '#93c5fd',
+    '#a5b4fc',
+    '#86efac',
+    '#fca5a5',
+  ]
+  const texts = [
+    '#000000',
+    '#111827',
+    '#24292f',
+    '#374151',
+    '#52525b',
+    '#6b7280',
+    '#71717a',
+    '#808080',
+    '#999999',
+    '#a1a1aa',
+    '#b0b0b0',
+    '#cccccc',
+    '#ffffff',
+    '#f9fafb',
+    '#e5e7eb',
+    '#2563eb',
+    '#0969da',
+    '#1a0dab',
+    '#c00000',
+    '#dc2626',
+    '#166534',
+    '#92400e',
+    '#7c2d12',
+    '#5b4cdb',
+    '#b45309',
+    '#0b0b0f',
+  ]
+  it('never leaves readable text below its original contrast, 4.5:1 at most, or below 3:1', () => {
+    const failures: string[] = []
+    for (const background of backgrounds)
+      for (const text of texts) {
+        const before = hex(background)
+        const after = darkBackground(before, surface)
+        const original = contrast(hex(text), before)
+        if (original < 1.25 || contrast(before, after) < 1.01) continue
+        const result = darkForeground(hex(text), before, after, 'text')
+        // Where even black or white can't reach the floor, the better of the two is enough.
+        const reachable = Math.max(contrast(white, after), contrast(hex('#000000'), after))
+        const required = Math.min(reachable, Math.max(Math.min(original, 4.5), 3))
+        if (contrast(result, after) < required) failures.push(text + ' on ' + background)
+      }
+    expect(failures).toEqual([])
+  })
+})
+
 describe('email dark colours: images', () => {
   const transparentLogo = pixels(40, 20, (x, y) =>
     x > 8 && x < 32 && y > 6 && y < 14 ? [10, 10, 10, 255] : [0, 0, 0, 0],
@@ -349,6 +424,36 @@ describe('email dark colours: converting a frame', () => {
       .map(hex)
     expect(Math.min(contrast(grey, hex('#d2d2d2')), contrast(grey, white))).toBeGreaterThan(4.5)
     for (const stop of stops) expect(contrast(text, stop)).toBeGreaterThan(4.49)
+  })
+  it('keeps white text on a grey button that only gets a little darker', () => {
+    const button = new FakeElement('TD', {
+      background: 'rgb(118, 118, 118)',
+      color: 'rgb(255, 255, 255)',
+    })
+    const { doc } = frame(button)
+    darkenFrame(doc, surface)
+    const background = written(button, 'background-color')!
+    expect(oklab(background).L).toBeLessThan(oklab(hex('#767676')).L)
+    expect(written(button, 'color')).toEqual(white)
+    expect(contrast(white, background)).toBeGreaterThan(4.5)
+  })
+  it('keeps white text readable across a grey gradient', () => {
+    const banner = new FakeElement('DIV', {
+      image: 'linear-gradient(rgb(118, 118, 118), rgb(138, 138, 138))',
+      color: 'rgb(255, 255, 255)',
+    })
+    const { doc } = frame(banner)
+    darkenFrame(doc, surface)
+    const text = written(banner, 'color')!
+    const stops = banner
+      .written('background-image')!
+      .match(/rgb\([^)]*\)/g)!
+      .map(hex)
+    expect(stops).toHaveLength(2)
+    const originals = [hex('#767676'), hex('#8a8a8a')].map((stop) => contrast(white, stop))
+    stops.forEach((stop, index) =>
+      expect(contrast(text, stop)).toBeGreaterThan(Math.min(originals[index], 4.5) - 0.01),
+    )
   })
   it('leaves an area alone when its background colour can’t be read', () => {
     const card = new FakeElement('DIV', {

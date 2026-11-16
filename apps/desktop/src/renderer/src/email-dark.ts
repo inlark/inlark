@@ -65,19 +65,27 @@ export function contrast(x: Rgb, y: Rgb) {
     b = luminance(y)
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
 }
-/** The same hue and chroma, at the lightness that gives `target` luminance. */
-function withLuminance(color: Rgb, target: number): Rgb {
+/**
+ * The same hue and chroma, at the lightness whose luminance is at least (or at most) `target`.
+ * The bound really holds after rounding to whole channels, so contrast floors are never missed.
+ */
+function withLuminance(color: Rgb, target: number, side: 'atLeast' | 'atMost'): Rgb {
   const { a, b } = oklab(color)
   let low = 0,
-    high = 1,
-    result = color
-  for (let i = 0; i < 22; i++) {
+    high = 1
+  for (let i = 0; i < 24; i++) {
     const L = (low + high) / 2
-    result = fromOklab({ L, a, b })
-    if (luminance(result) < target) low = L
+    if (luminance(fromOklab({ L, a, b })) < target) low = L
     else high = L
   }
-  return result
+  let L = side === 'atLeast' ? high : low
+  for (let i = 0; i < 50; i++) {
+    const result = fromOklab({ L, a, b })
+    const y = luminance(result)
+    if (side === 'atLeast' ? y >= target : y <= target) return result
+    L = side === 'atLeast' ? Math.min(1, L + 0.002) : Math.max(0, L - 0.002)
+  }
+  return fromOklab({ L, a, b })
 }
 
 /** Reads computed colours (`rgb()`/`rgba()`) and theme tokens (`#rrggbb`). Anything else is left alone. */
@@ -177,22 +185,41 @@ export function darkForegroundOver(
   // Text hidden against its own background, such as an inbox preview line, stays hidden.
   if (kind === 'text' && Math.max(...originals) < 1.25) return backgrounds[0][1]
   const y = luminance(color)
-  let lightest = 0,
-    darkest = 1,
-    lighter: boolean | undefined
-  backgrounds.forEach(([before, after], index) => {
+  // How light and how dark the colour may be while keeping its contrast with every background.
+  let atLeast = 0,
+    atMost = 1
+  backgrounds.forEach(([, after], index) => {
     const original = originals[index]
     let target = original ** contrastScale
     if (kind === 'text') target = Math.max(target, Math.min(original, 4.5), 3)
-    const yBefore = luminance(before),
-      yAfter = luminance(after)
-    // Dark text on paper that turned dark becomes light text, and the other way round.
-    const up = yAfter < yBefore ? y <= yBefore : y > yBefore
-    lighter ??= up
-    if (up) lightest = Math.max(lightest, target * (yAfter + 0.05) - 0.05)
-    else darkest = Math.min(darkest, (yAfter + 0.05) / target - 0.05)
+    const yAfter = luminance(after)
+    atLeast = Math.max(atLeast, target * (yAfter + 0.05) - 0.05)
+    atMost = Math.min(atMost, (yAfter + 0.05) / target - 0.05)
   })
-  return withLuminance(color, Math.max(0, Math.min(1, lighter ? lightest : darkest)))
+  const fits = (lighter: boolean) => (lighter ? atLeast <= 1 : atMost >= 0)
+  const worst = (extreme: Rgb) =>
+    Math.min(...backgrounds.map(([, after]) => contrast(extreme, after)))
+  // Dark text on paper that turned dark becomes light text, and the other way round...
+  const yBefore = luminance(backgrounds[0][0])
+  const mirrored = luminance(backgrounds[0][1]) < yBefore ? y <= yBefore : y > yBefore
+  // ...unless that can't reach the contrast, like white text on a grey button that only got a
+  // little darker. Then the text stays on the sender's side, as close to its own colour as it can.
+  const lighter = fits(mirrored)
+    ? mirrored
+    : fits(!mirrored)
+      ? !mirrored
+      : worst(white) >= worst({ r: 0, g: 0, b: 0 })
+  const goal =
+    lighter === mirrored
+      ? lighter
+        ? atLeast
+        : atMost
+      : lighter
+        ? Math.max(y, atLeast)
+        : Math.min(y, atMost)
+  // Staying on the sender's side with enough contrast already: the colour stays exactly as sent.
+  if (goal === y) return color
+  return withLuminance(color, Math.max(0, Math.min(1, goal)), lighter ? 'atLeast' : 'atMost')
 }
 
 export interface ImageStats {
