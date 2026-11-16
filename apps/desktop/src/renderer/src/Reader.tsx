@@ -32,6 +32,8 @@ import {
   Lock,
   Copy,
   ExternalLink,
+  Moon,
+  Sun,
 } from '@inlark/ui/icons'
 import { Tooltip } from '@base-ui/react/tooltip'
 import { Button, IconButton, Dropdown, MenuItem, Spinner } from '@inlark/ui'
@@ -54,6 +56,13 @@ import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
 import { emailBodyHtml, emailSanitizeOptions } from './email-html'
+import { darkElementLimit, darkenFrame, parseColor, prepareDarkImage, type Rgb } from './email-dark'
+import {
+  colorKey,
+  publishColorSwitch,
+  setColorOverrides,
+  useColorOverrides,
+} from './message-colors'
 import { offersAction } from './view-actions'
 import { SecuritySummary, WithheldBody, withheld } from './MessageSecurity'
 import {
@@ -191,11 +200,15 @@ const adaptiveStyles = (theme: 'light' | 'dark') =>
   '44}'
 const sharedStyles =
   'img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}details{margin-top:14px}summary{display:inline-flex;align-items:center;height:18px;padding:0 8px;border:1px solid #d5d5dc;border-radius:9px;cursor:pointer;font-size:11px;letter-spacing:1px;list-style:none;user-select:none}summary::-webkit-details-marker{display:none}details[open]>summary{margin-bottom:10px}'
+/** Designed email in dark colours sits on the app's surface, like the paper it replaces. */
+const darkPaper = (): Rgb => parseColor(token('--surface')) ?? { r: 30, g: 30, b: 32 }
 
 export function EmailBody({
   message,
   remoteImages,
   loading = false,
+  darkColors = false,
+  onColorSwitchable,
   onLinkHover,
   onMailto,
   onUnlock,
@@ -205,6 +218,10 @@ export function EmailBody({
   remoteImages: boolean
   /** The message body is still being fetched; show its shape instead of the preview. */
   loading?: boolean
+  /** Show a designed email in dark colours rather than on white, while the app is dark. */
+  darkColors?: boolean
+  /** Whether this email's colours can be switched: a designed email, shown in a dark app. */
+  onColorSwitchable?: (switchable: boolean) => void
   onLinkHover?: (href: string | null) => void
   onMailto?: (url: string) => void
   /** Unlocks encryption keys, so an encrypted message can be read. */
@@ -231,6 +248,29 @@ export function EmailBody({
   hover.current = onLinkHover
   const mailto = useRef(onMailto)
   mailto.current = onMailto
+  const wantsDark = useRef(darkColors)
+  wantsDark.current = darkColors
+  const reportSwitchable = useRef(onColorSwitchable)
+  reportSwitchable.current = onColorSwitchable
+  const switchable = useRef(false)
+  /** Puts the sender's colours back while the email is shown in dark colours. */
+  const restoreColors = useRef<(() => void) | null>(null)
+  const [darkened, setDarkened] = useState(false)
+  const syncColors = (doc: Document) => {
+    const dark = switchable.current && wantsDark.current
+    try {
+      if (dark && !restoreColors.current) restoreColors.current = darkenFrame(doc, darkPaper())
+      else if (!dark && restoreColors.current) {
+        restoreColors.current()
+        restoreColors.current = null
+      }
+    } catch (cause) {
+      // The email stays as sent rather than half converted; darkenFrame has already restored it.
+      restoreColors.current = null
+      console.error('Could not show the email in dark colors.', cause)
+    }
+    setDarkened(!!restoreColors.current)
+  }
   const describeIssue = (stage: string, error: string, currentSource = source) =>
     message.security?.encrypted
       ? JSON.stringify({
@@ -349,6 +389,15 @@ export function EmailBody({
         setSource(html())
       }
       await Promise.allSettled(imageJobs)
+      // Recolour logos before the email shows them, so they never flash dark-on-dark.
+      if (ownStyling && theme === 'dark' && wantsDark.current) {
+        const paper = darkPaper()
+        await Promise.allSettled(
+          [...template.content.querySelectorAll('img')].map((image) =>
+            prepareDarkImage(image.getAttribute('src'), paper),
+          ),
+        )
+      }
       if (active) setSource(html())
     }
     setBlocked(false)
@@ -417,6 +466,13 @@ export function EmailBody({
       }
       setRenderIssue(null)
       if (adaptiveFrame.current) softenColors(doc, getComputedStyle(document.body).backgroundColor)
+      // Simple notes already follow the theme; only designed email has colours to switch.
+      switchable.current =
+        !adaptiveFrame.current &&
+        theme === 'dark' &&
+        doc.body.getElementsByTagName('*').length <= darkElementLimit
+      reportSwitchable.current?.(switchable.current)
+      syncColors(doc)
       resizeFrame()
       observer.current = new ResizeObserver(resizeFrame)
       observer.current.observe(doc.body)
@@ -437,6 +493,16 @@ export function EmailBody({
           hover.current?.(href && !href.startsWith('#') ? href : null)
         })
         doc.addEventListener('mouseleave', () => hover.current?.(null))
+        // Copy the sender's colours, not the dark ones, so pasted text reads on a light page. The
+        // browser copies after this listener returns; the dark colours return before next paint.
+        doc.addEventListener('copy', () => {
+          if (!restoreColors.current) return
+          restoreColors.current()
+          restoreColors.current = null
+          requestAnimationFrame(() => {
+            if (frame.current?.contentDocument === doc) syncColors(doc)
+          })
+        })
         // Keep app shortcuts working after clicking into the message body.
         doc.addEventListener('keydown', (event) => {
           const forwarded = new KeyboardEvent('keydown', {
@@ -481,6 +547,8 @@ export function EmailBody({
       setRenderIssue(null)
       writtenSource.current = null
       linkedDocument.current = null
+      // The elements a dark conversion would restore are about to be replaced.
+      restoreColors.current = null
       doc.open()
       doc.write(source)
       doc.close()
@@ -496,6 +564,11 @@ export function EmailBody({
   useLayoutEffect(() => {
     if (frameReady) resizeFrame()
   }, [frameReady, source])
+  // Switching colours changes the email in place, so its height and scroll position stay put.
+  useLayoutEffect(() => {
+    const doc = frame.current?.contentDocument
+    if (frameReady && doc?.body && writtenSource.current === source) syncColors(doc)
+  }, [darkColors])
   useEffect(() => () => observer.current?.disconnect(), [])
   if (message.security && withheld(message.security) && !loading)
     return (
@@ -540,7 +613,9 @@ export function EmailBody({
             'email-frame [color-scheme:light] w-full border-0 block min-h-10',
             adaptive
               ? 'email-frame-adaptive [color-scheme:inherit] bg-transparent rounded-none'
-              : 'bg-white rounded-lg',
+              : darkened
+                ? 'email-frame-dark bg-surface rounded-lg'
+                : 'bg-white rounded-lg',
           )}
           referrerPolicy="no-referrer"
           onLoad={onFrameLoad}
@@ -766,6 +841,37 @@ export function Reader({
       return next
     })
   const [showAll, setShowAll] = useState(false)
+  // Designed emails can each be shown in dark colours or on their white background.
+  const theme = useResolvedTheme()
+  const overrides = useColorOverrides()
+  const [switchable, setSwitchable] = useState<ReadonlySet<string>>(() => new Set())
+  const markSwitchable = (key: string, value: boolean) =>
+    setSwitchable((current) => {
+      if (current.has(key) === value) return current
+      const next = new Set(current)
+      if (value) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  const colorsOf = (message: Message) =>
+    overrides.get(colorKey(message)) ?? settings.messageColors ?? 'light'
+  const canSwitch = (message: Message) => theme === 'dark' && switchable.has(colorKey(message))
+  // The shortcut and the menu act on every expanded email; usually that is just the latest one.
+  const switchTargets = messages.filter(
+    (m) => (expanded.has(m.id) || messages.length === 1) && canSwitch(m),
+  )
+  const showingDark = switchTargets.some((m) => colorsOf(m) === 'dark')
+  const switchColors = () =>
+    setColorOverrides(switchTargets.map(colorKey), showingDark ? 'light' : 'dark')
+  const latestSwitch = useRef(switchColors)
+  latestSwitch.current = switchColors
+  const offersSwitch = switchTargets.length > 0
+  useEffect(() => {
+    publishColorSwitch(
+      offersSwitch ? { dark: showingDark, toggle: () => latestSwitch.current() } : null,
+    )
+  }, [offersSwitch, showingDark])
+  useEffect(() => () => publishColorSwitch(null), [])
   const newest = last || drafts.at(-1)
   if (!newest) return null
   // Long threads show their first message and the latest few; the middle folds into one row.
@@ -873,6 +979,13 @@ export function Reader({
               <Inbox size={14} />
               Restore to inbox
               <ShortcutHint id="restore" className="menu-shortcut ml-auto" />
+            </MenuItem>
+          )}
+          {offersSwitch && (
+            <MenuItem onClick={switchColors}>
+              {showingDark ? <Sun size={14} /> : <Moon size={14} />}
+              {showingDark ? 'Show with light background' : 'Show in dark colors'}
+              <ShortcutHint id="messageColors" className="menu-shortcut ml-auto" />
             </MenuItem>
           )}
           {offersAction(view, 'destroy') && (
@@ -1056,6 +1169,28 @@ export function Reader({
                       {when.date}
                       <span> · {when.time}</span>
                     </time>
+                    {/* Shown while the email is dark, and kept after switching it by hand, so the
+                        way back never disappears. Untouched white emails look as they always did. */}
+                    {open &&
+                      canSwitch(message) &&
+                      (colorsOf(message) === 'dark' || overrides.has(colorKey(message))) && (
+                        <IconButton
+                          label={
+                            colorsOf(message) === 'dark'
+                              ? 'Show with light background'
+                              : 'Show in dark colors'
+                          }
+                          shortcut={keys('messageColors')}
+                          onClick={() =>
+                            setColorOverrides(
+                              [colorKey(message)],
+                              colorsOf(message) === 'dark' ? 'light' : 'dark',
+                            )
+                          }
+                        >
+                          {colorsOf(message) === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                        </IconButton>
+                      )}
                     {!draft && (
                       <IconButton
                         label="Message details"
@@ -1115,6 +1250,8 @@ export function Reader({
                         message={message}
                         remoteImages={settings.remoteImages}
                         loading={loading && !message.html && !message.text}
+                        darkColors={colorsOf(message) === 'dark'}
+                        onColorSwitchable={(value) => markSwitchable(colorKey(message), value)}
                         onLinkHover={setLink}
                         onMailto={onMailto}
                         onUnlock={onUnlock}

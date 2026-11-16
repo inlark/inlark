@@ -124,6 +124,7 @@ import type { LiveToast } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
+import { useColorSwitch } from './message-colors'
 import {
   draftMatches,
   locationOptions,
@@ -1035,6 +1036,7 @@ export function App() {
   const authFromRow = (c: Conversation) => {
     if (c.auth?.candidate) void applyAuth(c.auth.candidate, authKey(c.accountId, c.auth.messageId))
   }
+  const colorSwitch = useColorSwitch()
   useShortcutHandlers(
     shortcuts.bindings,
     {
@@ -1122,6 +1124,7 @@ export function App() {
         run: () => void unsubscribe(),
         enabled: !blocked && unsubscribeState === 'available',
       },
+      messageColors: { run: () => colorSwitch?.toggle(), enabled: inThread && !!colorSwitch },
       goInbox: { run: () => go({ view: 'inbox' }) },
       goStarred: { run: () => go({ view: 'starred' }) },
       goSent: { run: () => go({ view: 'sent' }) },
@@ -1284,6 +1287,18 @@ export function App() {
                 icon: Forward,
                 key: keys('forward'),
                 run: () => void compose(latest, 'forward'),
+              },
+            ]
+          : []),
+        ...(colorSwitch && route.thread
+          ? [
+              {
+                id: 'message-colors',
+                label: colorSwitch.dark ? 'Show with light background' : 'Show in dark colors',
+                icon: colorSwitch.dark ? Sun : Moon,
+                key: keys('messageColors'),
+                keywords: 'dark mode light theme colors white background invert',
+                run: colorSwitch.toggle,
               },
             ]
           : []),

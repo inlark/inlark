@@ -265,6 +265,11 @@ export interface Settings {
   htmlSignatures?: Record<string, boolean>
   /** Where the reader goes after a conversation leaves the current view. */
   afterArchive?: 'next' | 'previous' | 'list'
+  /**
+   * How emails with their own design (backgrounds, layout tables, images) look while the app is
+   * dark: on a white background as sent (the default), or converted to dark colours.
+   */
+  messageColors?: 'light' | 'dark'
   /** Seconds a sent message waits before it leaves, so it can still be undone. 0 sends at once. */
   undoSendSeconds?: UndoSendSeconds
   /**

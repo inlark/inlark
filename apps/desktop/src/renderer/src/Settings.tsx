@@ -43,6 +43,8 @@ import { ShortcutEditor } from './ShortcutEditor'
 import { EncryptionPanel } from './EncryptionSettings'
 import { newMessageAccount } from './compose-account'
 import { undoSendDelay } from './held-sends'
+import { clearColorOverrides } from './message-colors'
+import { useShortcutText } from './shortcuts'
 
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
@@ -160,6 +162,11 @@ const afterArchiveOptions: { value: NonNullable<Preferences['afterArchive']>; la
   { value: 'list', label: 'Return to the list' },
 ]
 
+const messageColorOptions: { value: NonNullable<Preferences['messageColors']>; label: string }[] = [
+  { value: 'light', label: 'White background' },
+  { value: 'dark', label: 'Dark colors' },
+]
+
 export function SettingsPanel({
   open,
   onClose,
@@ -185,6 +192,7 @@ export function SettingsPanel({
     [folders, setFolders] = useState<Account>(),
     [aliases, setAliases] = useState<Account>()
   const modalRef = useRef<HTMLDivElement>(null)
+  const keys = useShortcutText()
   const [restartPrompt, setRestartPrompt] = useState(false),
     [savingTitleBar, setSavingTitleBar] = useState(false),
     [restarting, setRestarting] = useState(false)
@@ -377,6 +385,33 @@ export function SettingsPanel({
                       value={bootstrap.settings.afterArchive || 'next'}
                       options={afterArchiveOptions}
                       onValueChange={(afterArchive) => void update({ afterArchive })}
+                    />
+                  </div>
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
+                    <div>
+                      <strong>Designed emails in dark mode</strong>
+                      <p>
+                        Emails with their own colors and layout, while inlark is dark.
+                        {keys('messageColors') &&
+                          ' Press ' + keys('messageColors') + ' to switch a single email.'}
+                      </p>
+                    </div>
+                    <Select
+                      aria-label="Designed emails in dark mode"
+                      className="setting-select w-auto min-w-60 shrink-0"
+                      value={bootstrap.settings.messageColors || 'light'}
+                      options={messageColorOptions}
+                      onValueChange={(messageColors) => {
+                        // Emails switched by hand follow the new default again.
+                        clearColorOverrides()
+                        void update({ messageColors })
+                      }}
                     />
                   </div>
                 </div>
