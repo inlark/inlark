@@ -135,8 +135,7 @@ type Journal = {
 }
 /** Attempts that ended with nothing sent, so the same draft may be sent again. */
 const resendable: Journal['state'][] = ['rejected', 'unsent']
-/** Rows whose reader finding is kept, and rows remembered for comparison while running. */
-const maxAuthCorrections = 5000
+/** Rows remembered for comparison while running; corrections themselves are kept for good. */
 const maxListedAuth = 5000
 const sameAuth = (a: AuthValue | null, b: AuthValue | null) =>
   a?.type === b?.type && a?.value === b?.value && a?.action === b?.action
@@ -947,16 +946,13 @@ export class MailService {
       if (!this.listedAuth.has(key) || isDraft(message) || message.security?.encrypted) continue
       const found = message.authCandidate ?? null
       if (sameAuth(this.listedAuth.get(key)!, found)) continue
-      this.authCorrections.delete(key)
       this.authCorrections.set(key, found)
       this.listedAuth.set(key, found)
       changed = true
     }
     if (!changed) return
-    for (const key of this.authCorrections.keys()) {
-      if (this.authCorrections.size <= maxAuthCorrections) break
-      this.authCorrections.delete(key)
-    }
+    // Never evicted: a row must keep what the reader found. Only rows the opening text got
+    // wrong are kept, and a disconnected account's rows are removed with it.
     await this.persistAuthCorrections()
     this.emit({ type: 'changed', accountId })
   }

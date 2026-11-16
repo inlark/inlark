@@ -161,6 +161,8 @@ describe('opening text shown in the conversation list', () => {
     ['Your verification code is 731904 Thanks for signing up', '731904'],
     ['Your security code 4829', '4829'],
     ['Your verification code: 123 456 Thanks', '123456'],
+    ['Your verification code is 1234-abcd.', '1234abcd'],
+    ['Your verification code is abcd-1234.', 'abcd1234'],
   ])('does not join a code and a neighboring word: %s', (text, value) => {
     expect(detectAuth({ text })).toEqual({ type: 'code', value })
   })

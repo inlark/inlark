@@ -51,8 +51,12 @@ const codeBodyRegex = codePatterns
   .join('|')
 const wholeCode = new RegExp(`^(?:${codeBodyRegex})$`)
 const codeGroups = new RegExp(`(${codeSeparator})`)
-/** Ordinary prose, not a code group: “731904. Thanks” is a code followed by a word. */
-const isWord = (group: string) => /^[A-Za-z]+$/.test(group) && /[a-z]/.test(group)
+/**
+ * Ordinary prose, not a code group: “731904. Thanks” is a code followed by a word. Only a space
+ * sets prose apart, so a bare hyphen still groups a code such as “1234-abcd”.
+ */
+const isProse = (groups: string[], i: number) =>
+  /^[A-Za-z]+$/.test(groups[i]) && /[a-z]/.test(groups[i]) && /\s/.test(groups[i === 0 ? 1 : i - 1])
 
 const authKeywords = [
   { regex: /\bverif(?:y|ies|ied|ying|ication)\b/gi, weight: 12 },
@@ -239,7 +243,7 @@ export function extractAuthCandidates({
       // grouped match. Keep the code, or retry after a leading word.
       const groups = raw.split(codeGroups)
       const word =
-        groups.length > 1 ? groups.findIndex((group, i) => i % 2 === 0 && isWord(group)) : -1
+        groups.length > 1 ? groups.findIndex((_, i) => i % 2 === 0 && isProse(groups, i)) : -1
       if (word === 0) {
         codeRegex.lastIndex = index + groups[0].length + groups[1].length
         continue

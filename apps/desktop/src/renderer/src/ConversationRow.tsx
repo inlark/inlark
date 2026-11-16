@@ -31,11 +31,13 @@ function RowAuth({
   candidate,
   copyKey,
   shortcut,
+  className,
   onRun,
 }: {
   candidate: AuthValue
   copyKey: string
   shortcut?: string
+  className?: string
   onRun: () => void
 }) {
   const copied = useAuthCopied(copyKey)
@@ -56,11 +58,17 @@ function RowAuth({
               '[&_svg]:shrink-0 [&_svg]:text-muted',
               'hover:[&_svg]:text-secondary [.unread_&]:text-strong',
               copied && '[&_svg]:text-success! border-border-strong',
+              className,
             )}
             aria-label={code ? 'Copy code ' + candidate.value : label + ', opens ' + host}
             onClick={(event) => {
               event.stopPropagation()
               onRun()
+            }}
+            // Activating the button with the keyboard must not reach the global Enter shortcut,
+            // which would open the conversation and cancel the button's own click.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
             }}
           />
         }
@@ -263,12 +271,18 @@ export function ConversationRow({
             candidate={auth.candidate}
             copyKey={authKey(c.accountId, auth.messageId)}
             shortcut={keys('authAction')}
+            // Clears the quick actions that cover the account and time on hover.
+            className={c.hasAttachment ? undefined : 'mr-1'}
             onRun={onAuth}
           />
         )}
-        <span className="row-attachment w-3.25">
-          {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
-        </span>
+        {/* Other rows keep the slot so their previews end evenly; beside a code or link it
+            would only leave a gap. */}
+        {(c.hasAttachment || !auth || !onAuth) && (
+          <span className="row-attachment w-3.25">
+            {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
+          </span>
+        )}
         {a && <AccountMark account={a} size={22} title={a.name} />}
         <time dateTime={c.receivedAt} title={new Date(c.receivedAt).toLocaleString()}>
           {shortDate(c.receivedAt)}
