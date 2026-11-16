@@ -443,6 +443,17 @@ describe('IMAP drafts', () => {
     expect(second.serverId).not.toBe(first.serverId)
     expect(server.box('Drafts').messages.map((m) => m.input.text?.trim())).toEqual(['Hello again'])
   })
+  it('replaces a server draft filed without the Draft flag, as Gmail keeps them', async () => {
+    const first = await service.syncDraft(draft)
+    server.setFlags('Drafts', server.box('Drafts').messages[0].uid, ['\\Seen'])
+    const second = await service.syncDraft({
+      ...first,
+      text: 'Hello again',
+      updatedAt: '2026-09-23T10:01:00.000Z',
+    })
+    expect(second.status).toBe('synced')
+    expect(server.box('Drafts').messages.map((m) => m.input.text?.trim())).toEqual(['Hello again'])
+  })
   it('keeps both copies when another client changed the server draft', async () => {
     const first = await service.syncDraft(draft)
     // Another client saves its own edit: it appends a new draft and removes the old one.
@@ -496,7 +507,15 @@ describe('IMAP drafts', () => {
   })
   it('allows explicitly keeping a separate copy after a real remote conflict', async () => {
     const first = await service.syncDraft(draft)
-    server.setFlags('Drafts', server.box('Drafts').messages[0].uid, ['\\Seen'])
+    // Another client sends it: the draft leaves Drafts and its copy is filed in Sent. Clearing
+    // \Draft alone means nothing, as Gmail never sets it on what is filed in Drafts.
+    server.remove('Drafts', server.box('Drafts').messages[0].uid)
+    server.deliver('Sent', {
+      messageId: 'sent@x',
+      subject: 'Plans',
+      text: 'Sent',
+      flags: ['\\Seen'],
+    })
     const conflict = await service.syncDraft({
       ...first,
       text: 'Mine',
@@ -513,7 +532,7 @@ describe('IMAP drafts', () => {
       updatedAt: '2026-09-23T10:02:00.000Z',
     })
     expect(separate.status).toBe('synced')
-    expect(server.box('Drafts').messages).toHaveLength(2)
+    expect(server.box('Drafts').messages.map((m) => m.input.text?.trim())).toEqual(['Mine'])
   })
   it('keeps the previous server draft when the replacement cannot be confirmed', async () => {
     const first = await service.syncDraft(draft)

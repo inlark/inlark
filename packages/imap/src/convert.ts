@@ -197,7 +197,8 @@ export function toNewMessage(
   }
 }
 
-export function toMessage(accountId: string, m: IndexedMessage): Message {
+/** `draft` marks a message filed in Drafts, which Gmail and some apps leave without `\Draft`. */
+export function toMessage(accountId: string, m: IndexedMessage, draft = false): Message {
   const encrypted =
     m.bodyStructure?.type.toLowerCase() === 'multipart/encrypted' ||
     m.preview.includes('-----BEGIN PGP MESSAGE-----')
@@ -224,7 +225,7 @@ export function toMessage(accountId: string, m: IndexedMessage): Message {
           },
         }
       : {}),
-    keywords: keywordsFromFlags(m.flags),
+    keywords: { ...keywordsFromFlags(m.flags), ...(draft ? { $draft: true } : {}) },
     mailboxIds: { [m.mailboxId]: true },
     size: m.size,
     hasAttachment: m.hasAttachment,
