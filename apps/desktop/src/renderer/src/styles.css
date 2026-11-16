@@ -58,16 +58,31 @@
     background-position: -100% 0;
   }
 }
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 8px) scale(0.98);
-  }
+/* Sonner stacks and times the toasts; Toasts.tsx draws each one. */
+.toaster[data-sonner-toaster] {
+  font-family: inherit;
+  z-index: 150;
 }
-@keyframes toast-timer {
-  to {
-    transform: scaleX(0);
-  }
+.toaster [data-sonner-toast] {
+  width: var(--width);
+}
+.toaster [data-sonner-toast]:focus-visible {
+  box-shadow: none;
+}
+.toaster [data-sonner-toast] .toast-card > * {
+  transition: opacity 0.4s;
+}
+/* Until the stack expands, the toasts behind the front one show only their edge. */
+.toaster [data-sonner-toast][data-expanded='false'][data-front='false'] .toast-card > * {
+  opacity: 0;
+}
+/* Keyboard focus expands the stack like hovering does, so a focused toast is never hidden. */
+.toaster:focus-within [data-sonner-toast][data-mounted='true'][data-removed='false'] {
+  --y: translateY(calc(var(--lift) * var(--offset)));
+  height: var(--initial-height);
+}
+.toaster:focus-within [data-sonner-toast] .toast-card > * {
+  opacity: 1;
 }
 @keyframes shortcut-listen {
   50% {

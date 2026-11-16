@@ -1,6 +1,6 @@
 import { clearDecryptedCache } from './cache'
 import { cn } from '@inlark/ui'
-import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, lazy, Suspense } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -23,7 +23,6 @@ import {
   RefreshCw,
   WifiOff,
   Rows3,
-  AlertCircle,
   Star,
   MailOpen,
   MailMinus,
@@ -42,7 +41,6 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   UserRound,
-  Info,
   Lock,
   LockOpen,
   LockKeyhole,
@@ -114,6 +112,8 @@ import { HintIconButton } from './HintIconButton'
 import { targetAccounts, targetLimit } from './account-limits'
 import { newMessageAccount } from './compose-account'
 import { SubmissionList } from './SendingStatus'
+import { ProgressToast, Toaster, toasts } from './Toasts'
+import type { LiveToast } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
@@ -121,14 +121,6 @@ import { version as packagedVersion } from '../../../package.json'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
-type Toast = {
-  text: string
-  undoId?: string
-  /** Undoes a change the client has not committed yet. */
-  onUndo?: () => void
-  tone?: 'error' | 'info'
-}
-let toastSequence = 0
 const discardKeys = (item: DraftItem) =>
   item.kind === 'local' && item.draft.serverId
     ? [item.key, 'server:' + scopeKey(item.draft.accountId, item.draft.serverId)]
@@ -171,8 +163,8 @@ export function App() {
   const [selected, setSelected] = useState(new Set<string>()),
     [focused, setFocused] = useState(''),
     [allMatching, setAllMatching] = useState(false)
-  const [toast, setToastState] = useState<Toast & { id: number }>(),
-    [busy, setBusy] = useState(false),
+  const undoTarget = useSyncExternalStore(toasts.subscribe, toasts.undoTarget)
+  const [busy, setBusy] = useState(false),
     [progress, setProgress] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ phase: 'idle' })
   const [folderDialog, setFolderDialog] = useState<FolderDialogState>()
@@ -188,15 +180,9 @@ export function App() {
     draftAnchor = useRef<string | undefined>(undefined)
   const [unsubscribes, setUnsubscribes] = useState(new Map<string, 'pending' | 'done'>())
   // Keep successful deletions hidden for this session; delayed server results can still be stale.
-  const [discarding, setDiscarding] = useState(new Set<string>()),
-    pendingDiscard = useRef<{ toastId: number; items: DraftItem[] } | undefined>(undefined)
+  const [discarding, setDiscarding] = useState(new Set<string>())
   const pendingMailto = useRef<string | undefined>(undefined)
-  const setToast = (next?: Toast) => {
-    const id = ++toastSequence
-    setToastState(next && { ...next, id })
-    return id
-  }
-  const notify = (text: string, tone?: Toast['tone']) => setToast({ text, tone })
+  const notify = (text: string, tone?: 'error' | 'info') => toasts.show({ text, tone })
   const fail = (error: unknown) => notify(friendlyError(error), 'error')
   const shortcuts = useShortcuts()
   const keys = useShortcutText()
@@ -461,7 +447,7 @@ export function App() {
           ? await api.mutateAll(query, action)
           : await api.mutate({ targets: chosen, action, mailboxId })
       const count = allMatching && !explicit ? result.changed : chosen.length
-      setToast({
+      toasts.show({
         tone: result.failures.length ? 'error' : undefined,
         text: result.failures.length
           ? result.changed + ' updated · ' + result.failures[0]
@@ -751,24 +737,22 @@ export function App() {
   const discardDraftItems = (candidates: DraftItem[]) => {
     const items = candidates.filter(deletable)
     if (!items.length) return
-    // Only one deletion waits for undo at a time; an earlier one is committed right away.
-    if (pendingDiscard.current) void commitDiscard(pendingDiscard.current.items)
     setDiscarding((current) => new Set([...current, ...items.flatMap(discardKeys)]))
     setDraftSelected(new Set())
-    const toastId = setToast({
+    // The deletion waits for its own toast: it is committed when the toast leaves, and undoing
+    // replaces the toast in place, which drops the commit.
+    const id = toasts.show({
       text: items.length > 1 ? items.length + ' drafts deleted' : 'Draft deleted',
       onUndo: () => {
-        if (pendingDiscard.current?.items !== items) return
-        pendingDiscard.current = undefined
         setDiscarding((current) => {
           const next = new Set(current)
           for (const item of items) for (const key of discardKeys(item)) next.delete(key)
           return next
         })
-        notify(items.length > 1 ? 'Drafts restored' : 'Draft restored')
+        toasts.show({ text: items.length > 1 ? 'Drafts restored' : 'Draft restored' }, id)
       },
+      onClose: () => void commitDiscard(items),
     })
-    pendingDiscard.current = { toastId, items }
   }
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: light)')
@@ -887,33 +871,29 @@ export function App() {
         })
     }
   }, [route.thread, route.threadAccount, conversations])
-  const [toastHeld, setToastHeld] = useState(false)
-  const canUndo = !!toast?.undoId || !!toast?.onUndo
-  const toastDuration = canUndo ? 9000 : toast?.tone === 'error' ? 8000 : 5000
-  useEffect(() => {
-    if (!toast || toastHeld) return
-    const timer = setTimeout(() => setToast(undefined), toastDuration)
-    return () => clearTimeout(timer)
-  }, [toast, toastHeld])
-  useEffect(() => {
-    const pending = pendingDiscard.current
-    if (!pending || pending.toastId === toast?.id) return
-    pendingDiscard.current = undefined
-    void commitDiscard(pending.items)
-  }, [toast?.id])
-  const undo = async (id = toast?.undoId) => {
-    if (toast?.onUndo) return toast.onUndo()
-    if (!id) return
-    setToast({ text: 'Undoing…' })
+  /** Undoes one toast's action, reporting the outcome in that same toast. */
+  const undo = async (target: LiveToast) => {
+    if (target.onUndo) {
+      target.onUndo()
+      // A local undo usually reports itself; either way, it can't be undone twice.
+      if (toasts.get(target.id) === target) toasts.show({ text: 'Undone.' }, target.id)
+      return
+    }
+    toasts.show({ text: 'Undoing…', tone: 'progress' }, target.id)
     try {
-      const result = await api.undo(id)
-      if (result.failures.length) notify(result.failures[0], 'error')
-      else notify('Undone.')
+      const result = await api.undo(target.undoId!)
+      toasts.show(
+        result.failures.length ? { text: result.failures[0], tone: 'error' } : { text: 'Undone.' },
+        target.id,
+      )
       await refresh()
     } catch (e) {
-      fail(e)
+      toasts.show({ text: friendlyError(e), tone: 'error' }, target.id)
     }
   }
+  useEffect(() => {
+    toasts.undoHandler = (target) => void undo(target)
+  })
   const openSettings = (tab = 'general') => {
     setSettingsTab(tab)
     setSettingsOpen(true)
@@ -1057,7 +1037,7 @@ export function App() {
       read: { run: () => void act('read'), enabled: canAct },
       star: { run: toggleStar, enabled: canAct },
       move: { run: () => openMove(targets()), enabled: canAct && !allMatching },
-      undo: { run: () => void undo(), enabled: !blocked && canUndo },
+      undo: { run: () => toasts.undo(), enabled: !blocked && !!undoTarget, ignoreRepeat: true },
       reply: { run: () => latest && void compose(latest), enabled: inThread },
       replyAll: { run: () => latest && void compose(latest, 'replyAll'), enabled: inThread },
       forward: { run: () => latest && void compose(latest, 'forward'), enabled: inThread },
@@ -1233,15 +1213,15 @@ export function App() {
       }))
     : []
   const commands: Command[] = [
-    ...(toast && canUndo
+    ...(undoTarget
       ? [
           {
             id: 'undo',
             group: 'Suggested',
-            label: 'Undo “' + toast.text + '”',
+            label: 'Undo “' + undoTarget.text + '”',
             icon: Undo2,
             key: keys('undo'),
-            run: () => void undo(),
+            run: () => toasts.undo(undoTarget),
           },
         ]
       : []),
@@ -2349,83 +2329,8 @@ export function App() {
           </>
         )}
       </main>
-      {toast && (
-        <div
-          className={cn(
-            'toast fixed bottom-5.75 left-[calc(50%+var(--rail)_/_2_-_4px)] transform-[translateX(-50%)] z-150 flex gap-3.25',
-            'items-center max-w-[75vw] bg-raised border border-solid border-border-strong shadow-popup py-2.75 px-3.75',
-            'rounded-lg text-[12px] [&>svg]:text-primary [&>span]:max-w-150 [&_button]:border-0 [&_button]:bg-none',
-            '[&_button]:bg-transparent [&_button]:text-primary [&_button]:text-[11px] [&_button]:p-[3px]',
-            '[&_button:last-child]:text-muted max-[700px]:max-w-[calc(100vw_-_var(--rail)_-_32px)]',
-            'max-[700px]:w-[max-content] overflow-hidden animate-[toast-in_180ms_cubic-bezier(0.2,_0.9,_0.3,_1.2)]',
-            '[&_.toast-undo]:inline-flex [&_.toast-undo]:items-center [&_.toast-undo]:gap-1.5 [&_.toast-undo]:py-[3px]',
-            '[&_.toast-undo]:pr-1 [&_.toast-undo]:pl-2 [&_.toast-undo]:rounded-sm [&_.toast-undo]:font-medium',
-            '[&_.toast-undo:hover]:bg-primary-tint [&_.toast-dismiss]:grid [&_.toast-dismiss]:place-items-center',
-            '[&_.toast-dismiss]:rounded-sm [&_.toast-dismiss]:text-muted [&_.toast-dismiss:hover]:text-foreground',
-            '[&_.toast-dismiss:hover]:bg-hover',
-            toast.tone === 'error' &&
-              'toast-error [&>svg:first-child]:text-danger [&_.toast-timer]:bg-danger/45',
-          )}
-          role={toast.tone === 'error' ? 'alert' : 'status'}
-          onMouseEnter={() => setToastHeld(true)}
-          onMouseLeave={() => setToastHeld(false)}
-          key={toast.id}
-        >
-          {toast.tone === 'error' ? (
-            <AlertCircle size={15} />
-          ) : toast.tone === 'info' ? (
-            <Info size={15} />
-          ) : (
-            <Check size={15} />
-          )}
-          <span>{toast.text}</span>
-          {canUndo && (
-            <button
-              className="toast-undo [&_kbd]:h-4 [&_kbd]:min-w-4 [&_kbd]:text-[9px] [&_kbd]:text-primary [&_kbd]:border-primary/35"
-              onClick={() => void undo()}
-            >
-              Undo <ShortcutHint id="undo" />
-            </button>
-          )}
-          <button
-            className="toast-dismiss"
-            aria-label="Dismiss notification"
-            onClick={() => setToast(undefined)}
-          >
-            <X size={13} />
-          </button>
-          {!toastHeld && (
-            <span
-              className="toast-timer absolute left-0 bottom-0 h-[2px] w-full bg-primary/45 origin-left animate-[toast-timer_linear_forwards]"
-              style={{ animationDuration: toastDuration + 'ms' }}
-              aria-hidden="true"
-            />
-          )}
-        </div>
-      )}
-      <Suspense
-        fallback={
-          <div
-            className={cn(
-              'toast fixed bottom-5.75 left-[calc(50%+var(--rail)_/_2_-_4px)] transform-[translateX(-50%)] z-150 flex gap-3.25',
-              'items-center max-w-[75vw] bg-raised border border-solid border-border-strong shadow-popup py-2.75 px-3.75',
-              'rounded-lg text-[12px] [&>svg]:text-primary [&>span]:max-w-150 [&_button]:border-0 [&_button]:bg-none',
-              '[&_button]:bg-transparent [&_button]:text-primary [&_button]:text-[11px] [&_button]:p-[3px]',
-              '[&_button:last-child]:text-muted max-[700px]:max-w-[calc(100vw_-_var(--rail)_-_32px)]',
-              'max-[700px]:w-[max-content] overflow-hidden animate-[toast-in_180ms_cubic-bezier(0.2,_0.9,_0.3,_1.2)]',
-              '[&_.toast-undo]:inline-flex [&_.toast-undo]:items-center [&_.toast-undo]:gap-1.5 [&_.toast-undo]:py-[3px]',
-              '[&_.toast-undo]:pr-1 [&_.toast-undo]:pl-2 [&_.toast-undo]:rounded-sm [&_.toast-undo]:font-medium',
-              '[&_.toast-undo:hover]:bg-primary-tint [&_.toast-dismiss]:grid [&_.toast-dismiss]:place-items-center',
-              '[&_.toast-dismiss]:rounded-sm [&_.toast-dismiss]:text-muted [&_.toast-dismiss:hover]:text-foreground',
-              '[&_.toast-dismiss:hover]:bg-hover',
-            )}
-            role="status"
-          >
-            <Spinner />
-            Opening…
-          </div>
-        }
-      >
+      <Toaster />
+      <Suspense fallback={<ProgressToast text="Opening…" />}>
         {composer && (
           <Composer
             key={composer.id}
