@@ -36,3 +36,11 @@ The first version should be a complete, straightforward email client: conversati
 Favor depth and polish over novelty. AI features, automatic categorization, advanced automation, snooze, scheduled sending, calendars, and a full address book are deferred.
 
 When making product decisions, ask whether the change makes everyday email clearer, faster, more reliable, or more enjoyable. Keep the experience focused and give small details the care needed for a daily-use application.
+
+## Review before completion
+
+Before completing an implementation or opening a PR, have a GPT-6.1 Sol subagent in the Codex harness review the changes with high reasoning effort. Address valid findings and repeat until both agents agree they’re ready. Reviewers must not spawn further reviewers. If the requested configuration is unavailable, report it.
+
+## UI screenshots
+
+After meaningful UI changes, capture a screenshot of the resulting UI and include it in the final response. If you cannot capture one, explain why.
