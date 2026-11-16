@@ -8,6 +8,7 @@ import {
   nextAccountColor,
   type Account,
   type AppEvent,
+  type AuthValue,
   type CertificateDetails,
   type ConnectInput,
   type ConnectionCheck,
@@ -84,6 +85,13 @@ const catalog = [
     'notifications',
   ],
   [
+    'OpenRouter',
+    'notifications@openrouter.ai',
+    '813718 is your verification code',
+    'Enter this code to finish signing in to OpenRouter. It expires in 10 minutes.',
+    'notifications',
+  ],
+  [
     'Hetzner',
     'billing@hetzner.com',
     'Your invoice for September is ready',
@@ -103,6 +111,13 @@ const catalog = [
     'Production deployment completed',
     'Everything is looking good. Your latest deployment is now live.',
     'deployment',
+  ],
+  [
+    'Linear',
+    'notifications@linear.app',
+    'Your sign-in link for Linear',
+    'Use the button below to sign in to your workspace. The link expires in 15 minutes.',
+    'notifications',
   ],
   [
     'Stripe',
@@ -587,9 +602,23 @@ const threadDrafts = (accountId: string, threadId: string) =>
     .filter((m) => m.accountId === accountId && m.threadId === threadId)
     .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
 /** A list entry for a sample message, with any drafts filed in its conversation. */
+/** Codes and links as the providers would find them in these samples. */
+const demoAuth: Record<string, AuthValue> = {
+  'notifications@openrouter.ai': { type: 'code', value: '813718' },
+  'notifications@linear.app': {
+    type: 'link',
+    value: 'https://linear.app/auth/magic-link/3f9c2a7e',
+    action: 'signIn',
+  },
+}
+const withAuth = (m: Message): Message => {
+  const candidate = demoAuth[m.from[0]?.email]
+  return candidate ? { ...m, authCandidate: candidate } : m
+}
 function listed(accountId: string, original: Message) {
   const m = secured(original)
   const messages = [m, ...threadDrafts(accountId, m.threadId)]
+  const candidate = demoAuth[m.from[0]?.email]
   // Display the matching message, as the providers do, even when a draft is newer.
   return {
     ...conversationFromMessages(accountId, m.threadId, messages),
@@ -597,6 +626,7 @@ function listed(accountId: string, original: Message) {
     preview: m.preview,
     receivedAt: m.receivedAt,
     count: messages.length,
+    auth: { messageId: m.id, ...(candidate ? { candidate } : {}) },
   }
 }
 function fileDraft(draft: Draft): Draft {
@@ -1217,7 +1247,7 @@ export const demoAPI: DesktopMailAPI = {
     const accountIndex = demoAccounts.findIndex((a) => a.id === accountId)
     const m = get(accountIndex, Number(threadId.replace('thread-', '')))
     if (!m) throw new Error('Conversation not found.')
-    return [secured(m), ...threadDrafts(accountId, threadId)]
+    return [withAuth(secured(m)), ...threadDrafts(accountId, threadId)]
   },
   mutate: async (input) => {
     const saved: [string, Message | null | undefined][] = []

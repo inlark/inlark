@@ -34,6 +34,7 @@ const ListConversationRow = memo(function ListConversationRow({
   onFocus,
   onSelect,
   onAction,
+  onAuth,
 }: {
   conversation: Conversation
   account?: Account
@@ -46,6 +47,7 @@ const ListConversationRow = memo(function ListConversationRow({
   onFocus: (key: string) => void
   onSelect: (key: string, range: boolean) => void
   onAction: (action: MailAction, conversation: Conversation) => void
+  onAuth: (conversation: Conversation) => void
 }) {
   return (
     <ConversationRow
@@ -64,6 +66,7 @@ const ListConversationRow = memo(function ListConversationRow({
       onTrash={offersAction(view, 'trash') ? () => onAction('trash', conversation) : undefined}
       onToggleRead={() => onAction(conversation.unread ? 'read' : 'unread', conversation)}
       onStar={() => onAction(conversation.starred ? 'unstar' : 'star', conversation)}
+      onAuth={() => onAuth(conversation)}
     />
   )
 })
@@ -90,6 +93,7 @@ export function ConversationList({
   onFocus,
   onSelect,
   onAction,
+  onAuth,
 }: {
   conversations: Conversation[]
   accounts: Account[]
@@ -112,6 +116,7 @@ export function ConversationList({
   onFocus: (key: string) => void
   onSelect: (key: string, range: boolean) => void
   onAction: (action: MailAction, conversation: Conversation) => void
+  onAuth: (conversation: Conversation) => void
 }) {
   const rowHeight = density === 'compact' ? 44 : 64
   const groupHeight = 36
@@ -308,6 +313,7 @@ export function ConversationList({
                   onFocus={onFocus}
                   onSelect={onSelect}
                   onAction={onAction}
+                  onAuth={onAuth}
                 />
               )}
             </div>

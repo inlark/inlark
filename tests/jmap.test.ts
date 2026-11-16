@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { JmapProvider, jmapFilter, jmapPatch, parseUnsubscribe } from '../packages/jmap/src'
+import {
+  JmapProvider,
+  jmapFilter,
+  jmapPatch,
+  parseUnsubscribe,
+  type JmapOptions,
+} from '../packages/jmap/src'
+import { detectAuth } from '../apps/desktop/src/main/auth-detection'
 import { ipcSchemas } from '../packages/core/src'
 const core = 'urn:ietf:params:jmap:core',
   mail = 'urn:ietf:params:jmap:mail',
@@ -28,7 +35,11 @@ const raw = (id: string) => ({
   mailboxIds: { inbox: true },
   keywords: { $seen: true },
 })
-function fixture(overrides: Record<string, (args: any) => any> = {}, downloadBody?: string) {
+function fixture(
+  overrides: Record<string, (args: any) => any> = {},
+  downloadBody?: string,
+  options: Partial<JmapOptions> = {},
+) {
   const calls: { name: string; args: any }[] = []
   const fetch = vi.fn(async (_url: any, init?: RequestInit) => {
     if (String(_url).includes('/download/') && downloadBody !== undefined)
@@ -84,6 +95,7 @@ function fixture(overrides: Record<string, (args: any) => any> = {}, downloadBod
     name: 'Test',
     authorization: 'Basic disposable',
     fetch,
+    ...options,
   })
   return { provider, fetch, calls }
 }
@@ -505,5 +517,89 @@ describe('JMAP provider', () => {
     expect(get.args.properties).not.toContain('bodyValues')
     expect(get.args.fetchAllBodyValues).toBeUndefined()
     provider.dispose()
+  })
+})
+
+describe('JMAP list codes and links', () => {
+  const rows: Record<string, any> = {
+    code: {
+      subject: 'Sign in to Example',
+      textBody: [{ partId: '1', type: 'text/plain' }],
+      bodyValues: { 1: { value: 'Your verification code is 482913.\nIt expires soon.' } },
+    },
+    link: {
+      subject: 'Your account',
+      textBody: [{ partId: '1', type: 'text/html' }],
+      bodyValues: {
+        1: {
+          value:
+            '<p>Hi</p><a href="https://example.com/verify?token=9f8e7d">Verify email address</a>',
+        },
+      },
+    },
+    cut: {
+      subject: 'Your account',
+      textBody: [{ partId: '1', type: 'text/plain' }],
+      bodyValues: { 1: { value: 'Your verification code is 4829', isTruncated: true } },
+    },
+    preview: { subject: 'Hello', preview: 'Your verification code is 731904. Thanks' },
+    draft: {
+      subject: 'Your verification code: 482913',
+      keywords: { $draft: true },
+      textBody: [],
+      bodyValues: {},
+    },
+  }
+  const ids = Object.keys(rows)
+  const list = () =>
+    fixture(
+      {
+        'Email/query': () => ({ ids, total: ids.length }),
+        'Email/get': (args) => ({
+          list: args.ids.map((id: string) => ({
+            ...raw(id),
+            ...(args.properties.includes('bodyValues') ? rows[id] : { subject: rows[id].subject }),
+            ...(rows[id].preview ? { preview: rows[id].preview } : {}),
+            ...(rows[id].keywords ? { keywords: rows[id].keywords } : {}),
+          })),
+        }),
+      },
+      undefined,
+      { detectAuth },
+    )
+  it('reads each row’s opening text in the request that loads the page', async () => {
+    const { provider, calls } = list()
+    const [account] = await provider.connect()
+    const page = await provider.query(account, { view: 'inbox' })
+    const gets = calls.filter((c) => c.name === 'Email/get')
+    expect(gets).toHaveLength(1)
+    expect(gets[0].args).toMatchObject({
+      ids,
+      fetchTextBodyValues: true,
+      maxBodyValueBytes: 4096,
+    })
+    expect(gets[0].args.fetchAllBodyValues).toBeUndefined()
+    expect(Object.fromEntries(page.items.map((c) => [c.messages[0].id, c.auth]))).toEqual({
+      code: { messageId: 'code', candidate: { type: 'code', value: '482913' } },
+      link: {
+        messageId: 'link',
+        candidate: {
+          type: 'link',
+          value: 'https://example.com/verify?token=9f8e7d',
+          action: 'verifyEmail',
+        },
+      },
+      // A value reaching the end of cut-off text may be incomplete.
+      cut: { messageId: 'cut' },
+      preview: { messageId: 'preview', candidate: { type: 'code', value: '731904' } },
+      draft: { messageId: 'draft' },
+    })
+  })
+  it('requests no opening text without a detector', async () => {
+    const { provider, calls } = fixture()
+    const [account] = await provider.connect()
+    const page = await provider.query(account, { view: 'inbox' })
+    expect(calls.find((c) => c.name === 'Email/get')?.args.fetchTextBodyValues).toBeUndefined()
+    expect(page.items[0].auth).toBeUndefined()
   })
 })

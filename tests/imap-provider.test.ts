@@ -15,6 +15,7 @@ import {
 import { ImapProvider, limitsFor, imapFlowOptions, ImapFlowPort } from '../packages/imap/src'
 import { openInProcessIndex } from '../apps/desktop/src/main/imap-index/sqlite-index'
 import { FakeImapServer } from './support/fake-imap'
+import { detectAuth } from '../apps/desktop/src/main/auth-detection'
 
 const config: ImapConnectionConfig = {
   protocol: 'imap',
@@ -571,6 +572,80 @@ describe('IMAP indexing and reading', () => {
       ).length,
     ).toBe(1)
     expect(server.commandPorts).toHaveLength(2)
+  })
+})
+
+describe('IMAP list codes and links', () => {
+  const previews = { sentCopyGraceMs: 0, initialBatch: 5, historicalBatch: 5, previews: 5 }
+  const rows = async (p: ImapProvider) => (await p.query(account, { view: 'inbox' })).items
+  it('finds a code or link with the preview it downloads, and keeps it in the index', async () => {
+    server.deliver('INBOX', {
+      messageId: 'code@x',
+      subject: 'Sign in to Example',
+      date: at(2),
+      text: 'Hi,\n\nYour verification code is 482913.\n\nIt expires in 10 minutes.',
+    })
+    server.deliver('INBOX', {
+      messageId: 'link@x',
+      subject: 'Your account',
+      date: at(1),
+      text: 'Click the link below to sign in:\n\nhttps://example.com/login?token=9f8e7d\n\nThanks',
+    })
+    const p = await connected({ detectAuth, timing: previews })
+    await sync(p)
+    await vi.waitFor(async () => expect((await rows(p)).every((c) => c.preview)).toBe(true))
+    const [code, link] = await rows(p)
+    expect(code.auth).toEqual({
+      messageId: code.messages[0].id,
+      candidate: { type: 'code', value: '482913' },
+    })
+    expect(link.auth?.candidate).toEqual({
+      type: 'link',
+      value: 'https://example.com/login?token=9f8e7d',
+      action: 'signIn',
+    })
+    // Kept with the preview, so later lists never need the body again.
+    const [stored] = await (p as any).index.messages(account.id, [code.messages[0].id])
+    expect(stored.auth).toEqual({ type: 'code', value: '482913' })
+  })
+  it('falls back to the subject and preview of rows checked before', async () => {
+    server.deliver('INBOX', {
+      messageId: 'subject@x',
+      subject: '482913 is your verification code',
+      date: at(1),
+      text: 'Enter it to finish signing in.',
+    })
+    server.deliver('INBOX', { messageId: 'plain@x', subject: 'Lunch?', date: at(0), text: 'Hi' })
+    const p = await connected({ detectAuth })
+    await sync(p)
+    const [code, plain] = await rows(p)
+    expect(code.auth?.candidate).toEqual({ type: 'code', value: '482913' })
+    expect(plain.auth).toEqual({ messageId: plain.messages[0].id })
+  })
+  it('never offers a draft’s code, and lists nothing without a detector', async () => {
+    server.deliver('Drafts', {
+      messageId: 'draft@x',
+      subject: 'Your verification code: 482913',
+      date: at(1),
+      text: 'Draft',
+      flags: ['\\Draft'],
+    })
+    // Gmail files drafts without the Draft flag.
+    server.deliver('Drafts', {
+      messageId: 'gmail-draft@x',
+      subject: 'Your verification code: 731904',
+      date: at(2),
+      text: 'Draft',
+    })
+    const p = await connected({ detectAuth })
+    await sync(p)
+    const drafts = (await p.query(account, { view: 'drafts' })).items
+    expect(drafts).toHaveLength(2)
+    for (const draft of drafts) expect(draft.auth).toEqual({ messageId: draft.messages[0].id })
+    const [draft] = drafts
+    const without = await connected()
+    await sync(without)
+    expect((await without.query(account, { view: 'drafts' })).items[0].auth).toBeUndefined()
   })
 })
 

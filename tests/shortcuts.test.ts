@@ -41,7 +41,7 @@ describe('shortcut defaults and saved preferences', () => {
   })
 
   it('round-trips customized refresh bindings and opt-in actions', () => {
-    const saved = { refresh: [['Mod+Shift+R'], ['G', 'R']], createFolder: [['Shift+C']] }
+    const saved = { refresh: [['Mod+Shift+R'], ['G', 'R']], createFolder: [['Shift+O']] }
     expect(overridesFor(resolveShortcuts(saved))).toEqual(saved)
     expect(resolveShortcuts({ refresh: [] }).refresh).toEqual([])
     expect(defaultBindings('refresh')).toEqual([['Mod+R'], ['F5']])

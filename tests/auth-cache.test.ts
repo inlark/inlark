@@ -42,3 +42,12 @@ it('excludes derived authentication values from persisted messages, including en
   expect(JSON.stringify(output)).not.toContain('012345')
   expect(input.pages[0].items[0].messages[0].authCandidate).toEqual(value)
 })
+
+it('keeps a row’s code or link so cached rows show it before mail refreshes', async () => {
+  vi.stubGlobal('location', { search: '' })
+  const { redactEncrypted } = await import('../apps/desktop/src/renderer/src/cache')
+  const auth = { messageId: 'plain', candidate: { type: 'code', value: '012345' } }
+  expect(redactEncrypted({ pages: [{ items: [{ id: 'thread', auth }] }] })).toEqual({
+    pages: [{ items: [{ id: 'thread', auth }] }],
+  })
+})

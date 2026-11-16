@@ -1,7 +1,20 @@
 import { cn } from '@inlark/ui'
-import { Archive, Lock, Mail, MailOpen, Paperclip, Star, Trash2 } from '@inlark/ui/icons'
+import {
+  Archive,
+  Check,
+  Copy,
+  ExternalLink,
+  Lock,
+  Mail,
+  MailOpen,
+  Paperclip,
+  Star,
+  Trash2,
+} from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
-import { isDraft, type Account, type Conversation } from '@inlark/core'
+import { Tooltip } from '@base-ui/react/tooltip'
+import { isDraft, type Account, type AuthValue, type Conversation } from '@inlark/core'
+import { authKey, authLabel, linkHost, SwapLabel, useAuthCopied } from './auth-action'
 import { shortDate } from './mail-date'
 import { SenderAvatar } from './SenderAvatar'
 import { AccountMark } from './AccountMark'
@@ -11,6 +24,90 @@ import { useShortcutText } from './shortcuts'
 
 export function senderLabel(conversation: Conversation) {
   return conversation.from.map((sender) => sender.name || sender.email.split('@')[0]).join(', ')
+}
+
+/** Copies the row's code, or opens its link, without opening the conversation. */
+function RowAuth({
+  candidate,
+  copyKey,
+  shortcut,
+  onRun,
+}: {
+  candidate: AuthValue
+  copyKey: string
+  shortcut?: string
+  onRun: () => void
+}) {
+  const copied = useAuthCopied(copyKey)
+  const code = candidate.type === 'code'
+  const label = authLabel(candidate)
+  const host = code ? '' : linkHost(candidate.value)
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              // It shrinks, truncating its text, rather than letting a narrow row overflow; narrow
+              // rows cap it so a long code cannot crowd out the sender.
+              'row-auth inline-flex items-center gap-1.5 h-6 max-w-60 min-w-0 px-2 rounded-md shrink',
+              '@max-[680px]/mail:max-w-36 @max-[440px]/mail:max-w-26',
+              'border border-solid border-border bg-transparent text-secondary text-[12px] leading-none',
+              'transition-[background-color,border-color,color] duration-120 ease-[ease]',
+              'hover:bg-strong/8 hover:border-border-strong hover:text-strong',
+              '[&_svg]:shrink-0 [&_svg]:text-muted',
+              'hover:[&_svg]:text-secondary [.unread_&]:text-strong',
+              copied && '[&_svg]:text-success! border-border-strong',
+              // Like the time, it gives way where a compact row has no room for it; the shortcut
+              // and the reader still offer the value.
+              '@max-[440px]/mail:[.density-compact_&]:hidden',
+            )}
+            aria-label={code ? 'Copy code ' + candidate.value : label + ', opens ' + host}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRun()
+            }}
+            // Activating the button with the keyboard must not reach the global Enter shortcut,
+            // which would open the conversation and cancel the button's own click.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
+            }}
+          />
+        }
+      >
+        {code ? (
+          <>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            <SwapLabel
+              showAlternate={copied}
+              label={<span className="font-mono tracking-wider">{candidate.value}</span>}
+              alternate="Copied"
+            />
+          </>
+        ) : (
+          <>
+            <ExternalLink size={12} />
+            <span className="min-w-0 truncate @max-[440px]/mail:hidden">{label}</span>
+            <span className="text-muted min-w-0 shrink-[4] truncate @max-[1100px]/mail:hidden">
+              {host}
+            </span>
+          </>
+        )}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={7}>
+          <Tooltip.Popup className="tooltip flex gap-3 items-center py-1.5 px-2.25 bg-raised border border-solid border-border-strong rounded-md text-[11px] shadow-popup z-200 max-w-80">
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+              {/* The whole code, even where the button has to truncate it. */}
+              {code ? 'Copy ' + candidate.value : label + ' · opens ' + host}
+            </span>
+            {shortcut && <kbd>{shortcut}</kbd>}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  )
 }
 
 export function ConversationRow({
@@ -27,6 +124,7 @@ export function ConversationRow({
   onArchive,
   onTrash,
   onToggleRead,
+  onAuth,
 }: {
   conversation: Conversation
   account?: Account
@@ -41,6 +139,8 @@ export function ConversationRow({
   onArchive?: () => void
   onTrash?: () => void
   onToggleRead: () => void
+  /** Copies the code or opens the link found in the shown message. */
+  onAuth?: () => void
 }) {
   const keys = useShortcutText()
   const moveLimit = actionLimit(a, 'move')
@@ -48,6 +148,8 @@ export function ConversationRow({
   // An unsent reply is flagged rather than counted, so it never reads as sent.
   const drafts = c.messages.filter(isDraft).length
   const count = c.count - drafts
+  const auth = c.auth?.candidate &&
+    onAuth && { candidate: c.auth.candidate, messageId: c.auth.messageId }
   return (
     <div
       className={cn(
@@ -166,36 +268,61 @@ export function ConversationRow({
           '@max-[680px]/mail:[.density-comfortable_&]:row-start-1 @max-[680px]/mail:[.density-comfortable_&]:gap-1.75',
           '@max-[680px]/mail:[&_time]:text-[10px] @max-[680px]/mail:[&_time]:w-13.5 @max-[680px]/mail:gap-1.5',
           '@max-[440px]/mail:[.density-compact_&_time]:hidden',
+          // With a code or link, this end may shrink (the button truncates) instead of overflowing.
+          auth && 'min-w-0 shrink',
         )}
         role="gridcell"
       >
-        <span className="row-attachment w-3.25">
-          {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
-        </span>
-        {a && <AccountMark account={a} size={22} title={a.name} />}
-        <time dateTime={c.receivedAt} title={new Date(c.receivedAt).toLocaleString()}>
-          {shortDate(c.receivedAt)}
-        </time>
-        <button
+        {auth && onAuth && (
+          <RowAuth
+            candidate={auth.candidate}
+            copyKey={authKey(c.accountId, auth.messageId)}
+            shortcut={keys('authAction')}
+            onRun={onAuth}
+          />
+        )}
+        <div
           className={cn(
-            'row-star grid place-items-center bg-none bg-transparent border-0 rounded-sm p-1.25 text-faint opacity-0',
-            'transition-[opacity,color,background-color] duration-120 ease-[ease]',
-            '[&_svg]:[transition:fill_120ms_ease,_transform_160ms_cubic-bezier(0.3,_1.5,_0.6,_1)] [&.starred]:opacity-100',
-            '[&:hover:not(:disabled)]:text-secondary [&:hover:not(:disabled)]:bg-strong/8',
-            '[&:active:not(:disabled)_svg]:transform-[scale(0.85)] [&.starred]:text-star',
-            '[&.starred:hover:not(:disabled)]:text-star [&.starred_svg]:fill-current @max-[680px]/mail:p-[3px]',
-            c.starred && 'starred [&:is(svg)]:fill-current text-star',
+            'row-meta-end flex items-center justify-end gap-[inherit]',
+            // Beside a code or link, this end of the row is at least as wide as the quick actions
+            // that cover it on hover (right-7.5, three w-7.25 buttons, gaps, padding, border), so
+            // they never cover the button at any width.
+            auth &&
+              'min-w-[calc(--spacing(7.5)+--spacing(7.25)*3+10px)] @max-[440px]/mail:[.density-compact_&]:min-w-0',
           )}
-          aria-label={(c.starred ? 'Unstar ' : 'Star ') + subject}
-          aria-pressed={c.starred}
-          disabled={busy}
-          onClick={(event) => {
-            event.stopPropagation()
-            onStar()
-          }}
         >
-          <Star size={14} />
-        </button>
+          {/* Other rows keep the slot so their previews end evenly; beside a code or link it
+              would only leave a gap. */}
+          {(c.hasAttachment || !auth) && (
+            <span className="row-attachment w-3.25">
+              {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
+            </span>
+          )}
+          {a && <AccountMark account={a} size={22} title={a.name} />}
+          <time dateTime={c.receivedAt} title={new Date(c.receivedAt).toLocaleString()}>
+            {shortDate(c.receivedAt)}
+          </time>
+          <button
+            className={cn(
+              'row-star grid place-items-center bg-none bg-transparent border-0 rounded-sm p-1.25 text-faint opacity-0',
+              'transition-[opacity,color,background-color] duration-120 ease-[ease]',
+              '[&_svg]:[transition:fill_120ms_ease,_transform_160ms_cubic-bezier(0.3,_1.5,_0.6,_1)] [&.starred]:opacity-100',
+              '[&:hover:not(:disabled)]:text-secondary [&:hover:not(:disabled)]:bg-strong/8',
+              '[&:active:not(:disabled)_svg]:transform-[scale(0.85)] [&.starred]:text-star',
+              '[&.starred:hover:not(:disabled)]:text-star [&.starred_svg]:fill-current @max-[680px]/mail:p-[3px]',
+              c.starred && 'starred [&:is(svg)]:fill-current text-star',
+            )}
+            aria-label={(c.starred ? 'Unstar ' : 'Star ') + subject}
+            aria-pressed={c.starred}
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation()
+              onStar()
+            }}
+          >
+            <Star size={14} />
+          </button>
+        </div>
         <div
           className="row-quick-actions absolute right-7.5 flex gap-[2px] p-[2px] border border-solid border-border-strong rounded-md bg-raised shadow-[0_2px_6px_#0002] opacity-0 pointer-events-none"
           onClick={(event) => event.stopPropagation()}

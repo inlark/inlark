@@ -145,6 +145,38 @@ describe('SQLite metadata index', () => {
     expect(await index.counts('a')).toEqual({ messages: 1 })
   })
 
+  it('keeps the code or link found with a preview, and whether one was checked', async () => {
+    const { INBOX } = await mailboxes()
+    const [id] = await index.upsertMessages('a', [message(INBOX!, 1, { preview: '' })])
+    expect((await one('a', id!)).auth).toBeUndefined()
+    await index.setPreview('a', id!, 'Your code', { type: 'code', value: '012345' })
+    expect(await one('a', id!)).toMatchObject({
+      preview: 'Your code',
+      auth: { type: 'code', value: '012345' },
+    })
+    // Refreshing flags or the preview of the same location keeps what was found.
+    await index.upsertMessages('a', [message(INBOX!, 1, { flags: ['\\Seen'], preview: 'Fresh' })])
+    await index.setPreview('a', id!, 'Again')
+    expect((await one('a', id!)).auth).toEqual({ type: 'code', value: '012345' })
+    await index.setPreview('a', id!, 'Nothing here', null)
+    expect((await one('a', id!)).auth).toBeNull()
+  })
+
+  it('adds the code or link column to a version 2 index without checking old rows', async () => {
+    const { INBOX } = await mailboxes()
+    const [id] = await index.upsertMessages('a', [message(INBOX!, 1, { emailId: '7' })])
+    await index.close()
+    const db = new DatabaseSync(path)
+    db.exec('ALTER TABLE messages DROP COLUMN auth; PRAGMA user_version = 2')
+    db.close()
+    index = openInProcessIndex(path)
+    expect(await one('a', id!)).toMatchObject({ id, emailId: '7', preview: 'Preview 1' })
+    expect((await one('a', id!)).auth).toBeUndefined()
+    const migrated = new DatabaseSync(path)
+    expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: SCHEMA_VERSION })
+    migrated.close()
+  })
+
   it('relocates an ID after a confirmed move and keeps its thread', async () => {
     const { INBOX, Archive } = await mailboxes()
     const [root, reply] = await index.upsertMessages('a', [
@@ -460,7 +492,7 @@ describe('SQLite metadata index', () => {
     // Recreate the prior schema from the same stored locations.
     const db = new DatabaseSync(path)
     db.exec(
-      'DROP INDEX messages_email_id; ALTER TABLE messages DROP COLUMN email_id; PRAGMA user_version = 1',
+      'DROP INDEX messages_email_id; ALTER TABLE messages DROP COLUMN email_id; ALTER TABLE messages DROP COLUMN auth; PRAGMA user_version = 1',
     )
     db.close()
     index = openInProcessIndex(path)

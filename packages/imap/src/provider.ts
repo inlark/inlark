@@ -3,11 +3,14 @@ import {
   accountKey,
   accountColors,
   conversationFromMessages,
+  isDraft,
   isProviderError,
   ProviderError,
   type Account,
   type AccountLimits,
   type Attachment,
+  type AuthDetector,
+  type Conversation,
   type Draft,
   type FolderMappingReview,
   type FolderMappings,
@@ -31,6 +34,7 @@ import {
   metadataQuery,
   parseBlobId,
   partSection,
+  previewLength,
   previewText,
   textParts,
   toMessage,
@@ -62,6 +66,8 @@ export interface ImapProviderOptions {
   index: MetadataIndex
   /** Reads a staged attachment by its ID; the desktop app owns the files. */
   readAttachment(id: string): Promise<Uint8Array>
+  /** Finds a message's code or link; checked with each preview and kept in the index. */
+  detectAuth?: AuthDetector
   /** Keeps the index current in the background. Off for temporary connection tests. */
   background?: boolean
   ports?: PortFactory
@@ -106,6 +112,8 @@ type Task = {
 const roleViews = ['inbox', 'archive', 'sent', 'drafts', 'junk', 'trash']
 const bodyLimit = 10_000_000
 const partLimit = 5_000_000
+/** The opening text read for a preview and its code or link. */
+const previewBytes = 4096
 const byMailbox = <T extends { mailboxId: string }>(items: T[]) => {
   const groups = new Map<string, T[]>()
   for (const item of items)
@@ -690,6 +698,21 @@ export class ImapProvider implements MailProvider {
     await this.emitProgress()
     return true
   }
+  /** The row's code or link: found with its preview, or else in the subject and preview. */
+  private listAuth(row: IndexedMessage, shown: Message): Conversation['auth'] {
+    const detect = this.options.detectAuth
+    if (!detect) return undefined
+    if (isDraft(shown) || shown.security?.encrypted) return { messageId: row.id }
+    const candidate =
+      row.auth !== undefined
+        ? row.auth || undefined
+        : detect({
+            subject: row.subject,
+            text: shown.preview,
+            partial: shown.preview.length >= previewLength,
+          })
+    return { messageId: row.id, ...(candidate ? { candidate } : {}) }
+  }
   private async fillPreviews(ids: string[]) {
     if (!ids.length || this.disposed) return
     const rows = await this.index.messages(this.accountId, ids)
@@ -704,9 +727,19 @@ export class ImapProvider implements MailProvider {
           const part = text || html
           if (!part) continue
           try {
-            const bytes = await port.download(row.uid, partSection(part), 4096, true)
-            const preview = previewText(new TextDecoder().decode(bytes), part === html)
-            if (preview) await this.index.setPreview(this.accountId, row.id, preview)
+            const bytes = await port.download(row.uid, partSection(part), previewBytes, true)
+            const content = new TextDecoder().decode(bytes)
+            const preview = previewText(content, part === html)
+            // The same opening text finds the code or link, so a row never needs the full body.
+            const auth = this.options.detectAuth
+              ? (this.options.detectAuth({
+                  subject: row.subject,
+                  [part === html ? 'html' : 'text']: content,
+                  partial: bytes.length >= previewBytes,
+                }) ?? null)
+              : undefined
+            if (preview || auth !== undefined)
+              await this.index.setPreview(this.accountId, row.id, preview, auth)
           } catch {
             // A missing preview is harmless; the body loads when the message opens.
           }
@@ -792,10 +825,13 @@ export class ImapProvider implements MailProvider {
       const shown = new Set(distinctEmails(locations).map((m) => m.id))
       c.messages = c.messages.filter((m) => shown.has(m.id))
       // Display the matching representative, even if the thread has newer mail elsewhere.
+      const representative = toMessage(account.id, row.latest, filed(row.latest))
       c.receivedAt = row.latest.receivedAt
       c.subject = row.latest.subject || '(No subject)'
-      c.preview = toMessage(account.id, row.latest).preview
+      c.preview = representative.preview
       c.count = row.count
+      const auth = this.listAuth(row.latest, representative)
+      if (auth) c.auth = auth
       return c
     })
     const end = position + items.length

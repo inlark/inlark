@@ -45,10 +45,13 @@ import {
   Lock,
   LockOpen,
   LockKeyhole,
+  Copy,
+  ExternalLink,
 } from '@inlark/ui/icons'
 import { Button, Checkbox, Dropdown, MenuItem, IconButton, EmptyState, Spinner } from '@inlark/ui'
 import {
   defaultSettings,
+  isDraft,
   scopeKey,
   unlinkedServerDrafts,
   friendlyError,
@@ -57,6 +60,7 @@ import {
   replyRecipients,
   replyTarget,
   type Address,
+  type AuthValue,
   type Bootstrap,
   type Conversation,
   type Draft,
@@ -115,6 +119,7 @@ import { newMessageAccount } from './compose-account'
 import { SubmissionList } from './SendingStatus'
 import { useHeldSends } from './held-sends'
 import { ProgressToast, Toaster, toasts } from './Toasts'
+import { AuthAnnouncer, authCommandLabel, authKey, linkHost, runAuth } from './auth-action'
 import type { LiveToast } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
@@ -1004,6 +1009,32 @@ export function App() {
   const toggleDensity = () =>
     setDensity((current) => (current === 'compact' ? 'comfortable' : 'compact'))
   const createFolder = () => setFolderDialog({ operation: 'create', accountId: route.account })
+  // The open conversation's newest code or link once its bodies are read, else the row's.
+  const readerAuth =
+    route.thread && thread.data && !thread.isPlaceholderData
+      ? [...thread.data].reverse().find((m) => m.authCandidate && !isDraft(m))
+      : undefined
+  const authRow = route.thread ? listed : conversations.find((c) => c.key === focused)
+  const authTarget: { candidate: AuthValue; key: string } | undefined = readerAuth
+    ? { candidate: readerAuth.authCandidate!, key: authKey(readerAuth.accountId, readerAuth.id) }
+    : !(route.thread && thread.data && !thread.isPlaceholderData) && authRow?.auth?.candidate
+      ? {
+          candidate: authRow.auth.candidate,
+          key: authKey(authRow.accountId, authRow.auth.messageId),
+        }
+      : undefined
+  const applyAuth = async (candidate: AuthValue, key: string) => {
+    if (await runAuth(candidate, key)) return
+    notify(
+      candidate.type === 'code'
+        ? 'Couldn’t copy the code. Open the email to copy it manually.'
+        : 'Couldn’t open this link.',
+      'error',
+    )
+  }
+  const authFromRow = (c: Conversation) => {
+    if (c.auth?.candidate) void applyAuth(c.auth.candidate, authKey(c.accountId, c.auth.messageId))
+  }
   useShortcutHandlers(
     shortcuts.bindings,
     {
@@ -1033,6 +1064,10 @@ export function App() {
       next: { run: () => step(1) },
       previous: { run: () => step(-1) },
       open: { run: openFocused },
+      authAction: {
+        run: () => authTarget && void applyAuth(authTarget.candidate, authTarget.key),
+        enabled: !blocked && !!authTarget,
+      },
       back: {
         ignoreInputs: (binding) => !sameBinding(binding, ['Escape']),
         run: () => {
@@ -1289,6 +1324,23 @@ export function App() {
             icon: Undo2,
             key: keys('undo'),
             run: () => toasts.undo(undoTarget),
+          },
+        ]
+      : []),
+    ...(authTarget
+      ? [
+          {
+            id: 'auth-action',
+            group: 'Suggested',
+            label: authCommandLabel(authTarget.candidate),
+            description:
+              authTarget.candidate.type === 'code'
+                ? authTarget.candidate.value
+                : 'Opens ' + linkHost(authTarget.candidate.value),
+            icon: authTarget.candidate.type === 'code' ? Copy : ExternalLink,
+            key: keys('authAction'),
+            keywords: 'otp 2fa one-time password login sign in verify confirm reset link code',
+            run: () => void applyAuth(authTarget.candidate, authTarget.key),
           },
         ]
       : []),
@@ -2375,6 +2427,7 @@ export function App() {
                     { accountId: conversation.accountId, threadId: conversation.id },
                   ])
                 }
+                onAuth={authFromRow}
               />
             )}
             <footer
@@ -2431,6 +2484,7 @@ export function App() {
         )}
       </main>
       <Toaster />
+      <AuthAnnouncer />
       <Suspense fallback={<ProgressToast text="Opening…" />}>
         {composer && (
           <Composer

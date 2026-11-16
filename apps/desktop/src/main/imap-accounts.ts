@@ -20,5 +20,6 @@ export const imapProviders: ProviderFactory = (input) => {
       : openWorkerIndex(join(input.directory, 'metadata.sqlite')),
     readAttachment: input.readAttachment,
     background: !input.temporary,
+    detectAuth: input.detectAuth,
   })
 }
