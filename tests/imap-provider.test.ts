@@ -5,7 +5,13 @@ import type { AddressInfo, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer as createTlsServer } from 'node:tls'
-import { ProviderError, type Account, type ImapConnectionConfig } from '../packages/core/src'
+import {
+  isDraft,
+  ProviderError,
+  unlinkedServerDrafts,
+  type Account,
+  type ImapConnectionConfig,
+} from '../packages/core/src'
 import { ImapProvider, limitsFor, imapFlowOptions, ImapFlowPort } from '../packages/imap/src'
 import { openInProcessIndex } from '../apps/desktop/src/main/imap-index/sqlite-index'
 import { FakeImapServer } from './support/fake-imap'
@@ -714,6 +720,78 @@ describe('IMAP drafts and sending', () => {
     expect(raw).toMatch(/^In-Reply-To: <root@x>/m)
     // Drafts keep Bcc so another client resuming the draft still sees it.
     expect(raw).toMatch(/^Bcc:/m)
+  })
+  it('lists drafts filed in Drafts without the Draft flag, as Gmail saves them', async () => {
+    server.capabilities.add('X-GM-EXT-1')
+    server.addMailbox('[Gmail]/All Mail', '\\All')
+    // Gmail files each draft in Drafts and All Mail, with \Seen but never \Draft.
+    const both = (input: Parameters<typeof server.deliver>[1]) => {
+      for (const path of ['Drafts', '[Gmail]/All Mail']) server.deliver(path, input)
+    }
+    both({
+      emailId: '201',
+      messageId: 'idea@x',
+      subject: 'Idea',
+      from: [me],
+      to: [alex],
+      date: at(1),
+      text: 'Unfinished',
+      flags: ['\\Seen'],
+    })
+    const root = {
+      emailId: '202',
+      messageId: 'root@x',
+      subject: 'Plans',
+      from: [alex],
+      to: [me],
+      date: at(2),
+      text: 'Shall we?',
+      flags: ['\\Seen'],
+    }
+    for (const path of ['INBOX', '[Gmail]/All Mail']) server.deliver(path, root)
+    both({
+      emailId: '203',
+      messageId: 'reply@x',
+      references: ['root@x'],
+      subject: 'Re: Plans',
+      from: [me],
+      to: [alex],
+      date: at(3),
+      text: 'Maybe',
+      flags: ['\\Seen'],
+    })
+    const p = await connected()
+    await sync(p)
+
+    const page = await p.query(account, { view: 'drafts' })
+    expect(page.total).toBe(2)
+    // The Drafts list shows exactly what the folder count promises.
+    const listed = unlinkedServerDrafts(page.items, [])
+    expect(listed.map((m) => m.subject)).toEqual(['Re: Plans', 'Idea'])
+
+    // In the conversation, the reply is a draft and the message it answers is not.
+    const [thread] = (await p.query(account, { view: 'inbox' })).items
+    expect(thread.messages.filter(isDraft).map((m) => m.subject)).toEqual(['Re: Plans'])
+    expect(thread.from).toEqual([alex])
+    const read = await p.conversation(account, thread.id)
+    expect(read.map((m) => [m.subject, isDraft(m)])).toEqual([
+      ['Plans', false],
+      ['Re: Plans', true],
+    ])
+
+    // Every location of a draft is one, like Gmail's All Mail copy, for actions and resuming.
+    const boxes = await p.mailboxes(account)
+    const allMail = boxes.find((b) => b.name === 'All Mail')!.id
+    const locations = await p.conversationMetadata(account, [thread.id])
+    expect(locations).toHaveLength(4)
+    for (const m of locations) expect(isDraft(m)).toBe(m.subject === 'Re: Plans')
+    const copy = locations.find((m) => isDraft(m) && m.mailboxIds[allMail])!
+    const [resumed] = await p.messages(account, [copy.id], true)
+    expect(isDraft(resumed)).toBe(true)
+    expect(resumed.text?.trim()).toBe('Maybe')
+    // Mail outside Drafts without the flag stays ordinary mail.
+    const [received] = await p.messages(account, [locations.find((m) => !isDraft(m))!.id])
+    expect(received.keywords).toEqual({ $seen: true })
   })
   it('keeps Bcc recipients in the envelope only', async () => {
     const p = await connected()

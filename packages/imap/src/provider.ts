@@ -718,6 +718,19 @@ export class ImapProvider implements MailProvider {
 
   // Reading
 
+  /**
+   * Gmail never sets `\Draft`, and some apps save drafts without it, so whatever is filed in Drafts
+   * is a draft too, at every location of that email, like Gmail's All Mail copy. `locations` must
+   * include the messages' other locations, e.g. their whole conversations.
+   */
+  private async filedDrafts(locations: IndexedMessage[]) {
+    const box = await this.roleBox('drafts')
+    const emails = new Set(
+      locations.filter((m) => box && m.mailboxId === box.id && m.emailId).map((m) => m.emailId),
+    )
+    return (m: IndexedMessage) =>
+      (!!box && m.mailboxId === box.id) || (!!m.emailId && emails.has(m.emailId))
+  }
   private async scope(query: MailQuery, boxes: IndexedMailbox[]) {
     const roles = rolesByPath(this.review(boxes))
     const roleOf = (b: IndexedMailbox) => (isInbox(b.path) ? 'inbox' : roles.get(b.path))
@@ -765,13 +778,14 @@ export class ImapProvider implements MailProvider {
       this.accountId,
       page.items.map((i) => i.threadId),
     )
+    const filed = await this.filedDrafts(threads)
     const items = page.items.map((row) => {
       const found = threads.filter((m) => m.threadId === row.threadId)
       const locations = found.length ? found : [row.latest]
       const c = conversationFromMessages(
         account.id,
         row.threadId,
-        locations.map((m) => toMessage(account.id, m)),
+        locations.map((m) => toMessage(account.id, m, filed(m))),
       )
       // Flags consider every location, like the index filters, but the summary lists each email
       // once. It is what the reader shows while the conversation's bodies load.
@@ -882,19 +896,23 @@ export class ImapProvider implements MailProvider {
     )
   }
   async conversationMetadata(account: Account, threadIds: string[]): Promise<Message[]> {
-    const rows = await this.index.threadMessages(this.accountId, threadIds)
-    return (await this.current(rows)).map((m) => toMessage(account.id, m))
+    const rows = await this.current(await this.index.threadMessages(this.accountId, threadIds))
+    const filed = await this.filedDrafts(rows)
+    return rows.map((m) => toMessage(account.id, m, filed(m)))
   }
   async messages(account: Account, ids: string[], bodies = false): Promise<Message[]> {
     const rows = await this.current(await this.index.messages(this.accountId, [...new Set(ids)]))
-    if (!bodies) return rows.map((m) => toMessage(account.id, m))
-    return this.withBodies(account, rows)
+    const filed = await this.filedDrafts(
+      await this.index.threadMessages(this.accountId, [...new Set(rows.map((m) => m.threadId))]),
+    )
+    if (!bodies) return rows.map((m) => toMessage(account.id, m, filed(m)))
+    return this.withBodies(account, rows, filed)
   }
   async conversation(account: Account, threadId: string): Promise<Message[]> {
     const rows = await this.index.threadMessages(this.accountId, [threadId])
     if (!rows.length)
       throw new ProviderError('notFound', 'This conversation is no longer available.')
-    const messages = await this.withBodies(account, rows, true)
+    const messages = await this.withBodies(account, rows, await this.filedDrafts(rows), true)
     if (!messages.length)
       throw new ProviderError('notFound', 'This conversation is no longer available.')
     return messages.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
@@ -902,6 +920,7 @@ export class ImapProvider implements MailProvider {
   private async withBodies(
     account: Account,
     rows: IndexedMessage[],
+    filed: (m: IndexedMessage) => boolean,
     deduplicate = false,
   ): Promise<Message[]> {
     const boxes = await this.index.listMailboxes(this.accountId)
@@ -925,7 +944,7 @@ export class ImapProvider implements MailProvider {
             if (preview && !row.preview)
               await this.index.setPreview(this.accountId, row.id, preview)
             result.push({
-              ...toMessage(account.id, { ...row, preview }),
+              ...toMessage(account.id, { ...row, preview }, filed(row)),
               html: body.html,
               text: body.text,
               attachments: attachmentsOf(row),
