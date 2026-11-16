@@ -1,6 +1,4 @@
 ---
-import '@fontsource-variable/newsreader/opsz.css'
-import '@fontsource-variable/newsreader/opsz-italic.css'
 import '@fontsource-variable/hanken-grotesk'
 import '@fontsource-variable/jetbrains-mono'
 import '@fontsource-variable/inter'
@@ -43,9 +41,25 @@ const url = new URL(Astro.url.pathname, Astro.site)
       content="inlark: beautiful email, for everyone. The unified inbox rising over a dawn horizon."
     />
     <meta name="twitter:card" content="summary_large_image" />
+    <script is:inline>
+      // Names the visitor's desktop system before the first paint, so download buttons can say it.
+      ;(() => {
+        const ua = navigator.userAgent
+        if (/Android|iPhone|iPad|iPod|Mobile|CrOS/i.test(ua)) return
+        if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return
+        const os = /Windows/.test(ua)
+          ? 'windows'
+          : /Macintosh/.test(ua)
+            ? 'mac'
+            : /Linux|X11/.test(ua)
+              ? 'linux'
+              : ''
+        if (os) document.documentElement.dataset.os = os
+      })()
+    </script>
     <slot name="head" />
   </head>
-  <body class="grain bg-night font-sans text-ink antialiased">
+  <body class="bg-night font-sans text-ink antialiased">
     <slot />
     <script>
       // Reveal sections as they scroll into view. Without JavaScript they are simply visible.

@@ -1,7 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
 import Nav from '../components/Nav.astro'
-import Stars from '../components/Stars.astro'
 import Footer from '../components/Footer.astro'
 import { DownloadPage } from '../components/download/Download'
 import { fetchLatestRelease, unconfirmedRelease } from '../data/release'
@@ -31,38 +30,25 @@ const release = import.meta.env.PROD
   </Fragment>
   <Nav page="download" />
   <main class="relative isolate min-h-[100svh] overflow-hidden pb-32">
-    <Stars count={48} class="h-[560px]" />
-    <div class="glow" aria-hidden="true"></div>
+    <div class="dawn download-dawn" aria-hidden="true"></div>
     <DownloadPage client:load initial={release} />
   </main>
   <Footer />
 </Layout>
 
 <style>
-  /* Dawn light rising behind the app icon. */
-  .glow {
-    position: absolute;
-    left: 50%;
-    top: -420px;
-    z-index: -1;
-    width: min(1400px, 190vw);
-    aspect-ratio: 16 / 9;
-    transform: translateX(-50%);
-    background: radial-gradient(
-      50% 50% at 50% 50%,
-      rgb(242 184 139 / 0.3) 0%,
-      rgb(224 158 190 / 0.18) 26%,
-      rgb(140 128 240 / 0.12) 48%,
-      transparent 72%
-    );
-    filter: blur(24px);
-    animation: glow-in 2.4s var(--ease-out-expo) both;
+  /* The horizon runs behind the app icon, which comes up over it like the sun. */
+  .download-dawn {
+    top: 0;
+    height: calc(9rem + 32px);
   }
-  @keyframes glow-in {
-    from {
-      opacity: 0;
-      transform: translate(-50%, 12%) scale(0.9);
+  @media (width >= 40rem) {
+    .download-dawn {
+      height: calc(11rem + 32px);
     }
+  }
+  :global(html.is-mobile) .download-dawn {
+    display: none;
   }
 
   :global(html:not(.is-mobile)) :global(.mobile-view),

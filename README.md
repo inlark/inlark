@@ -33,7 +33,7 @@ If you run your own mail server, or just have a few accounts at small providers,
 - **Your keyboard, first.** `J`/`K` to move, `E` to archive, `R` to reply, `/` to search, and `Ctrl K` for everything else. Every action works with a mouse, too.
 - **Undo for everything.** Archive, trash, move, star or mark as spam, then press `Z`. It works even if another client changed the mailbox in between.
 - **Search that goes all the way back.** Searches run on your server across every folder and every year, narrowed by sender, recipient, subject, date or attachment.
-- **Big mailboxes stay fast.** A quarter of a million conversations in the unified inbox still scroll smoothly, because only the few dozen on screen are ever drawn.
+- **Big mailboxes stay fast.** However long the unified inbox gets, it scrolls smoothly, because only the few dozen conversations on screen are ever drawn.
 - **Sending you can trust.** Drafts survive crashes. If a send's response gets lost on the way back, inlark marks the message **unconfirmed** and doesn't retry it on its own, so nobody gets your message twice.
 - **Private by design.** inlark connects directly to your mail server. There's no inlark account, no sync service and no analytics.
 - **Dark and light, with equal care.** Both themes get the same attention to detail, and rich HTML mail keeps the look its sender designed.

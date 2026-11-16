@@ -6,7 +6,7 @@ function highlight(line: string) {
   if (line.startsWith('#')) return <span className="text-ink-3">{line}</span>
   return line.split(/("[^"]*")/g).map((part, i) =>
     part.startsWith('"') ? (
-      <span key={i} className="text-dawn">
+      <span key={i} className="text-lavender">
         {part}
       </span>
     ) : (

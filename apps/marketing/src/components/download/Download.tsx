@@ -137,7 +137,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
           </button>
         </div>
         {mobileBuilds && (
-          <div className="mx-auto mt-8 max-w-6xl px-5">
+          <div className="wrap mt-8">
             <Builds release={release} selected={null} onChoose={() => {}} />
           </div>
         )}
@@ -149,34 +149,31 @@ export function DownloadPage({ initial }: { initial: Release }) {
             key={phase === 'detecting' ? 'pending' : 'resolved'}
             className={'mx-auto max-w-2xl ' + (phase === 'detecting' ? 'pending' : '')}
           >
-            <AppTile size={68} className="rise mx-auto" />
-            <p className="eyebrow rise mt-9" style={delay(0.06)}>
-              {meta}
-            </p>
-            <h1 className="display rise mt-5 text-[clamp(2.8rem,7vw,5.2rem)]" style={delay(0.12)}>
+            <AppTile size={64} className="rise mx-auto" />
+            <h1 className="display rise mt-12 text-[clamp(2.5rem,6vw,4.5rem)]" style={delay(0.06)}>
               {build ? (
                 <>
-                  inlark for <em className="dawn-text pr-[0.06em]">{osNames[build.os]}</em>
+                  inlark <span className="text-ink-3">for</span> {osNames[build.os]}
                 </>
               ) : (
                 'Download inlark'
               )}
             </h1>
-            <p
-              className="rise mx-auto mt-6 max-w-lg text-lg leading-relaxed text-ink-2"
-              style={delay(0.18)}
-            >
+            <p className="lede rise mx-auto mt-6 max-w-lg text-balance" style={delay(0.12)}>
               {phase === 'started'
                 ? 'Your download has started. Here’s how to install it.'
                 : build
                   ? 'Free and open source, and set up in a minute.'
                   : 'Free and open source for Linux, Windows, and macOS. Choose the build for your computer.'}
             </p>
+            <p className="rise mt-4 text-[0.8125rem] text-ink-3" style={delay(0.16)}>
+              {meta}
+            </p>
 
             {download && (
-              <div className="rise mx-auto mt-10 max-w-xl" style={delay(0.24)}>
+              <div className="rise mx-auto mt-10 max-w-xl" style={delay(0.2)}>
                 <div className="card flex items-center gap-4 p-3 pr-3 text-left sm:p-4">
-                  <span className="grid size-12 shrink-0 place-items-center rounded-xl border border-line bg-ink/[0.035] text-ink-2">
+                  <span className="grid size-12 shrink-0 place-items-center rounded-[0.625rem] border border-line bg-ink/[0.035] text-ink-2">
                     <BuildIcon build={download.build} size={22} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -259,7 +256,7 @@ export function DownloadPage({ initial }: { initial: Release }) {
                   <button
                     type="button"
                     onClick={() => copyDigest(download.digest!)}
-                    className="mt-3 font-mono text-[0.68rem] tracking-wide text-ink-3 transition-colors hover:text-ink-2"
+                    className="mt-4 font-mono text-[0.68rem] tracking-wide text-ink-3 transition-colors hover:text-ink-2"
                     title={download.digest}
                   >
                     {copiedDigest ? 'SHA-256 copied' : 'Copy SHA-256 checksum'}
@@ -271,25 +268,14 @@ export function DownloadPage({ initial }: { initial: Release }) {
         </section>
 
         {download && phase !== 'detecting' && (
-          <section
-            id="install"
-            className="mx-auto max-w-6xl -scroll-mt-20 px-5 pt-28 sm:-scroll-mt-24 sm:px-8 sm:pt-36"
-          >
+          <section id="install" className="wrap -scroll-mt-20 pt-28 sm:-scroll-mt-24 sm:pt-36">
             <Steps key={download.build.id} download={download} />
           </section>
         )}
 
-        <section
-          id="all"
-          className="mx-auto max-w-6xl -scroll-mt-20 px-5 pt-28 sm:-scroll-mt-24 sm:px-8 sm:pt-36"
-        >
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="eyebrow">Every build</p>
-              <h2 className="display mt-4 text-[clamp(2rem,4.2vw,3rem)]">
-                {build ? 'Something else?' : 'Choose your system.'}
-              </h2>
-            </div>
+        <section id="all" className="wrap -scroll-mt-20 pt-28 sm:-scroll-mt-24 sm:pt-36">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-12 sm:pt-16">
+            <h2 className="statement">{build ? 'Something else?' : 'Choose your system.'}</h2>
             <a
               href={release.url}
               className="flex items-center gap-1.5 text-sm text-ink-2 transition-colors hover:text-ink"
@@ -301,12 +287,9 @@ export function DownloadPage({ initial }: { initial: Release }) {
             <Builds release={release} selected={selected} onChoose={(b) => choose(b)} />
           </div>
           <p className="mt-8 max-w-2xl text-[0.92rem] leading-relaxed text-ink-3">
-            <span className="text-dawn">inlark {release.version} is an early preview.</span> Try it
-            alongside your current client while it matures, and{' '}
-            <a
-              href={links.issues}
-              className="text-ink-2 underline decoration-ink-3/50 underline-offset-4 hover:text-ink"
-            >
+            <span className="text-lavender">inlark {release.version} is an early preview.</span> Try
+            it alongside your current client while it matures, and{' '}
+            <a href={links.issues} className="link">
               tell us what breaks
             </a>
             .

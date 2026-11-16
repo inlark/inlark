@@ -1,5 +1,7 @@
 ---
-import { AlertCircle, Check, FileText, Send } from '@inlark/ui/icons'
+import { AlertCircle, FileText, Mail, Send } from '@inlark/ui/icons'
+import { AccountMark } from './mail/MailRow'
+import { accountById } from '../data/mail'
 
 const points = [
   {
@@ -21,94 +23,114 @@ const points = [
 ]
 ---
 
-<section id="reliability" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
-  <div class="grid items-center gap-14 lg:grid-cols-[1fr_1.05fr] lg:gap-20">
-    <div class="reveal">
-      <p class="eyebrow">Dependable by design</p>
-      <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">Nothing you write gets lost.</h2>
-      <dl class="mt-10 grid gap-x-8 gap-y-8 sm:grid-cols-2">
-        {points.map((p) => (
-          <div>
-            <dt class="font-semibold text-ink">{p.title}</dt>
-            <dd class="mt-2 leading-relaxed text-ink-2">{p.text}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+<section id="reliability" class="wrap mt-28 sm:mt-44">
+  <header class="reveal border-t border-line pt-12 sm:pt-16">
+    <h2 class="statement">
+      Nothing you write gets lost.{' '}
+      <span>Drafts are saved as you type, and every send says exactly where it stands.</span>
+    </h2>
+  </header>
 
-    <div class="reveal relative" style="--delay:.1s" aria-hidden="true">
-      <div class="status-glow"></div>
+  <div class="mt-14 grid items-start gap-x-16 gap-y-14 sm:mt-20 lg:grid-cols-12">
+    <dl class="reveal border-b border-line lg:col-span-5">
+      {points.map((p) => (
+        <div class="border-t border-line py-6">
+          <dt class="title">{p.title}</dt>
+          <dd class="copy mt-2">{p.text}</dd>
+        </div>
+      ))}
+    </dl>
+
+    <div class="reveal relative lg:col-span-7" style="--delay:.1s" aria-hidden="true">
       <div class="app relative">
-        <div class="overflow-hidden rounded-[16px] border border-(--border-strong) bg-(--bg) shadow-[0_40px_100px_-30px_var(--shadow-deep)]">
-          <header class="flex items-center gap-2.5 border-b border-(--border) px-5 py-4">
-            <Send size={15} className="text-(--muted)" />
-            <span class="text-[14px] font-semibold text-(--text-strong)">Send status</span>
-            <span class="ml-auto text-[11px] text-(--muted)">Today</span>
-          </header>
+        <div class="frame">
+          <div class="app-main !rounded-[15px] !border-0">
+            <header class="flex items-center gap-2.5 px-6 pt-5 pb-1">
+              <span class="text-[17px] font-semibold tracking-[-0.01em] text-(--text-strong)">
+                Send status
+              </span>
+              <span class="rounded-[5px] border border-(--border-strong) px-1.5 py-px text-[10.5px] text-(--muted)">
+                3
+              </span>
+            </header>
+            <p class="px-6 pt-4 pb-2 text-[11px] font-medium text-(--faint)">Needs attention</p>
 
-          <div class="status-item border-b border-(--border) px-5 py-4" style="--i:0">
-            <div class="flex items-center gap-3">
-              <span class="grid size-6 place-items-center rounded-full bg-(--green)/15 text-(--green)">
-                <Check size={13} strokeWidth={2.2} />
-              </span>
-              <span class="text-[13px] font-medium text-(--text-strong)">
-                Re: Coffee sometime next week?
-              </span>
-              <span class="ml-auto text-[11px] text-(--muted)">9:02 AM</span>
+            <div class="status-item border-b border-(--border) px-6 py-4" style="--i:0">
+              <div class="flex items-center gap-3">
+                <Mail size={16} className="shrink-0 text-(--muted)" />
+                <span class="text-[13px] font-medium text-(--text-strong)">
+                  Re: Coffee sometime next week?
+                </span>
+                <span class="ml-auto text-[11px] text-(--muted)">9:02 AM</span>
+              </div>
+              <p class="mt-1.5 flex items-center gap-2 pl-7 text-[12px] text-(--green)">
+                Sent · Copy in Sent pending
+                <span class="flex items-center gap-1.5 text-[11.5px] text-(--muted)">
+                  <AccountMark account={accountById.personal} size={12} /> Personal
+                </span>
+              </p>
+              <p class="mt-1 pl-7 text-[11.5px] text-(--muted)">
+                Delivered. Its copy in Sent hasn’t been saved yet.
+              </p>
             </div>
-            <p class="mt-1.5 pl-9 text-[12px] text-(--muted)">
-              <span class="text-(--secondary)">Sent · Copy in Sent pending.</span> Delivered. Its
-              copy in Sent hasn’t been saved yet.
-            </p>
-          </div>
 
-          <div class="status-item border-b border-(--border) px-5 py-4" style="--i:1">
-            <div class="flex items-center gap-3">
-              <span class="grid size-6 place-items-center rounded-full bg-(--star)/15 text-(--star)">
-                <AlertCircle size={13} strokeWidth={2} />
-              </span>
-              <span class="text-[13px] font-medium text-(--text-strong)">Quarterly numbers</span>
-              <span class="ml-auto rounded-[5px] bg-(--star)/12 px-1.5 py-px text-[10.5px] text-(--star)">
+            <div class="status-item border-b border-(--border) px-6 py-4" style="--i:1">
+              <div class="flex items-center gap-3">
+                <AlertCircle size={16} className="shrink-0 text-(--muted)" />
+                <span class="text-[13px] font-medium text-(--text-strong)">Quarterly numbers</span>
+                <span class="ml-auto text-[11px] text-(--muted)">8:51 AM</span>
+              </div>
+              <p class="mt-1.5 flex items-center gap-2 pl-7 text-[12px] text-(--star)">
                 Delivery unconfirmed
-              </span>
+                <span class="flex items-center gap-1.5 text-[11.5px] text-(--muted)">
+                  <AccountMark account={accountById.studio} size={12} /> Studio
+                </span>
+              </p>
+              <p class="mt-1 max-w-md pl-7 text-[11.5px] leading-relaxed text-(--muted)">
+                The server may have accepted this message. Check again before sending a replacement,
+                or recipients may get it twice.
+              </p>
+              <div class="mt-3 flex flex-wrap items-center gap-2 pl-7 text-[11.5px]">
+                <span class="rounded-[6px] border border-(--border-strong) bg-(--surface) px-2.5 py-1 text-(--text-strong)">
+                  Check again
+                </span>
+                <span class="rounded-[6px] border border-(--border-strong) bg-(--surface) px-2.5 py-1 text-(--text-strong)">
+                  Send a replacement…
+                </span>
+                <span class="px-2 text-(--secondary)">Dismiss</span>
+              </div>
             </div>
-            <p class="mt-1.5 pl-9 text-[12px] leading-relaxed text-(--muted)">
-              The server may have accepted this message. Check again before sending a replacement,
-              or recipients may get it twice.
-            </p>
-            <div class="mt-3 pl-9">
-              <span class="inline-flex rounded-[6px] border border-(--border-strong) bg-(--surface) px-2.5 py-1 text-[11.5px] text-(--text)">
-                Check again
-              </span>
-            </div>
-          </div>
 
-          <div class="status-item px-5 py-4" style="--i:2">
-            <div class="flex items-center gap-3">
-              <span class="grid size-6 place-items-center rounded-full bg-(--accent)/15 text-(--accent)">
-                <Send size={12} />
-              </span>
-              <span class="text-[13px] font-medium text-(--text-strong)">
-                Plans for the offsite
-              </span>
-              <span class="ml-auto rounded-[5px] bg-(--accent)/12 px-1.5 py-px text-[10.5px] text-(--accent)">
+            <div class="status-item px-6 pt-4 pb-9" style="--i:2">
+              <div class="flex items-center gap-3">
+                <Send size={16} className="shrink-0 text-(--muted)" />
+                <span class="text-[13px] font-medium text-(--text-strong)">
+                  Plans for the offsite
+                </span>
+                <span class="ml-auto text-[11px] text-(--muted)">8:14 AM</span>
+              </div>
+              <p class="mt-1.5 flex items-center gap-2 pl-7 text-[12px] text-(--accent)">
                 Partially sent
-              </span>
-            </div>
-            <p class="mt-1.5 pl-9 text-[12px] text-(--muted)">
-              Not delivered to <span class="text-(--secondary)">kai@oldmail.example</span>. Everyone
-              else received it.
-            </p>
-            <div class="mt-3 pl-9">
-              <span class="inline-flex items-center gap-1.5 rounded-[6px] bg-(--accent-solid) px-2.5 py-1 text-[11.5px] text-white">
-                <FileText size={12} /> Create draft to refused recipients
-              </span>
+                <span class="flex items-center gap-1.5 text-[11.5px] text-(--muted)">
+                  <AccountMark account={accountById.studio} size={12} /> Studio
+                </span>
+              </p>
+              <p class="mt-1 pl-7 text-[11.5px] text-(--muted)">
+                Not delivered to <span class="text-(--secondary)">kai@oldmail.example</span>.
+                Everyone else received it.
+              </p>
+              <div class="mt-3 flex flex-wrap items-center gap-2 pl-7 text-[11.5px]">
+                <span class="flex items-center gap-1.5 rounded-[6px] border border-(--border-strong) bg-(--surface) px-2.5 py-1 text-(--text-strong)">
+                  <FileText size={12} /> Create draft to refused recipients
+                </span>
+                <span class="px-2 text-(--secondary)">Dismiss</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="draft-chip absolute -bottom-5 -left-4 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] text-(--secondary) shadow-[0_18px_50px_var(--shadow)] sm:-left-8">
-          <span class="size-1.5 rounded-full bg-(--green)"></span> Saved on this device
+        <div class="draft-chip absolute -bottom-4 left-5 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] text-(--secondary) shadow-[0_18px_50px_var(--shadow)] sm:left-8">
+          <span class="size-1.5 rounded-full bg-(--green)"></span> Draft saved on this device
         </div>
       </div>
     </div>
@@ -116,12 +138,6 @@ const points = [
 </section>
 
 <style>
-  .status-glow {
-    position: absolute;
-    inset: 10% -10% -10%;
-    background: radial-gradient(closest-side, rgb(255 255 255 / 0.06), transparent);
-    filter: blur(40px);
-  }
   .status-item {
     opacity: 0;
     transform: translateY(8px);
@@ -137,7 +153,9 @@ const points = [
   .draft-chip {
     opacity: 0;
     transform: translateY(8px);
-    transition: all 0.8s var(--ease-out-expo) 0.8s;
+    transition:
+      opacity 0.8s var(--ease-out-expo) 0.8s,
+      transform 0.8s var(--ease-out-expo) 0.8s;
   }
   :global(.is-visible) .draft-chip {
     opacity: 1;

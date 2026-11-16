@@ -24,7 +24,7 @@ export function Builds({
 }) {
   const group = (os: Os) => (
     <div key={os} className="card p-2">
-      <p className="flex items-center gap-2.5 px-3 pt-2.5 pb-3 text-sm font-medium text-ink">
+      <p className="title flex items-center gap-2.5 px-3 pt-2.5 pb-3 text-[0.9375rem]">
         <OsIcon os={os} size={17} className="text-ink-2" />
         {osNames[os]}
       </p>
@@ -56,7 +56,7 @@ export function Builds({
               </>
             )
             const className =
-              'group flex w-full items-center gap-3 rounded-[0.8rem] px-3 py-2.5 text-left transition-colors ' +
+              'group flex w-full items-center gap-3 rounded-[0.55rem] px-3 py-2.5 text-left transition-colors ' +
               (active ? 'bg-ink/[0.05] ring-1 ring-ink/[0.07]' : 'hover:bg-ink/[0.035]')
             return (
               <li key={build.id}>

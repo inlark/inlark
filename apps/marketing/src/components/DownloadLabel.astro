@@ -1,0 +1,22 @@
+---
+/* The label of a download button. It names the visitor's system once the page knows it. */
+---
+
+<span class="download-label">
+  <span data-os="">Download inlark</span>
+  <span data-os="linux">Download for Linux</span>
+  <span data-os="windows">Download for Windows</span>
+  <span data-os="mac">Download for macOS</span>
+</span>
+
+<style>
+  .download-label > [data-os]:not([data-os='']),
+  :global(html[data-os]) .download-label > [data-os=''] {
+    display: none;
+  }
+  :global(html[data-os='linux']) .download-label > [data-os='linux'],
+  :global(html[data-os='windows']) .download-label > [data-os='windows'],
+  :global(html[data-os='mac']) .download-label > [data-os='mac'] {
+    display: inline;
+  }
+</style>
