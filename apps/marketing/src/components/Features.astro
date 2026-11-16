@@ -1,8 +1,10 @@
 ---
 import {
   Archive,
+  Check,
   ChevronDown,
-  FolderInput,
+  ChevronUp,
+  CornerDownLeft,
   Inbox,
   Moon,
   Search,
@@ -11,275 +13,376 @@ import {
   X,
 } from '@inlark/ui/icons'
 import { Mark } from './Mark'
-import { AccountMark, MailRow, SenderTile } from './mail/MailRow'
-import { accountById, accounts, inbox } from '../data/mail'
+import ReaderWindow from './ReaderWindow.astro'
+import { Wordmark } from '@inlark/ui/components/wordmark'
+import { AccountMark, MailRow } from './mail/MailRow'
+import { accountById, accounts, inbox, type Conversation } from '../data/mail'
 
-const unified = [inbox[0], inbox[2], inbox[3], inbox[5]].map((c) => ({ ...c, unread: false }))
-const scrollRows = [...inbox, ...inbox]
+const unified = [inbox[0], inbox[2], inbox[3], inbox[5], inbox[4], inbox[6]].map((c) => ({
+  ...c,
+  unread: false,
+}))
+
+// What a search for old invoices turns up: the same sender, month after month.
+const found: Conversation[] = ['September', 'August', 'July', 'June', 'May'].map((month, i) => ({
+  ...inbox[6],
+  id: 'invoice-' + month,
+  subject: `Your invoice for ${month} is ready`,
+  time: ['Sep 1', 'Aug 1', 'Jul 1', 'Jun 1', 'May 1'][i],
+}))
+
+const toasts = ['Archived 3 conversations', 'Moved to Receipts', 'Marked as spam']
+const notifications = [
+  { sender: inbox[0].sender, subject: inbox[0].subject, when: 'now' },
+  { sender: inbox[1].sender, subject: inbox[1].subject, when: '29 min ago' },
+]
 ---
 
-<section id="features" class="relative mx-auto max-w-6xl px-5 pt-32 sm:px-8 sm:pt-44">
-  <div class="reveal mx-auto max-w-3xl text-center">
-    <p class="eyebrow">Everyday email, done well</p>
-    <h2 class="display mt-5 text-[clamp(2.4rem,5.4vw,4.2rem)]">
-      Everything you reach for. Nothing in the way.
+<section id="features" class="wrap mt-28 sm:mt-44">
+  <header class="reveal border-t border-line pt-12 sm:pt-16">
+    <h2 class="statement">
+      The complete everyday client.{' '}
+      <span>
+        Conversations, folders, search, attachments, drafts, replies and forwarding, with care in
+        every detail.
+      </span>
     </h2>
-    <p class="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-ink-2">
-      Conversations, folders, search, attachments, drafts, replies and forwarding — the complete
-      everyday client, with care in every detail.
-    </p>
-  </div>
+  </header>
 
-  <div class="mt-16 grid gap-4 md:grid-cols-3">
+  <div class="ledger mt-14 sm:mt-20">
     <!-- Unified inbox -->
-    <article class="card reveal flex flex-col md:col-span-2">
-      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
-        <h3 class="text-xl font-semibold tracking-[-0.01em]">Every account, one calm inbox</h3>
-        <p class="mt-2.5 max-w-md leading-relaxed text-ink-2">
-          Personal, work and side projects arrive together in one timeline, each marked with its
-          account. Replies go out from the address the message was sent to.
-        </p>
-      </div>
-      <div class="app relative mt-8 flex-1 px-6 pb-6 sm:px-10">
-        <div class="mb-3 flex flex-wrap gap-1.5">
-          <span class="flex items-center gap-1.5 rounded-full bg-(--selected) px-2.5 py-1 text-[11.5px] text-(--text-strong)">
-            <Inbox size={13} /> All accounts
-          </span>
-          {accounts.map((a) => (
-            <span class="flex items-center gap-1.5 rounded-full border border-(--border-strong) px-2.5 py-1 text-[11.5px] text-(--secondary)">
-              <AccountMark account={a} size={12} /> {a.name}
-            </span>
-          ))}
-        </div>
-        <div class="@container overflow-hidden rounded-[10px] border border-(--border) bg-(--bg)">
-          {unified.map((c) => (
-            <MailRow conversation={c} />
-          ))}
-        </div>
-        <div class="absolute right-10 bottom-3 hidden items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] shadow-[0_18px_50px_var(--shadow)] sm:flex">
-          <span class="text-(--muted)">From</span>
-          <AccountMark account={accountById.studio} size={14} />
-          <span class="text-(--text-strong)">{accountById.studio.email}</span>
-          <ChevronDown size={12} className="text-(--muted)" />
-        </div>
-      </div>
-    </article>
+    <div class="ledger-row">
+      <article class="cell reveal lg:col-span-12">
+        <div class="grid gap-x-16 gap-y-10 lg:grid-cols-12">
+          <div class="lg:col-span-4">
+            <h3 class="title">Every account, one calm inbox</h3>
+            <p class="copy mt-2.5">
+              Personal, work and side projects arrive together in one timeline, each marked with its
+              account. Replies go out from the address the message was sent to.
+            </p>
+            <ul class="mt-9 border-t border-line text-[0.875rem]" aria-label="Example accounts">
+              {accounts.map((a) => (
+                <li class="flex items-center gap-3 border-b border-line py-2.5">
+                  <AccountMark account={a} size={15} />
+                  <span class="text-ink">{a.name}</span>
+                  <span class="ml-auto truncate font-mono text-[0.72rem] text-ink-3">
+                    {a.email}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-    <!-- Command palette -->
-    <article class="card reveal flex flex-col" style="--delay:.08s">
-      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
-        <h3 class="text-xl font-semibold tracking-[-0.01em]">
-          <span class="kbd mr-1 text-[0.8em]">Ctrl</span>
-          <span class="kbd mr-2 text-[0.8em]">K</span> for everything
+          <div class="app relative lg:col-span-8" aria-hidden="true">
+            <div class="frame">
+              <div class="app-main @container !rounded-[15px] !border-0">
+                <div class="flex flex-wrap items-center gap-1.5 border-b border-(--border) px-4 py-3">
+                  <span class="flex items-center gap-1.5 rounded-full bg-(--selected) px-2.5 py-1 text-[11.5px] text-(--text-strong)">
+                    <Inbox size={13} /> All accounts
+                  </span>
+                  {accounts.map((a) => (
+                    <span class="flex items-center gap-1.5 rounded-full border border-(--border-strong) px-2.5 py-1 text-[11.5px] text-(--secondary)">
+                      <AccountMark account={a} size={12} /> {a.name}
+                    </span>
+                  ))}
+                </div>
+                {unified.map((c) => (
+                  <MailRow conversation={c} />
+                ))}
+                <div class="h-10"></div>
+              </div>
+            </div>
+            <div class="absolute right-4 -bottom-4 flex items-center gap-2 rounded-[9px] border border-(--border-strong) bg-(--raised) px-3 py-2 text-[11.5px] shadow-[0_18px_50px_var(--shadow)] sm:right-8">
+              <span class="text-(--muted)">From</span>
+              <AccountMark account={accountById.studio} size={14} />
+              <span class="text-(--text-strong)">{accountById.studio.email}</span>
+              <ChevronDown size={12} className="text-(--muted)" />
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <!-- Command palette and search -->
+    <div class="ledger-row">
+      <article class="cell reveal lg:col-span-7">
+        <h3 class="title">
+          <kbd class="kbd mr-1 align-[0.08em]">Ctrl</kbd>
+          <kbd class="kbd mr-1.5 align-[0.08em]">K</kbd> for everything
         </h3>
-        <p class="mt-2.5 leading-relaxed text-ink-2">
+        <p class="copy mt-2.5 max-w-md">
           Every action, folder and account is a few letters away, with its shortcut beside it.
         </p>
-      </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
-        <div class="overflow-hidden rounded-[12px] border border-(--border-strong) bg-(--raised) shadow-[0_24px_60px_var(--shadow)]">
-          <div class="flex items-center gap-2.5 border-b border-(--border) px-3.5 py-3 text-[13px]">
-            <Search size={14} className="text-(--muted)" />
-            <span class="text-(--text-strong)">
-              arch<span class="caret"></span>
-            </span>
-          </div>
-          <div class="p-1.5 text-[12px]">
-            <div class="px-2 pt-1.5 pb-1 text-[10.5px] text-(--faint)">Conversation</div>
-            <div class="flex items-center gap-2.5 rounded-[7px] bg-(--selected) px-2 py-1.5 text-(--text-strong)">
-              <Archive size={14} /> Archive <span class="app-kbd ml-auto">E</span>
-            </div>
-            <div class="flex items-center gap-2.5 px-2 py-1.5 text-(--secondary)">
-              <FolderInput size={14} /> Move to folder… <span class="app-kbd ml-auto">V</span>
-            </div>
-            <div class="px-2 pt-2.5 pb-1 text-[10.5px] text-(--faint)">Go to</div>
-            <div class="flex items-center gap-2.5 px-2 py-1.5 text-(--secondary)">
-              <Archive size={14} /> Archive
-              <span class="ml-auto flex gap-1">
-                <span class="app-kbd">G</span>
-                <span class="app-kbd">A</span>
+        <div class="cell-visual app" aria-hidden="true">
+          <div class="overflow-hidden rounded-[13px] border border-(--border-strong) bg-(--raised) shadow-[0_30px_70px_-20px_var(--shadow-deep)]">
+            <div class="flex items-center gap-3 border-b border-(--border-strong) px-4 py-3.5 text-[13.5px]">
+              <Search size={15} className="text-(--muted)" />
+              <span class="text-(--text-strong)">
+                arch<span class="caret"></span>
               </span>
+              <span class="app-kbd ml-auto">Esc</span>
+            </div>
+            <div class="p-2 text-[12.5px]">
+              <p class="px-2 pt-1.5 pb-1.5 text-[11px] text-(--muted)">Conversation</p>
+              <p class="flex items-center gap-3 rounded-[8px] bg-(--selected) px-2 py-1.5 text-(--text-strong)">
+                <span class="palette-icon text-(--accent)">
+                  <Archive size={14} />
+                </span>
+                Archive <span class="app-kbd ml-auto">E</span>
+              </p>
+              <p class="px-2 pt-3 pb-1.5 text-[11px] text-(--muted)">Go to</p>
+              <p class="flex items-center gap-3 px-2 py-1.5 text-(--secondary)">
+                <span class="palette-icon">
+                  <Archive size={14} />
+                </span>
+                Archive
+                <span class="ml-auto flex gap-1">
+                  <span class="app-kbd">G</span>
+                  <span class="app-kbd">A</span>
+                </span>
+              </p>
+              <p class="px-2 pt-3 pb-1.5 text-[11px] text-(--muted)">Mail</p>
+              <p class="flex items-center gap-3 px-2 py-1.5 text-(--secondary)">
+                <span class="palette-icon">
+                  <Search size={14} />
+                </span>
+                Search all mail for “arch”
+              </p>
+            </div>
+            <div class="flex items-center gap-2 border-t border-(--border) px-4 py-2.5 text-[11px] text-(--muted)">
+              <span class="app-kbd">
+                <ChevronUp size={11} />
+              </span>
+              <span class="app-kbd">
+                <ChevronDown size={11} />
+              </span>
+              Navigate
+              <span class="app-kbd ml-3">
+                <CornerDownLeft size={10} />
+              </span>
+              Run
+              <Wordmark height={11} className="ml-auto text-(--faint)" decorative />
             </div>
           </div>
         </div>
-      </div>
-    </article>
+      </article>
 
-    <!-- Search -->
-    <article class="card reveal flex flex-col">
-      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
-        <h3 class="text-xl font-semibold tracking-[-0.01em]">Search that goes all the way back</h3>
-        <p class="mt-2.5 leading-relaxed text-ink-2">
+      <article class="cell reveal lg:col-span-5" style="--delay:.08s">
+        <h3 class="title">Search that goes all the way back</h3>
+        <p class="copy mt-2.5">
           Search runs on your server across every folder and every year. Narrow it by sender,
           recipient, subject, date or attachment.
         </p>
-      </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
-        <div class="flex items-center gap-2.5 rounded-[9px] border border-(--accent-solid) bg-(--bg) px-3 py-2.5 text-[13px] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-solid)_22%,transparent)]">
-          <Search size={14} className="text-(--muted)" />
-          <span class="text-(--text-strong)">invoice</span>
-          <span class="app-kbd ml-auto">/</span>
-        </div>
-        <div class="mt-3 flex flex-wrap gap-1.5 text-[11.5px]">
-          {['From: Northwind', 'After: 2024-01-01', 'Has attachments'].map((chip) => (
-            <span class="flex items-center gap-1.5 rounded-md border border-(--border-strong) bg-(--surface) py-1 pr-1.5 pl-2 text-(--secondary)">
-              {chip} <X size={11} className="text-(--muted)" />
-            </span>
-          ))}
-        </div>
-        <p class="mt-4 text-[11.5px] text-(--muted)">
-          <span class="text-(--text-strong)">31 conversations</span> · 2024 – today
-        </p>
-      </div>
-    </article>
-
-    <!-- Scale -->
-    <article class="card reveal relative flex flex-col" style="--delay:.08s">
-      <div
-        class="scroller app pointer-events-none absolute inset-0 opacity-[0.14]"
-        aria-hidden="true"
-      >
-        <div class="scroller-track @container">
-          {scrollRows.map((c) => (
-            <MailRow conversation={c} compact />
-          ))}
-        </div>
-      </div>
-      <div class="relative flex flex-1 flex-col justify-end p-8 sm:p-10">
-        <p class="display scale-number text-[clamp(3.4rem,6vw,4.6rem)]">250,000</p>
-        <h3 class="mt-3 text-xl font-semibold tracking-[-0.01em]">Years of mail, still instant</h3>
-        <p class="mt-2.5 leading-relaxed text-ink-2">
-          conversations in one unified inbox, yet only the few dozen on screen are ever drawn. Big
-          archives stay smooth to scroll.
-        </p>
-      </div>
-    </article>
-
-    <!-- Undo -->
-    <article class="card reveal flex flex-col" style="--delay:.16s">
-      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
-        <h3 class="text-xl font-semibold tracking-[-0.01em]">Every mistake, one key from undone</h3>
-        <p class="mt-2.5 leading-relaxed text-ink-2">
-          Archive, trash, move, star or mark as spam, then take it back with{' '}
-          <span class="kbd text-[0.85rem]">Z</span> — even if another client changed the mailbox in
-          between.
-        </p>
-      </div>
-      <div class="app relative mt-8 h-48 flex-1 px-6 sm:px-8">
-        {[
-          ['Archived 3 conversations', 1],
-          ['Moved to Receipts', 0.45],
-          ['Marked as spam', 0.18],
-        ].map(([text, opacity], i) => (
-          <div
-            class="toast-stack absolute inset-x-6 flex items-center gap-3 rounded-[10px] border border-(--border-strong) bg-(--raised) py-2.5 pr-2.5 pl-4 text-[12.5px] text-(--text-strong) shadow-[0_18px_50px_var(--shadow)] sm:inset-x-8"
-            style={`top:${i * 54}px;opacity:${opacity};transform:scale(${1 - i * 0.04});z-index:${3 - i}`}
-          >
-            {text}
-            <span class="ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-(--accent)">
-              <Undo2 size={13} /> Undo <span class="app-kbd">Z</span>
-            </span>
+        <div class="cell-visual app" aria-hidden="true">
+          <div class="flex items-center gap-2.5 rounded-[9px] border border-(--accent-solid) bg-(--bg) px-3 py-2.5 text-[13px] shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-solid)_22%,transparent)]">
+            <Search size={14} className="text-(--muted)" />
+            <span class="text-(--text-strong)">invoice</span>
+            <span class="app-kbd ml-auto !px-1.5">Enter</span>
           </div>
-        ))}
-      </div>
-    </article>
+          <div class="mt-3 flex flex-wrap gap-1.5 text-[11.5px]">
+            {['From: Northwind', 'After: 2024-01-01', 'Has attachments'].map((chip) => (
+              <span class="flex items-center gap-1.5 rounded-md border border-(--border-strong) bg-(--surface) py-1 pr-1.5 pl-2 text-(--secondary)">
+                {chip} <X size={11} className="text-(--muted)" />
+              </span>
+            ))}
+          </div>
+          <p class="mt-5 mb-2 text-[11.5px] text-(--muted)">
+            <span class="text-(--text-strong)">31 conversations</span> · 2024 to today
+          </p>
+          <div class="fade-out @container overflow-hidden rounded-t-[10px] border border-b-0 border-(--border) bg-(--bg)">
+            {found.map((c) => (
+              <MailRow conversation={c} compact />
+            ))}
+          </div>
+        </div>
+      </article>
+    </div>
 
     <!-- Themes -->
-    <article class="card reveal flex flex-col md:col-span-2">
-      <div class="grid flex-1 gap-8 p-8 sm:p-10 md:grid-cols-[1fr_1.35fr] md:items-center">
-        <div>
-          <h3 class="text-xl font-semibold tracking-[-0.01em]">Dark and light, with equal care</h3>
-          <p class="mt-2.5 leading-relaxed text-ink-2">
-            Quiet surfaces, readable type and subtle emphasis in both themes — or let inlark follow
-            your desktop. Rich HTML mail keeps the look its sender designed.
-          </p>
-          <div class="mt-6 inline-flex rounded-lg border border-line-strong p-1 text-sm text-ink-2">
-            <span class="flex items-center gap-1.5 rounded-md bg-ink/[0.07] px-3 py-1 text-ink light:bg-transparent light:text-ink-2">
-              <Moon size={14} /> Dark
-            </span>
-            <span class="flex items-center gap-1.5 rounded-md px-3 py-1 light:bg-ink/[0.07] light:text-ink">
-              <Sun size={14} /> Light
-            </span>
-            <span class="px-3 py-1">System</span>
+    <div class="ledger-row">
+      <article class="cell reveal lg:col-span-12">
+        <div class="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+          <div class="max-w-md">
+            <h3 class="title">Dark and light, with equal care</h3>
+            <p class="copy mt-2.5">
+              Quiet surfaces, readable type and subtle emphasis in both themes, or let inlark follow
+              your desktop. Rich HTML mail keeps the look its sender designed.
+            </p>
           </div>
+          <p class="flex items-center gap-2.5 text-[0.8125rem] text-ink-3">
+            <Moon size={14} />
+            <span class="hint-rail" aria-hidden="true"></span>
+            <Sun size={14} />
+            <span class="ml-1 pointer-coarse:hidden">Move across the window to compare</span>
+            <span class="ml-1 hidden pointer-coarse:inline">Drag to compare</span>
+          </p>
         </div>
-        <div class="theme-split relative h-60 overflow-hidden rounded-[12px] border border-line-strong">
-          {(['dark', 'light'] as const).map((theme) => (
-            <div
-              class={`app theme-pane theme-${theme} absolute inset-0 bg-(--bg) p-6`}
-              data-theme={theme}
-            >
-              <div class="flex items-center gap-2 text-[11px] text-(--muted)">
-                <AccountMark account={accountById.studio} size={13} /> Studio
-                <span class="text-(--faint)">·</span> Conversation
-              </div>
-              <p class="mt-2 text-[17px] font-semibold tracking-[-0.01em] whitespace-nowrap text-(--text-strong)">
-                A few thoughts on the new direction
-              </p>
-              <div class="mt-4 flex items-center gap-3 border-t border-(--border) pt-4 text-[12px]">
-                <SenderTile name="Maya Chen" tint="#a69aef" />
-                <span class="font-medium text-(--text-strong)">Maya Chen</span>
-                <span class="ml-auto text-[11px] text-(--muted)">9:41 AM</span>
-              </div>
-              <p class="mt-3 pl-[34px] text-[12.5px] leading-[1.65] text-(--text)">
-                I took another look at the explorations this morning. The quieter direction feels
-                right — it gets out of the way and lets the work breathe.
-              </p>
-            </div>
-          ))}
+
+        <div class="compare frame mt-10" data-compare>
+          <div class="compare-pane @container">
+            <ReaderWindow theme="dark" />
+          </div>
+          <div class="compare-pane compare-light @container">
+            <ReaderWindow theme="light" />
+          </div>
           <svg
-            class="pointer-events-none absolute inset-0 size-full"
+            class="compare-edge"
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <line
-              x1="60"
-              y1="0"
-              x2="44"
-              y2="100"
-              stroke="rgb(255 255 255 / 0.28)"
-              stroke-width="1"
-              vector-effect="non-scaling-stroke"
-            />
+            <line x1="52" y1="0" x2="48" y2="100" vector-effect="non-scaling-stroke"></line>
           </svg>
+          <button
+            type="button"
+            class="compare-handle"
+            data-compare-handle
+            role="slider"
+            aria-label="Compare the dark and light themes"
+            aria-orientation="horizontal"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="50"
+            aria-valuetext="Half dark, half light"
+          >
+            <Moon size={13} />
+            <Sun size={13} />
+          </button>
         </div>
-      </div>
-    </article>
+      </article>
+    </div>
 
-    <!-- Desktop integration -->
-    <article class="card reveal flex flex-col" style="--delay:.08s">
-      <div class="p-8 pb-0 sm:p-10 sm:pb-0">
-        <h3 class="text-xl font-semibold tracking-[-0.01em]">At home on your desktop</h3>
-        <p class="mt-2.5 leading-relaxed text-ink-2">
-          Native notifications, a tray icon with your unread count, and every{' '}
-          <span class="font-mono text-[0.88em] text-ink">mailto:</span> link opens a new message.
+    <!-- Undo, scale, desktop -->
+    <div class="ledger-row">
+      <article class="cell reveal lg:col-span-4">
+        <h3 class="title">Every mistake, one key from undone</h3>
+        <p class="copy mt-2.5">
+          Archive, trash, move, star or mark as spam, then take it back with{' '}
+          <kbd class="kbd align-[0.08em] text-[0.8rem]">Z</kbd>, even if another client changed the
+          mailbox in between.
         </p>
-      </div>
-      <div class="app mt-8 flex-1 px-6 pb-8 sm:px-8">
-        <div class="flex items-center justify-end gap-3 rounded-t-[10px] bg-black/50 px-3 py-1.5 text-[11px] text-(--secondary) light:bg-black/[0.04]">
-          <span class="flex items-center gap-1.5">
-            <Mark size={12} /> 9
-          </span>
-          <span>Mon 28 Sep</span>
-          <span class="text-(--text-strong)">09:41</span>
+        <div class="cell-visual app min-h-52" aria-hidden="true">
+          {toasts.map((text, i) => (
+            <div
+              class="toast-stack absolute inset-x-0 flex items-center gap-3 rounded-[10px] border border-(--border-strong) bg-(--raised) py-2.5 pr-2.5 pl-4 text-[12.5px] text-(--text-strong) shadow-[0_18px_50px_var(--shadow)]"
+              style={`top:${i * 56}px;opacity:${[1, 0.5, 0.22][i]};transform:scale(${1 - i * 0.04});z-index:${3 - i}`}
+            >
+              {text}
+              <span class="ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-(--accent)">
+                <Undo2 size={13} /> Undo <span class="app-kbd">Z</span>
+              </span>
+            </div>
+          ))}
         </div>
-        <div class="notification mt-3 flex gap-3 rounded-[14px] border border-(--border-strong) bg-(--raised) p-3.5 shadow-[0_24px_60px_var(--shadow)]">
-          <span class="grid size-8 shrink-0 place-items-center rounded-[9px] scheme-dark bg-linear-to-br from-[#6268ef] to-[#292397]">
-            <Mark size={16} />
-          </span>
-          <div class="min-w-0 text-[12px] leading-snug">
-            <p class="flex gap-2 text-(--muted)">
-              inlark <span class="text-(--faint)">now</span>
+      </article>
+
+      <article class="cell reveal lg:col-span-4" style="--delay:.08s">
+        <h3 class="title">Built to feel instant</h3>
+        <p class="copy mt-2.5">
+          Archive, star or move, and the list changes the moment you press the key while the server
+          catches up behind it. Conversations open from what’s already loaded, and long inboxes draw
+          only the rows on screen.
+        </p>
+        <div class="cell-visual app min-h-52" aria-hidden="true">
+          <div class="race rounded-[12px] border border-(--border-strong) bg-(--bg) p-[18px] shadow-[0_18px_50px_var(--shadow)]">
+            <p class="flex items-center gap-2.5 text-[12.5px] text-(--text-strong)">
+              <span class="race-key app-kbd">E</span> Archive
             </p>
-            <p class="mt-0.5 font-semibold text-(--text-strong)">Maya Chen</p>
-            <p class="truncate text-(--secondary)">A few thoughts on the new direction</p>
+            <div class="mt-5 grid grid-cols-[4.75rem_1fr] items-center gap-x-3 gap-y-4 text-[12px]">
+              <span class="text-(--secondary)">inlark</span>
+              <span class="race-line">
+                <i class="race-bar race-instant" />
+                <span class="race-done race-done-instant text-(--text-strong)">Archived</span>
+              </span>
+
+              <span class="text-(--muted)">Your server</span>
+              <span class="race-line">
+                <i class="race-bar race-slow" />
+                <span class="race-done race-done-slow flex items-center gap-1 text-(--muted)">
+                  <Check size={12} /> Saved
+                </span>
+              </span>
+
+              <span></span>
+              <span class="flex justify-between border-t border-(--border-strong) pt-2 text-[10.5px] text-(--faint)">
+                <span>now</span>
+                <span>a moment later</span>
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      <article class="cell reveal lg:col-span-4" style="--delay:.16s">
+        <h3 class="title">At home on your desktop</h3>
+        <p class="copy mt-2.5">
+          Native notifications, a tray icon with your unread count, and every{' '}
+          <span class="font-mono text-[0.86em] text-ink">mailto:</span> link opens a new message.
+        </p>
+        <div class="cell-visual app min-h-52" aria-hidden="true">
+          <div class="flex items-center justify-end gap-3 rounded-[9px] border border-(--border) bg-black/40 px-3 py-1.5 text-[11px] text-(--secondary) light:bg-black/[0.03]">
+            <span class="flex items-center gap-1.5">
+              <Mark size={12} /> 9
+            </span>
+            <span>Mon 28 Sep</span>
+            <span class="text-(--text-strong)">09:41</span>
+          </div>
+          {notifications.map((n, i) => (
+            <div
+              class="notification mt-2.5 flex gap-3 rounded-[14px] border border-(--border-strong) bg-(--raised) p-3.5 shadow-[0_24px_60px_var(--shadow)]"
+              style={`opacity:${[1, 0.4][i]}`}
+            >
+              <span class="grid size-8 shrink-0 place-items-center rounded-[9px] scheme-dark bg-linear-to-br from-[#6268ef] to-[#292397]">
+                <Mark size={16} />
+              </span>
+              <div class="min-w-0 text-[12px] leading-snug">
+                <p class="flex gap-2 text-(--muted)">
+                  inlark <span class="text-(--faint)">{n.when}</span>
+                </p>
+                <p class="mt-0.5 font-semibold text-(--text-strong)">{n.sender}</p>
+                <p class="truncate text-(--secondary)">{n.subject}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </article>
+    </div>
   </div>
 </section>
+
+<script>
+  // The theme comparison: the divide follows the pointer, a drag on touch screens, or the arrow keys.
+  const compare = document.querySelector<HTMLElement>('[data-compare]')
+  const handle = compare?.querySelector<HTMLElement>('[data-compare-handle]')
+  if (compare && handle) {
+    let position = 50
+    const set = (value: number) => {
+      position = Math.max(0, Math.min(100, value))
+      compare.classList.add('is-touched')
+      // The divide stops just short of each edge, so the handle never leaves the window.
+      compare.style.setProperty('--x', Math.max(3, Math.min(97, position)) + '%')
+      const light = Math.round(100 - position)
+      handle.setAttribute('aria-valuenow', String(Math.round(position)))
+      handle.setAttribute('aria-valuetext', `${100 - light}% dark, ${light}% light`)
+    }
+    const follow = (event: PointerEvent) => {
+      const box = compare.getBoundingClientRect()
+      set(((event.clientX - box.left) / box.width) * 100)
+    }
+    compare.addEventListener('pointerdown', follow)
+    compare.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'mouse' || event.buttons) follow(event)
+    })
+    handle.addEventListener('keydown', (event) => {
+      const step = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 }[event.key]
+      if (step) set(position + step)
+      else if (event.key === 'Home') set(0)
+      else if (event.key === 'End') set(100)
+      else return
+      event.preventDefault()
+    })
+  }
+</script>
 
 <style>
   .caret {
@@ -297,39 +400,210 @@ const scrollRows = [...inbox, ...inbox]
     }
   }
 
-  .scroller {
-    mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
+  .palette-icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
   }
-  .scroller-track {
-    animation: scroll-mail 14s linear infinite;
+
+  /* Results run on past the edge of their cell. */
+  .fade-out {
+    mask-image: linear-gradient(180deg, #000 35%, transparent 96%);
   }
-  @keyframes scroll-mail {
-    to {
-      transform: translateY(-50%);
+
+  /* Theme comparison */
+  .compare {
+    --x: 50%;
+    height: clamp(420px, 46vw, 600px);
+    touch-action: pan-y;
+    cursor: ew-resize;
+    user-select: none;
+  }
+  .compare-pane {
+    position: absolute;
+    inset: 1px;
+    border-radius: 15px;
+    overflow: hidden;
+  }
+  .compare-pane :global(.app) {
+    height: 100%;
+  }
+  .compare-light {
+    clip-path: polygon(calc(var(--x) + 2%) 0, 100% 0, 100% 100%, calc(var(--x) - 2%) 100%);
+  }
+  .compare-edge {
+    position: absolute;
+    inset: 1px;
+    left: calc(var(--x) - 50%);
+    width: 100%;
+    height: calc(100% - 2px);
+    pointer-events: none;
+    overflow: visible;
+  }
+  .compare-edge line {
+    stroke: rgb(255 255 255 / 0.5);
+    stroke-width: 1;
+  }
+  .compare-handle {
+    position: absolute;
+    left: var(--x);
+    top: 50%;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    height: 2rem;
+    padding: 0 0.6rem;
+    translate: -50% -50%;
+    border-radius: 999px;
+    color: #17171a;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px rgb(20 20 30 / 0.12),
+      0 8px 24px -6px rgb(0 0 0 / 0.5);
+    cursor: ew-resize;
+  }
+  /* On first sight the divide sweeps in from the right, which shows it can move. */
+  :global(.is-visible) .compare:not(.is-touched) {
+    animation: compare-sweep 1.8s var(--ease-out-expo) 0.3s backwards;
+  }
+  @keyframes compare-sweep {
+    from {
+      --x: 88%;
     }
   }
 
-  .scale-number {
-    font-weight: 330;
-    letter-spacing: -0.035em;
-    background: linear-gradient(
-      180deg,
-      light-dark(var(--color-ink), #fff) 30%,
-      var(--color-lavender)
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  .hint-rail {
+    width: 2.25rem;
+    height: 1px;
+    background: var(--color-line-strong);
   }
 
   .toast-stack {
     transform-origin: 50% 0;
   }
 
-  .theme-dark {
-    clip-path: polygon(0 0, 60% 0, 44% 100%, 0 100%);
+  /* One keystroke, two finishes, on a shared time line: the app is done at once and the server
+     in its own time. The resting state is the finished race, which is what reduced motion shows. */
+  .race-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
   }
-  .theme-light {
-    clip-path: polygon(60% 0, 100% 0, 100% 100%, 44% 100%);
+  .race-bar {
+    display: block;
+    height: 3px;
+    border-radius: 3px;
+    transform-origin: 0 50%;
+  }
+  .race-instant {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    animation: race-instant 6s linear infinite;
+  }
+  .race-slow {
+    flex: 1;
+    background: color-mix(in srgb, var(--muted) 55%, transparent);
+    animation: race-slow 6s linear infinite;
+  }
+  .race-key {
+    animation: race-key 6s linear infinite;
+  }
+  .race-done-instant {
+    animation: race-done-instant 6s linear infinite;
+  }
+  .race-done-slow {
+    animation: race-done-slow 6s linear infinite;
+  }
+  @keyframes race-key {
+    0%,
+    7%,
+    13%,
+    100% {
+      transform: none;
+      color: var(--muted);
+      border-color: var(--border-strong);
+    }
+    8%,
+    11% {
+      transform: translateY(1px);
+      color: var(--text-strong);
+      border-color: var(--accent);
+    }
+  }
+  @keyframes race-instant {
+    0%,
+    8% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    10%,
+    90% {
+      transform: none;
+      opacity: 1;
+    }
+    97%,
+    100% {
+      transform: none;
+      opacity: 0;
+    }
+  }
+  @keyframes race-done-instant {
+    0%,
+    9.5% {
+      opacity: 0;
+    }
+    10.5%,
+    90% {
+      opacity: 1;
+    }
+    97%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes race-slow {
+    0%,
+    10% {
+      transform: scaleX(0);
+      opacity: 1;
+      animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1);
+    }
+    42%,
+    90% {
+      transform: none;
+      opacity: 1;
+    }
+    97%,
+    100% {
+      transform: none;
+      opacity: 0;
+    }
+  }
+  @keyframes race-done-slow {
+    0%,
+    42% {
+      opacity: 0;
+    }
+    45%,
+    90% {
+      opacity: 1;
+    }
+    97%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .race-bar,
+    .race-key,
+    .race-done {
+      animation: none;
+    }
   }
 </style>

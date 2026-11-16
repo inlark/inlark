@@ -216,8 +216,11 @@ export function KeyboardDemo() {
   const current = state.items[state.focus]
 
   return (
-    <div ref={root} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12">
-      <div className="demo-frame @container">
+    <div
+      ref={root}
+      className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-14"
+    >
+      <div className="frame demo-frame @container">
         <div className="app h-full">
           <div
             ref={listRef}
@@ -262,33 +265,28 @@ export function KeyboardDemo() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-7 lg:block lg:pt-2">
+      <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-1 lg:pt-1">
         {legend.map((group) => (
-          <div key={group.title} className="lg:mb-7">
-            <div className="eyebrow mb-3 text-ink-3">{group.title}</div>
-            <ul className="flex flex-col gap-1">
+          <div key={group.title}>
+            <p className="text-[0.8125rem] font-medium text-ink-3">{group.title}</p>
+            <ul className="mt-4 flex flex-wrap gap-x-2.5 gap-y-4">
               {group.keys.map((item) => (
                 <li key={item.command}>
                   <button
                     type="button"
                     onClick={() => run(item.command)}
-                    className={
-                      'shortcut group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[0.95rem] text-ink-2 transition-colors hover:bg-ink/[0.04] hover:text-ink' +
-                      (pressed === item.command ? ' is-pressed' : '')
-                    }
+                    aria-label={item.label}
+                    className={'keycap' + (pressed === item.command ? ' is-pressed' : '')}
                   >
-                    <span className="flex min-w-10 sm:min-w-14">
-                      <kbd className="kbd text-[0.95rem]">{item.key}</kbd>
-                    </span>
-                    <span className="sm:hidden">{item.short}</span>
-                    <span className="hidden sm:inline">{item.label}</span>
+                    <kbd>{item.key}</kbd>
+                    <span>{item.short}</span>
                   </button>
                 </li>
               ))}
             </ul>
           </div>
         ))}
-        <p className="col-span-2 border-t border-line pt-5 text-sm leading-relaxed text-ink-3 lg:mt-7">
+        <p className="border-t border-line pt-6 text-[0.875rem] leading-[1.75] text-ink-3 sm:col-span-2 lg:col-span-1">
           In the app, <Key>C</Key> composes, <Key>R</Key> <Key>A</Key> <Key>F</Key> reply, reply all
           and forward, <Key>/</Key> searches, <Key>G</Key> <Key>I</Key> goes to the inbox and{' '}
           <Key>Ctrl</Key> <Key>K</Key> finds everything else.
@@ -299,7 +297,7 @@ export function KeyboardDemo() {
 }
 
 function Key({ children }: { children: ReactNode }) {
-  return <kbd className="kbd mx-px align-[0.1em] text-[0.8rem]">{children}</kbd>
+  return <kbd className="kbd mx-px align-[0.08em] text-[0.74rem]">{children}</kbd>
 }
 
 function List({

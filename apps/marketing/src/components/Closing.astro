@@ -1,28 +1,27 @@
 ---
 import { Download } from '@inlark/ui/icons'
-import { Mark } from './Mark'
+import DownloadLabel from './DownloadLabel.astro'
 import { GitHubIcon } from './GitHubIcon'
 import { links } from '../data/links'
 import Footer from './Footer.astro'
 ---
 
-<section class="closing relative isolate mt-32 overflow-hidden pt-32 pb-40 text-center sm:mt-44 sm:pt-40 sm:pb-52">
-  <div class="dawn" aria-hidden="true"></div>
-  <div class="reveal relative mx-auto max-w-3xl px-5">
-    <span class="mx-auto grid size-16 place-items-center rounded-[20px] scheme-dark bg-linear-to-br from-[#6268ef] via-[#484bd3] to-[#292397] shadow-[0_20px_60px_-10px_#484bd3,inset_0_1px_0_#ffffff40]">
-      <Mark size={30} />
-    </span>
-    <h2 class="display mt-10 text-[clamp(3rem,8vw,6.2rem)]">
+<section class="closing relative isolate mt-28 overflow-hidden sm:mt-44">
+  <div class="dawn closing-dawn" aria-hidden="true"></div>
+  <div class="wrap reveal relative pt-28 pb-56 text-center sm:pt-40 sm:pb-72">
+    <h2 class="display">
       Good morning,
-      <br /> <em class="font-[360]">inbox.</em>
+      <br />
+      <span class="text-ink-3">inbox.</span>
     </h2>
-    <p class="mx-auto mt-6 max-w-lg text-lg leading-relaxed text-ink-2">
-      Calm, fast, dependable email for Linux, Windows, and macOS. Free and open source, from the
+    <p class="lede mx-auto mt-7 max-w-[30rem] text-balance">
+      Calm, fast, dependable email for Linux, Windows and macOS. Free and open source, from the
       first line to the last.
     </p>
-    <div class="mt-10 flex flex-wrap justify-center gap-3">
+    <div class="mt-9 flex flex-wrap justify-center gap-3">
       <a href={links.download} class="btn btn-primary">
-        <Download size={17} /> Download inlark
+        <Download size={17} />
+        <DownloadLabel />
       </a>
       <a href={links.repo} class="btn btn-ghost">
         <GitHubIcon className="size-4" /> Star on GitHub
@@ -31,33 +30,40 @@ import Footer from './Footer.astro'
   </div>
 </section>
 
-<Footer />
+<Footer horizon />
 
 <style>
-  .dawn {
-    position: absolute;
-    left: 50%;
-    bottom: -62%;
-    z-index: -1;
-    width: min(1500px, 200vw);
-    aspect-ratio: 1.6;
-    transform: translateX(-50%);
-    border-radius: 50%;
-    background: radial-gradient(
-      closest-side,
-      rgb(255 214 184 / 0.55),
-      rgb(242 184 139 / 0.38) 18%,
-      rgb(214 150 190 / 0.24) 38%,
-      rgb(120 112 236 / 0.14) 60%,
-      transparent 80%
-    );
-    filter: blur(10px);
+  /* The day the page has been leading up to: the sun clears the horizon the footer stands on. */
+  .closing {
+    view-timeline-name: --closing;
   }
-  .closing::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: linear-gradient(180deg, var(--color-night), transparent 40%);
+  .closing-dawn {
+    bottom: 0;
+    height: min(34rem, 100%);
+  }
+  .closing-dawn::before {
+    width: min(2000px, 220vw);
+  }
+  /* Where the browser can tie it to scrolling, the sun comes up as the section does. */
+  @supports (animation-timeline: view()) {
+    .closing-dawn::before {
+      animation: sun-up linear both;
+      animation-timeline: --closing;
+      animation-range: entry 10% cover 55%;
+    }
+    .closing-dawn::after {
+      animation: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .closing-dawn::before {
+      animation: none;
+    }
+  }
+  @keyframes sun-up {
+    from {
+      opacity: 0.15;
+      transform: scale(0.75, 0.3);
+    }
   }
 </style>

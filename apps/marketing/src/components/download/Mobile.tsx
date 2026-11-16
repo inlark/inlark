@@ -103,26 +103,20 @@ export function Mobile() {
     <div className="mx-auto flex max-w-md flex-col items-center px-6 text-center">
       <LaptopVisual />
 
-      <p className="eyebrow rise mt-12" style={{ '--delay': '.1s' } as CSSProperties}>
-        Linux · Windows · macOS
-      </p>
       <h1
-        className="display rise mt-5 text-[clamp(2.6rem,12vw,3.6rem)]"
-        style={{ '--delay': '.16s' } as CSSProperties}
+        className="display rise mt-12 text-[clamp(2.5rem,11.5vw,3.5rem)]"
+        style={{ '--delay': '.1s' } as CSSProperties}
       >
-        Made for your <em className="dawn-text pr-[0.06em]">desktop.</em>
+        Made for your <span className="text-ink-3">desktop.</span>
       </h1>
-      <p
-        className="rise mt-5 text-[1.05rem] leading-relaxed text-ink-2"
-        style={{ '--delay': '.22s' } as CSSProperties}
-      >
-        inlark is a desktop app, and there’s no phone version yet. Send yourself the link and pick
-        it up on your computer.
+      <p className="lede rise mt-5" style={{ '--delay': '.16s' } as CSSProperties}>
+        inlark is a desktop app for Linux, Windows and macOS, and there’s no phone version yet. Send
+        yourself the link and pick it up on your computer.
       </p>
 
       <div
         className="rise mt-9 grid w-full grid-cols-2 gap-2.5"
-        style={{ '--delay': '.28s' } as CSSProperties}
+        style={{ '--delay': '.22s' } as CSSProperties}
       >
         {canShare ? (
           <button type="button" onClick={share} className="btn btn-primary col-span-2 h-12">
@@ -161,7 +155,7 @@ export function Mobile() {
       </span>
       <p
         className="rise mt-4 font-mono text-[0.72rem] tracking-wide text-ink-3"
-        style={{ '--delay': '.32s' } as CSSProperties}
+        style={{ '--delay': '.28s' } as CSSProperties}
       >
         {url.replace(/^https?:\/\//, '') || ' '}
       </p>
@@ -228,7 +222,7 @@ function LaptopVisual() {
   ]
   return (
     <div className="laptop rise relative w-[min(19rem,82vw)]" aria-hidden="true">
-      <div className="laptop-glow" />
+      <div className="dawn laptop-dawn" />
       <div className="laptop-lid">
         <div
           className="app flex h-full overflow-hidden rounded-[7px] bg-(--sidebar)"

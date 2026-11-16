@@ -1,7 +1,7 @@
 ---
 import { ArrowUpRight, Download } from '@inlark/ui/icons'
+import DownloadLabel from './DownloadLabel.astro'
 import InboxWindow from './InboxWindow.astro'
-import Stars from './Stars.astro'
 import { GitHubIcon } from './GitHubIcon'
 import { links } from '../data/links'
 import { fetchLatestRelease, unconfirmedRelease } from '../data/release'
@@ -10,59 +10,54 @@ const release = import.meta.env.PROD
   ? ((await fetchLatestRelease(import.meta.env.GITHUB_TOKEN).catch(() => null)) ??
     unconfirmedRelease)
   : unconfirmedRelease
+
+const facts = [
+  { label: 'Platforms', value: 'Linux, Windows and macOS' },
+  { label: 'Protocols', value: 'JMAP, IMAP and SMTP' },
+  { label: 'Privacy', value: 'No account, no cloud, no telemetry' },
+  { label: 'License', value: 'Free software, AGPL-3.0' },
+]
 ---
 
 <section id="top" class="relative isolate overflow-x-clip pt-32 sm:pt-44">
-  <Stars />
-
-  <div class="relative z-10 mx-auto max-w-4xl px-5 text-center">
-    <a
-      href={links.releases}
-      class="rise group inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-ink/[0.03] py-1.5 pr-3 pl-2 text-[0.8rem] text-ink-2 transition-colors hover:border-ink/20 hover:text-ink"
-    >
-      <span
-        data-release-version
-        class="rounded-full bg-dawn/15 px-2 py-0.5 font-mono text-[0.68rem] text-dawn"
-      >
-        v{release.version}
-      </span>
-      Early preview for desktop
-      <ArrowUpRight
-        size={14}
-        className="text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-      />
-    </a>
-
-    <h1 class="display rise mt-8 text-[clamp(3.1rem,8.6vw,6.9rem)]" style="--delay:.08s">
-      <em class="dawn-text pr-[0.06em]">Beautiful</em> email. <br class="hidden sm:block" />
-      For everyone.
+  <div class="wrap relative z-10">
+    <h1 class="display rise">
+      Beautiful email.
+      <br />
+      <span class="text-ink-3">For everyone.</span>
     </h1>
 
-    <p
-      class="rise mx-auto mt-7 max-w-[37rem] text-lg leading-relaxed text-ink-2 sm:text-[1.3rem]"
-      style="--delay:.16s"
-    >
+    <p class="lede rise mt-7 max-w-[35rem] sm:mt-8" style="--delay:.07s">
       inlark is a fast, keyboard-first mail client for the accounts you already own. Every JMAP and
       IMAP inbox in one calm place, with no hosted service in between and no telemetry.
     </p>
 
-    <div class="rise mt-10 flex flex-wrap justify-center gap-3" style="--delay:.24s">
+    <div class="rise mt-9 flex flex-wrap items-center gap-3" style="--delay:.14s">
       <a href={links.download} class="btn btn-primary">
-        <Download size={17} /> Download inlark
+        <Download size={17} />
+        <DownloadLabel />
       </a>
       <a href={links.repo} class="btn btn-ghost">
         <GitHubIcon className="size-4" /> View source
       </a>
     </div>
-    <p class="rise mt-5 font-mono text-[0.7rem] tracking-wide text-ink-3" style="--delay:.3s">
-      Linux · Windows · macOS<span class="hidden sm:inline">&nbsp; — &nbsp;</span>
-      <span class="block sm:inline">free software, AGPL-3.0</span>
+
+    <p class="rise mt-6 text-[0.8125rem] text-ink-3" style="--delay:.2s">
+      <a href={links.releases} class="group inline-flex items-center gap-1 hover:text-ink-2">
+        <span class="font-mono text-[0.75rem] text-lavender" data-release-version>
+          v{release.version}
+        </span>
+        <span class="ml-1">early preview</span>
+        <ArrowUpRight
+          size={13}
+          className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+        />
+      </a>
     </p>
   </div>
 
-  <div class="stage relative mx-auto mt-16 max-w-[1240px] px-3 sm:mt-24 sm:px-8">
-    <div class="sun" aria-hidden="true"></div>
-    <div class="horizon" aria-hidden="true"></div>
+  <div class="stage wrap relative mt-16 sm:mt-24">
+    <div class="dawn hero-dawn" aria-hidden="true"></div>
     <div class="window @container">
       <InboxWindow animate />
     </div>
@@ -70,6 +65,17 @@ const release = import.meta.env.PROD
       inlark’s unified inbox, showing conversations from four accounts in one list, each marked with
       the colour of its account.
     </p>
+  </div>
+
+  <div class="wrap relative z-10">
+    <dl class="facts mt-16 grid grid-cols-2 border-t border-line sm:mt-24 lg:grid-cols-4">
+      {facts.map((fact) => (
+        <div class="fact py-5 pr-6 lg:py-6">
+          <dt class="text-[0.8125rem] text-ink-3">{fact.label}</dt>
+          <dd class="mt-1 text-[0.9375rem] font-medium text-ink">{fact.value}</dd>
+        </div>
+      ))}
+    </dl>
   </div>
 </section>
 
@@ -86,46 +92,24 @@ const release = import.meta.env.PROD
 
 <style>
   .stage {
-    --window-height: clamp(420px, 52vw, 640px);
+    --window-height: clamp(400px, 52vw, 672px);
   }
 
-  /* The light the window rises into. */
-  .sun {
-    position: absolute;
-    left: 50%;
-    top: -300px;
-    width: min(1600px, 180vw);
-    aspect-ratio: 16 / 9;
-    background: radial-gradient(
-      50% 50% at 50% 50%,
-      rgb(242 184 139 / 0.42) 0%,
-      rgb(224 158 190 / 0.26) 24%,
-      rgb(140 128 240 / 0.12) 46%,
-      transparent 70%
-    );
-    filter: blur(24px);
-    pointer-events: none;
-    transform: translate(-50%, 0);
-    animation: sunrise 2.8s var(--ease-out-expo) 0.15s both;
+  /* The horizon crosses just behind the window's top edge, so the window comes up with the light. */
+  .hero-dawn {
+    top: -400px;
+    height: calc(400px + 4.5rem);
   }
-
-  /* The curve of the horizon, lit from behind, that the window sits in front of. */
-  .horizon {
-    --r: 1700px;
-    position: absolute;
-    left: 50%;
-    top: calc(var(--window-height) * 0.3);
-    width: calc(var(--r) * 2);
-    height: calc(var(--r) * 2);
-    margin-left: calc(var(--r) * -1);
-    border-radius: 50%;
-    background: var(--color-night);
-    box-shadow:
-      0 -1px 0 rgb(255 220 196 / 0.55),
-      0 -2px 12px rgb(242 184 139 / 0.35),
-      0 -40px 120px -20px rgb(200 150 220 / 0.3),
-      inset 0 40px 80px -40px rgb(255 232 214 / 0.08);
-    pointer-events: none;
+  /* The light swells for a moment as the new message lands in the inbox. */
+  .hero-dawn::before {
+    animation:
+      dawn-rise 2.8s var(--ease-out-expo) 0.1s both,
+      arrival-light 2.4s ease-out 2.7s;
+  }
+  @keyframes arrival-light {
+    25% {
+      filter: brightness(1.4);
+    }
   }
 
   .window {
@@ -136,24 +120,30 @@ const release = import.meta.env.PROD
     padding: 1px;
     background: linear-gradient(
       180deg,
-      light-dark(rgb(20 20 30 / 0.14), rgb(255 255 255 / 0.2)),
-      light-dark(rgb(20 20 30 / 0.07), rgb(255 255 255 / 0.06)) 22%,
-      light-dark(rgb(20 20 30 / 0.05), rgb(255 255 255 / 0.03))
+      light-dark(rgb(20 20 30 / 0.14), rgb(255 255 255 / 0.22)),
+      light-dark(rgb(20 20 30 / 0.07), rgb(255 255 255 / 0.07)) 22%,
+      light-dark(rgb(20 20 30 / 0.05), rgb(255 255 255 / 0.04))
     );
     box-shadow:
-      0 0 0 1px light-dark(rgb(20 20 30 / 0.03), rgb(0 0 0 / 0.55)),
-      0 50px 140px -30px light-dark(rgb(22 24 36 / 0.3), rgb(0 0 0 / 0.95)),
-      0 -30px 140px -60px rgb(242 184 139 / 0.45);
+      0 0 0 1px light-dark(rgb(20 20 30 / 0.03), rgb(0 0 0 / 0.6)),
+      0 60px 120px -40px light-dark(rgb(22 24 36 / 0.3), #000),
+      0 24px 50px -24px light-dark(rgb(22 24 36 / 0.16), rgb(0 0 0 / 0.8));
     transform-origin: 50% 0;
-    animation: window-in 1.7s var(--ease-out-expo) 0.3s both;
+    animation: window-in 1.6s var(--ease-out-expo) 0.25s both;
   }
+  /* The top edge catches the light behind it. */
   .window::before {
     content: '';
     position: absolute;
-    inset: 0 12% auto;
+    inset: 0 10% auto;
     height: 1px;
     z-index: 3;
-    background: linear-gradient(90deg, transparent, rgb(255 226 206 / 0.7), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      light-dark(rgb(255 255 255 / 0.9), rgb(226 224 255 / 0.7)),
+      transparent
+    );
   }
   .window :global(.app) {
     height: 100%;
@@ -162,5 +152,19 @@ const release = import.meta.env.PROD
   }
   .window :global(.app-shell) {
     border-radius: 15px;
+  }
+
+  .fact + .fact {
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--color-line);
+  }
+  @media (width < 64rem) {
+    .fact + .fact:nth-child(odd) {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .fact:nth-child(n + 3) {
+      border-top: 1px solid var(--color-line);
+    }
   }
 </style>

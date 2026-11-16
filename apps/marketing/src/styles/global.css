@@ -5,25 +5,42 @@
 @custom-variant light (@media (prefers-color-scheme: light));
 
 @theme {
-  --font-display: 'Newsreader Variable', ui-serif, Georgia, serif;
+  /* The wordmark is drawn from Hanken Grotesk, so the site sets its own words in it too. */
   --font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
   --font-app: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 
-  --color-night: light-dark(#fbfbfc, #09090a);
-  --color-night-2: light-dark(#ffffff, #0e0e0f);
-  --color-ink: light-dark(#18181b, #ededee);
-  --color-ink-2: light-dark(#55565d, #a9a9ae);
-  --color-ink-3: light-dark(#6f7078, #818186);
+  --color-night: light-dark(#fbfbfc, #08080a);
+  --color-night-2: light-dark(#ffffff, #0e0e10);
+  --color-ink: light-dark(#17171a, #f2f2f4);
+  --color-ink-2: light-dark(#52535a, #a5a5ac);
+  --color-ink-3: light-dark(#6c6d75, #7d7d85);
   --color-line: light-dark(rgb(20 20 30 / 0.08), rgb(255 255 255 / 0.07));
   --color-line-strong: light-dark(rgb(20 20 30 / 0.14), rgb(255 255 255 / 0.12));
   --color-lavender: light-dark(#5d57c9, #aaa6ec);
   --color-indigo: #6268ef;
   --color-iris: #484bd3;
-  --color-dawn: light-dark(#a85a22, #f2b88b);
   --color-leaf: light-dark(#2e8559, #76bc9a);
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Where the theme comparison divides. Registered so it can animate. */
+@property --x {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+
+/* The page's shared column. Product visuals align to its edges. */
+@utility wrap {
+  width: 100%;
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (width >= 40rem) {
+    padding-inline: 2rem;
+  }
 }
 
 @layer base {
@@ -57,7 +74,6 @@
 
   body {
     overflow-x: clip;
-    font-feature-settings: 'ss01', 'cv11';
     text-rendering: optimizeLegibility;
   }
 
@@ -74,82 +90,108 @@
 }
 
 @layer components {
-  /* Grain keeps large gradients from banding and gives the dark surfaces some tooth. */
-  .grain::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    pointer-events: none;
-    opacity: 0.045;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-  @media (prefers-color-scheme: light) {
-    .grain::after {
-      opacity: 0.025;
-    }
-  }
-
+  /* ──────────────────────────────────────────────────────────────────────────────
+     Type
+     ────────────────────────────────────────────────────────────────────────────── */
   .display {
-    font-family: var(--font-display);
-    font-optical-sizing: auto;
-    font-weight: 380;
-    letter-spacing: -0.022em;
-    line-height: 1.02;
+    font-size: clamp(2.75rem, 6.6vw, 5.5rem);
+    font-weight: 600;
+    letter-spacing: -0.042em;
+    line-height: 0.98;
     text-wrap: balance;
   }
 
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-lavender);
+  /* A section's opening line: the claim in ink, and what backs it up in grey. */
+  .statement {
+    max-width: 21em;
+    font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+    font-weight: 580;
+    letter-spacing: -0.034em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+  .statement > span {
+    color: var(--color-ink-3);
   }
 
-  /* Buttons */
+  .lede {
+    font-size: clamp(1.0625rem, 1.5vw, 1.25rem);
+    line-height: 1.55;
+    letter-spacing: -0.008em;
+    color: var(--color-ink-2);
+    text-wrap: pretty;
+  }
+
+  .title {
+    font-size: 1.0625rem;
+    font-weight: 620;
+    letter-spacing: -0.012em;
+    line-height: 1.35;
+    color: var(--color-ink);
+  }
+  .copy {
+    font-size: 0.9688rem;
+    line-height: 1.6;
+    color: var(--color-ink-2);
+    text-wrap: pretty;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────────
+     Controls
+     ────────────────────────────────────────────────────────────────────────────── */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    height: 2.75rem;
-    padding: 0 1.15rem;
-    border-radius: 0.7rem;
-    font-weight: 560;
-    font-size: 0.95rem;
+    gap: 0.55rem;
+    height: 2.625rem;
+    padding: 0 1.05rem;
+    border-radius: 0.625rem;
+    font-weight: 580;
+    font-size: 0.9375rem;
+    letter-spacing: -0.005em;
     white-space: nowrap;
     transition:
       transform 0.2s var(--ease-out-expo),
       background-color 0.2s,
-      border-color 0.2s,
-      box-shadow 0.3s;
+      box-shadow 0.2s;
   }
   .btn:active {
-    transform: translateY(1px) scale(0.99);
+    transform: translateY(1px);
   }
   .btn-primary {
-    color: light-dark(#ffffff, #111112);
-    background: linear-gradient(180deg, light-dark(#2c2c33, #ffffff), light-dark(#16161a, #e6e6e8));
+    color: var(--color-night);
+    background: var(--color-ink);
     box-shadow:
-      0 0 0 1px light-dark(rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.4)) inset,
-      0 10px 30px -10px light-dark(rgb(98 104 239 / 0.35), rgb(170 166 236 / 0.55)),
-      0 1px 2px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.4));
+      inset 0 1px 0 light-dark(rgb(255 255 255 / 0.14), #fff),
+      0 1px 2px rgb(0 0 0 / 0.25);
   }
   .btn-primary:hover {
-    box-shadow:
-      0 0 0 1px light-dark(rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.5)) inset,
-      0 14px 40px -10px light-dark(rgb(98 104 239 / 0.5), rgb(170 166 236 / 0.8)),
-      0 1px 2px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.4));
+    background: light-dark(#2e2e34, #fff);
   }
   .btn-ghost {
     color: var(--color-ink);
-    background: light-dark(#ffffff, rgb(255 255 255 / 0.035));
-    border: 1px solid var(--color-line-strong);
+    background: light-dark(#fff, rgb(255 255 255 / 0.04));
+    box-shadow: inset 0 0 0 1px var(--color-line-strong);
   }
   .btn-ghost:hover {
-    background: light-dark(#f3f3f5, rgb(255 255 255 / 0.07));
-    border-color: light-dark(rgb(20 20 30 / 0.22), rgb(255 255 255 / 0.2));
+    background: light-dark(#f3f3f5, rgb(255 255 255 / 0.08));
+    box-shadow: inset 0 0 0 1px light-dark(rgb(20 20 30 / 0.22), rgb(255 255 255 / 0.2));
+  }
+
+  /* An inline link that reads as text until it's hovered. */
+  .link {
+    color: var(--color-ink-2);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+    text-underline-offset: 0.25em;
+    transition:
+      color 0.2s,
+      text-decoration-color 0.2s;
+  }
+  .link:hover {
+    color: var(--color-ink);
+    text-decoration-color: currentColor;
   }
 
   /* Keycaps */
@@ -176,42 +218,84 @@
       0 2px 0 light-dark(rgb(20 20 30 / 0.1), rgb(0 0 0 / 0.5));
   }
 
-  .dawn-text {
-    font-style: italic;
-    font-weight: 360;
-    background: linear-gradient(
-      95deg,
-      light-dark(#5b52d6, #d8d5ff) 5%,
-      light-dark(#c0507f, #f0c8d6) 55%,
-      light-dark(#d0762f, var(--color-dawn)) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  /* Section glow used behind feature cards. */
+  /* A quiet raised surface, for the few things that are objects rather than sections. */
   .card {
     position: relative;
     overflow: hidden;
-    border-radius: 1.25rem;
-    background:
-      radial-gradient(
-        120% 80% at 50% 0%,
-        light-dark(transparent, rgb(255 255 255 / 0.035)),
-        transparent 60%
-      ),
-      linear-gradient(180deg, light-dark(#ffffff, #111112), light-dark(#fcfcfd, #0c0c0d));
+    border-radius: 0.875rem;
+    background: var(--color-night-2);
     border: 1px solid var(--color-line);
-    box-shadow:
-      0 1px 0 light-dark(#ffffff, rgb(255 255 255 / 0.04)) inset,
-      0 16px 40px -24px light-dark(rgb(22 24 36 / 0.14), transparent);
+    box-shadow: 0 16px 40px -28px light-dark(rgb(22 24 36 / 0.18), transparent);
   }
 
+  /* ──────────────────────────────────────────────────────────────────────────────
+     Ledger: features set out in ruled rows rather than boxes.
+     ────────────────────────────────────────────────────────────────────────────── */
+  .ledger {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .ledger-row {
+    display: grid;
+    border-top: 1px solid var(--color-line);
+  }
+  .cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding-block: 2.25rem 2.75rem;
+  }
+  .cell + .cell {
+    border-top: 1px solid var(--color-line);
+  }
+  .cell-visual {
+    position: relative;
+    flex: 1;
+    margin-top: 2.25rem;
+  }
+  @media (width >= 64rem) {
+    .ledger-row {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+    .cell {
+      padding-block: 2.75rem 3.25rem;
+    }
+    .cell + .cell {
+      padding-left: 2.75rem;
+      border-top: 0;
+      border-left: 1px solid var(--color-line);
+    }
+    .cell:not(:last-child) {
+      padding-right: 2.75rem;
+    }
+  }
+
+  /* The lit edge and deep shadow every app window on the page shares. */
+  .frame {
+    position: relative;
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      light-dark(rgb(20 20 30 / 0.13), rgb(255 255 255 / 0.17)),
+      light-dark(rgb(20 20 30 / 0.06), rgb(255 255 255 / 0.05)) 40%
+    );
+    box-shadow:
+      0 0 0 1px light-dark(rgb(20 20 30 / 0.03), rgb(0 0 0 / 0.5)),
+      0 40px 100px -40px light-dark(rgb(22 24 36 / 0.3), rgb(0 0 0 / 0.9));
+  }
+  .frame > .app {
+    border-radius: 15px;
+    overflow: hidden;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────────
+     Motion
+     ────────────────────────────────────────────────────────────────────────────── */
   /* Reveal on scroll: elements start slightly lowered and settle when they enter the viewport. */
   .reveal {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(14px);
     transition:
       opacity 0.9s var(--ease-out-expo),
       transform 0.9s var(--ease-out-expo);
@@ -228,53 +312,94 @@
     }
   }
 
-  /* Hero entrance */
   @keyframes rise-in {
     from {
       opacity: 0;
-      transform: translateY(14px);
-      filter: blur(6px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-      filter: blur(0);
+      transform: translateY(12px);
     }
   }
   .rise {
-    animation: rise-in 1.1s var(--ease-out-expo) both;
+    animation: rise-in 1s var(--ease-out-expo) both;
     animation-delay: var(--delay, 0s);
   }
 
   @keyframes window-in {
     from {
       opacity: 0;
-      transform: perspective(2200px) rotateX(22deg) translateY(80px) scale(0.96);
-    }
-    to {
-      opacity: 1;
-      transform: perspective(2200px) rotateX(0) translateY(0) scale(1);
+      transform: perspective(2200px) rotateX(16deg) translateY(64px) scale(0.97);
     }
   }
 
-  @keyframes sunrise {
+  /* ──────────────────────────────────────────────────────────────────────────────
+     First light: the product lit from behind, in the app's own indigo. The box is the sky and
+     its lower edge is the horizon, so whatever sits in front of it appears to come up with the
+     light.
+     ────────────────────────────────────────────────────────────────────────────── */
+  .dawn {
+    /* Where along the horizon the light comes up. */
+    --dawn-x: 50%;
+    position: absolute;
+    left: 50%;
+    width: 100vw;
+    transform: translateX(-50%);
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .dawn::before {
+    content: '';
+    position: absolute;
+    left: var(--dawn-x);
+    bottom: 0;
+    width: min(1900px, 200vw);
+    height: 100%;
+    translate: -50% 0;
+    transform-origin: 50% 100%;
+    background:
+      radial-gradient(
+        26% 20% at 50% 100%,
+        light-dark(rgb(124 118 236 / 0.3), rgb(226 224 255 / 0.5)),
+        transparent
+      ),
+      radial-gradient(
+        38% 56% at 50% 100%,
+        light-dark(rgb(98 104 239 / 0.26), rgb(112 118 245 / 0.5)),
+        light-dark(rgb(98 104 239 / 0.1), rgb(98 104 239 / 0.2)) 52%,
+        transparent
+      ),
+      radial-gradient(
+        50% 100% at 50% 100%,
+        light-dark(rgb(124 118 236 / 0.12), rgb(72 75 211 / 0.26)),
+        transparent
+      );
+    /* A little fine noise in the light's opacity keeps the gradient from banding on dark screens. */
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .2 0 0 0 .88'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: dawn-rise 2.8s var(--ease-out-expo) 0.1s both;
+  }
+  .dawn::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      light-dark(rgb(93 87 201 / 0.22), rgb(170 166 236 / 0.3)) 12%,
+      light-dark(rgb(93 87 201 / 0.6), rgb(224 222 255 / 0.9)) var(--dawn-x),
+      light-dark(rgb(93 87 201 / 0.22), rgb(170 166 236 / 0.3)) 88%,
+      transparent
+    );
+    animation: horizon-draw 2.2s var(--ease-out-expo) both;
+  }
+  @keyframes dawn-rise {
     from {
       opacity: 0;
-      transform: translate(-50%, 18%) scale(0.85);
-    }
-    to {
-      opacity: 1;
-      transform: translate(-50%, 0) scale(1);
+      transform: scale(0.7, 0.4);
     }
   }
-
-  @keyframes twinkle {
-    0%,
-    100% {
-      opacity: var(--o, 0.5);
-    }
-    50% {
-      opacity: calc(var(--o, 0.5) * 0.25);
+  @keyframes horizon-draw {
+    from {
+      opacity: 0;
+      transform: scaleX(0.2);
     }
   }
 
@@ -488,6 +613,26 @@
       width: 118px;
     }
   }
+  /* On a phone the subject needs the room more than the columns need their alignment. */
+  @container (max-width: 440px) {
+    .mail-row {
+      gap: 10px;
+      padding: 0 12px 0 10px;
+    }
+    .mail-row .sender {
+      width: 104px;
+      gap: 8px;
+    }
+    .mail-row .meta {
+      gap: 8px;
+    }
+    .mail-row time {
+      width: auto;
+    }
+    .mail-row .star:empty {
+      display: none;
+    }
+  }
   .mail-row .star {
     color: var(--star);
     width: 14px;
@@ -524,20 +669,6 @@
   /* Keyboard demo */
   .demo-frame {
     height: clamp(420px, 60vw, 480px);
-    border-radius: 16px;
-    padding: 1px;
-    background: linear-gradient(
-      180deg,
-      light-dark(rgb(20 20 30 / 0.12), rgb(255 255 255 / 0.16)),
-      light-dark(rgb(20 20 30 / 0.05), rgb(255 255 255 / 0.04)) 40%
-    );
-    box-shadow:
-      0 0 0 1px light-dark(rgb(20 20 30 / 0.03), rgb(0 0 0 / 0.5)),
-      0 40px 100px -40px light-dark(rgb(22 24 36 / 0.3), rgb(0 0 0 / 0.9));
-  }
-  .demo-frame .app {
-    border-radius: 15px;
-    overflow: hidden;
   }
   .demo-frame .app-main:focus-visible {
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
@@ -581,24 +712,63 @@
       box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 25%, transparent);
     }
   }
-  .shortcut .kbd {
+  /* The demo's keys: large caps that travel when pressed, on screen or on the real keyboard. */
+  .keycap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 3.125rem;
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+    transition: color 0.2s;
+  }
+  .keycap kbd {
+    display: grid;
+    place-items: center;
+    min-width: 3.125rem;
+    height: 3.125rem;
+    padding: 0 0.7rem;
+    border-radius: 0.75rem;
+    font-family: var(--font-app);
+    font-size: 1rem;
+    font-weight: 560;
+    line-height: 1;
+    color: var(--color-ink);
+    background: linear-gradient(180deg, light-dark(#ffffff, #27272b), light-dark(#f4f4f6, #18181b));
+    box-shadow:
+      inset 0 0 0 1px light-dark(rgb(20 20 30 / 0.12), rgb(255 255 255 / 0.08)),
+      inset 0 1px 0 light-dark(#ffffff, rgb(255 255 255 / 0.13)),
+      0 3px 0 light-dark(rgb(20 20 30 / 0.14), #000),
+      0 10px 18px -8px light-dark(rgb(20 20 30 / 0.18), rgb(0 0 0 / 0.7));
     transition:
-      transform 0.12s,
+      transform 0.1s,
       box-shadow 0.25s,
       background-color 0.25s,
       color 0.25s;
   }
-  .shortcut.is-pressed {
-    background: color-mix(in srgb, var(--color-lavender) 9%, transparent);
-    color: var(--color-ink);
+  .keycap:hover {
+    color: var(--color-ink-2);
   }
-  .shortcut.is-pressed .kbd {
-    transform: translateY(2px);
-    color: light-dark(#3d379f, #fff);
-    background: light-dark(rgb(93 87 201 / 0.16), rgb(170 166 236 / 0.28));
+  .keycap:hover kbd {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--color-lavender) 70%, transparent) inset,
-      0 0 24px color-mix(in srgb, var(--color-lavender) 45%, transparent);
+      inset 0 0 0 1px light-dark(rgb(20 20 30 / 0.2), rgb(255 255 255 / 0.16)),
+      inset 0 1px 0 light-dark(#ffffff, rgb(255 255 255 / 0.16)),
+      0 3px 0 light-dark(rgb(20 20 30 / 0.14), #000),
+      0 10px 18px -8px light-dark(rgb(20 20 30 / 0.18), rgb(0 0 0 / 0.7));
+  }
+  .keycap:active kbd,
+  .keycap.is-pressed kbd {
+    transform: translateY(3px);
+    color: light-dark(#3d379f, #fff);
+    background: light-dark(#ecebfb, #34315c);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--color-lavender) 70%, transparent),
+      0 0 0 light-dark(rgb(20 20 30 / 0.14), #000),
+      0 0 26px color-mix(in srgb, var(--color-lavender) 40%, transparent);
+  }
+  .keycap.is-pressed {
+    color: var(--color-ink);
   }
 
   .terminal-caret {
@@ -704,22 +874,11 @@
     border-radius: 0 0 5px 5px;
     background: rgb(0 0 0 / 0.35);
   }
-  .laptop-glow {
-    position: absolute;
-    left: 50%;
-    top: 45%;
+  /* The laptop stands on the horizon, with the day coming up behind its screen. */
+  .laptop-dawn {
+    bottom: 5px;
     z-index: -1;
-    width: 160%;
-    aspect-ratio: 1;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(
-      closest-side,
-      rgb(242 184 139 / 0.3),
-      rgb(214 150 190 / 0.16) 40%,
-      rgb(120 112 236 / 0.1) 62%,
-      transparent
-    );
-    filter: blur(8px);
+    height: 17rem;
   }
   .laptop-row {
     animation: rise-in 0.8s var(--ease-out-expo) both;

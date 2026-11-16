@@ -207,13 +207,8 @@ export function Steps({ download }: { download: Download }) {
   const os = download.build.os
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Next</p>
-          <h2 className="display mt-4 text-[clamp(2rem,4.2vw,3rem)]">
-            Up and running in a minute.
-          </h2>
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-12 sm:pt-16">
+        <h2 className="statement">Up and running in a minute.</h2>
         <p className="flex items-center gap-2 text-sm text-ink-3">
           <OsIcon os={os} size={16} />
           {osNames[os]} · {download.build.label}
@@ -226,17 +221,17 @@ export function Steps({ download }: { download: Download }) {
             className="card step row-span-2 grid grid-rows-subgrid gap-0 p-2"
             style={{ '--i': i } as CSSProperties}
           >
-            <div className="visual relative min-h-48 overflow-hidden rounded-[0.9rem] border border-line bg-black/25 p-3 light:bg-ink/[0.03]">
+            <div className="visual relative min-h-48 overflow-hidden rounded-[0.55rem] border border-line bg-black/30 p-3 light:bg-ink/[0.03]">
               {step.visual}
             </div>
             <div className="px-4 pt-5 pb-5">
-              <p className="flex items-center gap-3 font-medium text-ink">
+              <p className="title flex items-center gap-3">
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-ink/[0.06] font-mono text-[0.7rem] text-ink-2">
                   {i + 1}
                 </span>
                 {step.title}
               </p>
-              <p className="mt-2.5 text-[0.92rem] leading-relaxed text-ink-2">{step.body}</p>
+              <p className="copy mt-2.5">{step.body}</p>
             </div>
           </li>
         ))}
