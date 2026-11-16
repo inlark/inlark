@@ -31,13 +31,11 @@ function RowAuth({
   candidate,
   copyKey,
   shortcut,
-  className,
   onRun,
 }: {
   candidate: AuthValue
   copyKey: string
   shortcut?: string
-  className?: string
   onRun: () => void
 }) {
   const copied = useAuthCopied(copyKey)
@@ -58,7 +56,9 @@ function RowAuth({
               '[&_svg]:shrink-0 [&_svg]:text-muted',
               'hover:[&_svg]:text-secondary [.unread_&]:text-strong',
               copied && '[&_svg]:text-success! border-border-strong',
-              className,
+              // Like the time, it gives way where a compact row has no room for it; the shortcut
+              // and the reader still offer the value.
+              '@max-[440px]/mail:[.density-compact_&]:hidden',
             )}
             aria-label={code ? 'Copy code ' + candidate.value : label + ', opens ' + host}
             onClick={(event) => {
@@ -144,7 +144,8 @@ export function ConversationRow({
   // An unsent reply is flagged rather than counted, so it never reads as sent.
   const drafts = c.messages.filter(isDraft).length
   const count = c.count - drafts
-  const auth = c.auth?.candidate && { candidate: c.auth.candidate, messageId: c.auth.messageId }
+  const auth = c.auth?.candidate &&
+    onAuth && { candidate: c.auth.candidate, messageId: c.auth.messageId }
   return (
     <div
       className={cn(
@@ -271,42 +272,51 @@ export function ConversationRow({
             candidate={auth.candidate}
             copyKey={authKey(c.accountId, auth.messageId)}
             shortcut={keys('authAction')}
-            // Clears the quick actions that cover the account and time on hover.
-            className={c.hasAttachment ? undefined : 'mr-1'}
             onRun={onAuth}
           />
         )}
-        {/* Other rows keep the slot so their previews end evenly; beside a code or link it
-            would only leave a gap. */}
-        {(c.hasAttachment || !auth || !onAuth) && (
-          <span className="row-attachment w-3.25">
-            {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
-          </span>
-        )}
-        {a && <AccountMark account={a} size={22} title={a.name} />}
-        <time dateTime={c.receivedAt} title={new Date(c.receivedAt).toLocaleString()}>
-          {shortDate(c.receivedAt)}
-        </time>
-        <button
+        <div
           className={cn(
-            'row-star grid place-items-center bg-none bg-transparent border-0 rounded-sm p-1.25 text-faint opacity-0',
-            'transition-[opacity,color,background-color] duration-120 ease-[ease]',
-            '[&_svg]:[transition:fill_120ms_ease,_transform_160ms_cubic-bezier(0.3,_1.5,_0.6,_1)] [&.starred]:opacity-100',
-            '[&:hover:not(:disabled)]:text-secondary [&:hover:not(:disabled)]:bg-strong/8',
-            '[&:active:not(:disabled)_svg]:transform-[scale(0.85)] [&.starred]:text-star',
-            '[&.starred:hover:not(:disabled)]:text-star [&.starred_svg]:fill-current @max-[680px]/mail:p-[3px]',
-            c.starred && 'starred [&:is(svg)]:fill-current text-star',
+            'row-meta-end flex items-center justify-end gap-[inherit]',
+            // Beside a code or link, this end of the row is at least as wide as the quick actions
+            // that cover it on hover (right-7.5, three w-7.25 buttons, gaps, padding, border), so
+            // they never cover the button at any width.
+            auth &&
+              'min-w-[calc(--spacing(7.5)+--spacing(7.25)*3+10px)] @max-[440px]/mail:[.density-compact_&]:min-w-0',
           )}
-          aria-label={(c.starred ? 'Unstar ' : 'Star ') + subject}
-          aria-pressed={c.starred}
-          disabled={busy}
-          onClick={(event) => {
-            event.stopPropagation()
-            onStar()
-          }}
         >
-          <Star size={14} />
-        </button>
+          {/* Other rows keep the slot so their previews end evenly; beside a code or link it
+              would only leave a gap. */}
+          {(c.hasAttachment || !auth) && (
+            <span className="row-attachment w-3.25">
+              {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
+            </span>
+          )}
+          {a && <AccountMark account={a} size={22} title={a.name} />}
+          <time dateTime={c.receivedAt} title={new Date(c.receivedAt).toLocaleString()}>
+            {shortDate(c.receivedAt)}
+          </time>
+          <button
+            className={cn(
+              'row-star grid place-items-center bg-none bg-transparent border-0 rounded-sm p-1.25 text-faint opacity-0',
+              'transition-[opacity,color,background-color] duration-120 ease-[ease]',
+              '[&_svg]:[transition:fill_120ms_ease,_transform_160ms_cubic-bezier(0.3,_1.5,_0.6,_1)] [&.starred]:opacity-100',
+              '[&:hover:not(:disabled)]:text-secondary [&:hover:not(:disabled)]:bg-strong/8',
+              '[&:active:not(:disabled)_svg]:transform-[scale(0.85)] [&.starred]:text-star',
+              '[&.starred:hover:not(:disabled)]:text-star [&.starred_svg]:fill-current @max-[680px]/mail:p-[3px]',
+              c.starred && 'starred [&:is(svg)]:fill-current text-star',
+            )}
+            aria-label={(c.starred ? 'Unstar ' : 'Star ') + subject}
+            aria-pressed={c.starred}
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation()
+              onStar()
+            }}
+          >
+            <Star size={14} />
+          </button>
+        </div>
         <div
           className="row-quick-actions absolute right-7.5 flex gap-[2px] p-[2px] border border-solid border-border-strong rounded-md bg-raised shadow-[0_2px_6px_#0002] opacity-0 pointer-events-none"
           onClick={(event) => event.stopPropagation()}

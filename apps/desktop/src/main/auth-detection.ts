@@ -52,11 +52,19 @@ const codeBodyRegex = codePatterns
 const wholeCode = new RegExp(`^(?:${codeBodyRegex})$`)
 const codeGroups = new RegExp(`(${codeSeparator})`)
 /**
- * Ordinary prose, not a code group: “731904. Thanks” is a code followed by a word. Only a space
- * sets prose apart, so a bare hyphen still groups a code such as “1234-abcd”.
+ * Ordinary prose, not a code group: “731904. Thanks” is a code followed by a word. Only a space,
+ * perhaps after a full stop, sets prose apart; a hyphen, underscore, or asterisk still groups a
+ * code such as “1234-abcd” or “1234 - abcd”.
  */
-const isProse = (groups: string[], i: number) =>
-  /^[A-Za-z]+$/.test(groups[i]) && /[a-z]/.test(groups[i]) && /\s/.test(groups[i === 0 ? 1 : i - 1])
+const isProse = (groups: string[], i: number) => {
+  const separator = groups[i === 0 ? 1 : i - 1]
+  return (
+    /^[A-Za-z]+$/.test(groups[i]) &&
+    /[a-z]/.test(groups[i]) &&
+    /\s/.test(separator) &&
+    /^[\s.]+$/.test(separator)
+  )
+}
 
 const authKeywords = [
   { regex: /\bverif(?:y|ies|ied|ying|ication)\b/gi, weight: 12 },
