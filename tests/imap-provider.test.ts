@@ -293,6 +293,8 @@ describe('IMAP indexing and reading', () => {
     const [thread] = (await p.query(account, { view: 'inbox' })).items
     const messages = await p.conversation(account, thread.id)
     expect(messages.map((m) => m.text?.trim())).toEqual(['Shall we?', 'Yes.'])
+    // The list summary opens the reader before bodies load, so it shows the same emails.
+    expect(thread.messages.map((m) => m.id).sort()).toEqual(messages.map((m) => m.id).sort())
     expect(new TextDecoder().decode(await p.download(account, messages[0].attachments![0]))).toBe(
       'Plan A',
     )
