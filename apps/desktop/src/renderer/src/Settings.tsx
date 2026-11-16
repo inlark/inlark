@@ -19,6 +19,7 @@ import {
   SquarePen,
   Keyboard,
   LockKeyhole,
+  Coffee,
 } from '@inlark/ui/icons'
 import { Button, Dropdown, EmptyState, MenuItem, Modal, Select, Switch } from '@inlark/ui'
 import {
@@ -45,6 +46,7 @@ import { newMessageAccount } from './compose-account'
 import { undoSendDelay } from './held-sends'
 import { clearColorOverrides, defaultColors } from './message-colors'
 import { useShortcutText } from './shortcuts'
+import { openSupportPage } from './SupportCard'
 
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
@@ -940,6 +942,34 @@ export function SettingsPanel({
                       <strong>No telemetry</strong>
                       <p>inlark collects no usage data or analytics.</p>
                     </div>
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
+                  <h4>Support</h4>
+                  <div
+                    className={cn(
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
+                    )}
+                  >
+                    <div>
+                      <strong>Enjoying inlark?</strong>
+                      <p>
+                        It’s free, with no ads or subscriptions, and made by one person. A coffee
+                        helps keep it going.
+                      </p>
+                    </div>
+                    <Button onClick={() => void openSupportPage()}>
+                      <Coffee size={14} />
+                      Buy me a coffee
+                    </Button>
                   </div>
                 </div>
                 <div

@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronDown,
   Keyboard,
+  Coffee,
   SlidersHorizontal,
   MoreHorizontal,
   Check,
@@ -123,6 +124,7 @@ import { AuthAnnouncer, authCommandLabel, authKey, linkHost, runAuth } from './a
 import type { LiveToast, ToastInput } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
+import { openSupportPage } from './SupportCard'
 import { offersAction } from './view-actions'
 import {
   clearColorOverrides,
@@ -1617,6 +1619,14 @@ export function App() {
       icon: Keyboard,
       keywords: 'hotkeys keys bindings change edit',
       run: () => openSettings('shortcuts'),
+    },
+    {
+      id: 'support',
+      group: 'Help',
+      label: 'Buy me a coffee',
+      icon: Coffee,
+      keywords: 'support donate donation sponsor tip thanks',
+      run: () => void openSupportPage(),
     },
   ]
   const activeIndex = conversations.findIndex(

@@ -27,6 +27,7 @@ import appIcon from '../../../resources/icon-mark.svg?no-inline'
 import { AccountMark } from './AccountMark'
 import { ShortcutHint, useShortcutText, type ShortcutId } from './shortcuts'
 import { useEncryption } from './encryption-ui'
+import { SupportCard } from './SupportCard'
 
 export const views: { id: View; title: string; icon: typeof Inbox; shortcut?: ShortcutId }[] = [
   { id: 'inbox', title: 'Inbox', icon: Inbox, shortcut: 'goInbox' },
@@ -498,6 +499,10 @@ export function Sidebar({
             {!collapsed && <span>{statusText}</span>}
           </button>
         )}
+        <SupportCard
+          connected={accounts.some((a) => a.status === 'connected')}
+          quiet={collapsed || !!needsBackup || sendingIssues > 0 || unavailable.length > 0}
+        />
         <div
           className={cn(
             'sidebar-footer flex items-center gap-1 border-t border-solid border-t-border pt-2 pb-2.5 px-0',

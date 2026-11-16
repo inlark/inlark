@@ -14,6 +14,7 @@ import {
   Calendar as CalendarGlyph,
   CalendarAdd02Icon as CalendarAddGlyph,
   Check as CheckGlyph,
+  Coffee02Icon as CoffeeGlyph,
   ChevronDown as ChevronDownGlyph,
   ChevronLeft as ChevronLeftGlyph,
   ChevronRight as ChevronRightGlyph,
@@ -109,6 +110,7 @@ export const BadgeCheck = icon(BadgeCheckGlyph)
 export const Calendar = icon(CalendarGlyph)
 export const CalendarAdd = icon(CalendarAddGlyph)
 export const Check = icon(CheckGlyph)
+export const Coffee = icon(CoffeeGlyph)
 export const ChevronDown = icon(ChevronDownGlyph)
 export const ChevronLeft = icon(ChevronLeftGlyph)
 export const ChevronRight = icon(ChevronRightGlyph)
