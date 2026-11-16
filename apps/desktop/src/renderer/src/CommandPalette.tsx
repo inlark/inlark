@@ -123,7 +123,7 @@ export function CommandPalette({
         className={cn(
           'command-input flex gap-3.25 items-center py-4.5 px-5.25 border-b border-solid border-b-border-strong text-muted',
           '[&_input]:border-0 [&_input]:py-[3px] [&_input]:px-0 [&_input]:bg-none [&_input]:bg-transparent',
-          '[&_input]:text-[14px] [&_input:focus-visible]:outline-none focus-within:border-b-primary-solid',
+          '[&_input]:text-[14px] [&_input:focus-visible]:outline-none',
         )}
       >
         <Search size={18} />
