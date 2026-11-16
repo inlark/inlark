@@ -221,6 +221,9 @@ export class ImapFlowPort implements ImapPort {
         uidValidity: true,
         ...(this.condstore || this.can('CONDSTORE') ? { highestModseq: true } : {}),
       })
+      // Never mistake a failed STATUS for an empty folder: deleting a folder relies on it.
+      if (!s)
+        throw new ProviderError('command', 'The server did not report the status of ' + path + '.')
       return {
         messages: s.messages ?? 0,
         unseen: s.unseen ?? 0,
@@ -299,6 +302,7 @@ export class ImapFlowPort implements ImapPort {
         uid: true,
         maxBytes: maxBytes + 1,
       })
+      if (!content) return undefined
       return bytes(content, maxBytes, false)
     })
   }
@@ -309,6 +313,8 @@ export class ImapFlowPort implements ImapPort {
         maxBytes: maxBytes + 1,
         ...(truncate ? { chunkSize: Math.min(65536, Math.max(1024, maxBytes)) } : {}),
       })
+      if (!content)
+        throw new ProviderError('notFound', 'This message is no longer available on the server.')
       return bytes(content, maxBytes, truncate)
     })
   }
