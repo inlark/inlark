@@ -116,6 +116,24 @@ export interface MailSecurity {
   confirmed: boolean
   detail?: string
 }
+/** What a detected link does, when its email says so clearly. */
+export type AuthLinkAction = 'signIn' | 'verifyEmail' | 'verify' | 'resetPassword'
+/** A sign-in, verification, or password reset code or link found in an email. */
+export interface AuthValue {
+  type: 'code' | 'link'
+  value: string
+  action?: AuthLinkAction
+}
+/**
+ * Finds the one code or link an email is about. `partial` marks text cut off at the end, so a
+ * value touching the end may be incomplete and is never returned.
+ */
+export type AuthDetector = (input: {
+  subject?: string
+  text?: string
+  html?: string
+  partial?: boolean
+}) => AuthValue | undefined
 export interface Message {
   id: string
   accountId: string
@@ -145,7 +163,7 @@ export interface Message {
   protectedRevision?: string
   encryptionIntent?: boolean
   /** Derived from this message after decryption; never persisted separately. */
-  authCandidate?: { type: 'code' | 'link'; value: string }
+  authCandidate?: AuthValue
 }
 export interface Conversation {
   id: string
@@ -160,6 +178,11 @@ export interface Conversation {
   hasAttachment: boolean
   count: number
   messages: Message[]
+  /**
+   * The code or link of the message this row shows, found in its subject and opening text.
+   * `messageId` is set whenever that message was checked, even when nothing was found.
+   */
+  auth?: { messageId: string; candidate?: AuthValue }
 }
 export interface Identity {
   id: string

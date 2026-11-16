@@ -445,6 +445,71 @@ describe.each(['imap', 'jmap'] as const)('automatic copying on %s arrival', (pro
     expect(read.map((m) => m.authCandidate?.value)).toEqual(['012345', '654321'])
     expect(desktop.write).not.toHaveBeenCalled()
   })
+  describe('list rows', () => {
+    const listing = (candidate?: { type: 'code'; value: string }) =>
+      query.mockImplementation(async (a) => {
+        const items = messages
+          .filter((m) => m.accountId === a.id)
+          .map((m) => ({
+            ...conversationFromMessages(a.id, m.threadId, [m]),
+            auth: { messageId: m.id, ...(candidate ? { candidate } : {}) },
+          }))
+        return { items, total: items.length }
+      })
+    const rowValue = async () =>
+      (await service.query({ view: 'inbox' })).items[0].auth?.candidate?.value
+    const corrections = async () => {
+      try {
+        return JSON.parse(await readFile(join(directory, 'auth-corrections.json'), 'utf8')).data
+      } catch {
+        return undefined
+      }
+    }
+    it('takes the reader’s finding where it differs, and keeps it', async () => {
+      messages = [message('m', { text: 'Your verification code is: 654321' })]
+      listing({ type: 'code', value: '012345' })
+      expect(await rowValue()).toBe('012345')
+      events = []
+      await service.conversation(account.id, 'm')
+      expect(events).toContainEqual({ type: 'changed', accountId: account.id })
+      expect(await rowValue()).toBe('654321')
+      expect(Object.values(await corrections())).toEqual([{ type: 'code', value: '654321' }])
+      // Opening it again agrees with the row, so nothing changes.
+      events = []
+      await service.conversation(account.id, 'm')
+      expect(events.filter((e) => e.type === 'changed')).toEqual([])
+      await service.disconnect(account.connectionId)
+      expect(await corrections()).toEqual({})
+    })
+    it('hides the row’s code when the whole message names none', async () => {
+      messages = [message('m', { text: 'Hello there' })]
+      listing({ type: 'code', value: '012345' })
+      expect(await rowValue()).toBe('012345')
+      await service.conversation(account.id, 'm')
+      expect(await rowValue()).toBeUndefined()
+    })
+    it('leaves rows it has not listed, and agreeing rows, untouched', async () => {
+      messages = [message('m')]
+      await service.conversation(account.id, 'm')
+      listing({ type: 'code', value: '012345' })
+      expect(await rowValue()).toBe('012345')
+      await service.conversation(account.id, 'm')
+      expect(await corrections()).toBeUndefined()
+    })
+    it('never keeps a value read from encrypted mail', async () => {
+      vi.spyOn(service.encryption, 'read').mockImplementation(async (m) => ({
+        ...m,
+        text: 'Your verification code: 654321',
+        security: { encrypted: true, state: 'decrypted', signature: 'unsigned', confirmed: false },
+      }))
+      messages = [message('m', { text: 'ciphertext' })]
+      listing()
+      expect(await rowValue()).toBeUndefined()
+      expect((await service.conversation(account.id, 'm'))[0].authCandidate?.value).toBe('654321')
+      expect(await rowValue()).toBeUndefined()
+      expect(await corrections()).toBeUndefined()
+    })
+  })
   it('keeps extracted secrets out of local service data and diagnostics', async () => {
     messages = [message('new')]
     await refresh()

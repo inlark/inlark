@@ -1,4 +1,4 @@
-import type { Address } from '@inlark/core'
+import type { Address, AuthValue } from '@inlark/core'
 
 /**
  * Persistent IMAP metadata, injected into the provider. The desktop app implements this with
@@ -49,7 +49,8 @@ export interface MetadataIndex {
   knownUids(accountId: string, mailboxId: string): Promise<number[]>
   /** Moves an existing ID to a new location after the server confirmed the move. */
   relocate(accountId: string, id: string, location: MessageLocation): Promise<void>
-  setPreview(accountId: string, id: string, preview: string): Promise<void>
+  /** Also records the code or link found in the same text; `null` when there was none. */
+  setPreview(accountId: string, id: string, preview: string, auth?: AuthValue | null): Promise<void>
 
   /** Messages by ID, in no particular order. Unknown IDs are skipped. */
   messages(accountId: string, ids: string[]): Promise<IndexedMessage[]>
@@ -155,6 +156,8 @@ export interface NewMessage extends MessageLocation {
 export interface IndexedMessage extends NewMessage {
   id: string
   threadId: string
+  /** The code or link found with the preview; `null` when none, absent until checked. */
+  auth?: AuthValue | null
 }
 
 /** A trimmed BODYSTRUCTURE node. `part` is the IMAP section number, e.g. `1.2`. */

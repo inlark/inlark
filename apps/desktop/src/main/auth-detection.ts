@@ -2,13 +2,16 @@
 // https://github.com/authfill/authfill/blob/7462d616bc781f07945d5ea87345c316ef2583fa/apps/extension/src/utils/detection.ts
 // Modified for inlark on 2026-10-24: bounded input, German context, stricter
 // confidence/ambiguity rules, grouped-code normalization and robust URL handling.
+// Modified for inlark on 2026-11-16: excerpts cut off at the end, and link action labels.
 // See resources/authfill-GPL-3.0.txt and resources/THIRD_PARTY_NOTICES.md.
 import { convert } from 'html-to-text'
+import type { AuthDetector, AuthLinkAction } from '@inlark/core'
 
 export interface AuthCandidate {
   type: 'link' | 'code'
   value: string
   score: number
+  action?: AuthLinkAction
 }
 
 // AuthFill's supported formats, longest first so a grouped value stays intact.
@@ -37,14 +40,19 @@ const codePatterns = [
   '????-????-????-????',
   '?????-?????-?????-?????',
 ].sort((a, b) => b.length - a.length)
+const codeSeparator = '[ \\t]{0,3}[-*_ .][ \\t]{0,3}'
 const codeBodyRegex = codePatterns
   .map((pattern) =>
     pattern
       .split('-')
       .map((part) => `[A-Za-z0-9]{${part.length}}`)
-      .join('[ \\t]{0,3}[-*_ .][ \\t]{0,3}'),
+      .join(codeSeparator),
   )
   .join('|')
+const wholeCode = new RegExp(`^(?:${codeBodyRegex})$`)
+const codeGroups = new RegExp(`(${codeSeparator})`)
+/** Ordinary prose, not a code group: “731904. Thanks” is a code followed by a word. */
+const isWord = (group: string) => /^[A-Za-z]+$/.test(group) && /[a-z]/.test(group)
 
 const authKeywords = [
   { regex: /\bverif(?:y|ies|ied|ying|ication)\b/gi, weight: 12 },
@@ -84,15 +92,70 @@ const unrelatedLabel =
 const hasContext = (value: string) => contextPhrases.some((regex) => regex.test(value))
 const maxInput = 200_000
 
+// What a link does, most specific first. Each phrase stands for a button label or the sentence
+// introducing the link; each target pattern for a URL path segment or parameter.
+const linkActions: {
+  action: 'resetPassword' | 'verify' | 'signIn'
+  text: RegExp
+  target: RegExp
+}[] = [
+  {
+    action: 'resetPassword',
+    text: /\b(?:reset|recover|change)\s+(?:your\s+|my\s+|the\s+)?password\b|\b(?:choose|create|set)\s+(?:up\s+)?(?:a\s+)?new\s+password\b|\bpassword\s+(?:reset|recovery)\b|\bforgot(?:ten)?\s+(?:your\s+)?password\b|passwort\s+(?:zur(?:ü|ue)cksetzen|(?:ä|ae)ndern|vergessen|festlegen)|neues\s+passwort/i,
+    target:
+      /(?:^|[/#?&=_.-])(?:reset|reset-?password|password|passwort|recover|recovery)(?:[/#?&=_.-]|$)/i,
+  },
+  {
+    action: 'verify',
+    text: /\bverif(?:y|ies|ication)\b|\bconfirm(?:ation)?\b|\bactivat(?:e|ion)\b|\bvalidate\b|complete\s+(?:your\s+)?registration|best(?:ä|ae)tig|verifizier|aktivier/i,
+    target:
+      /(?:^|[/#?&=_.-])(?:verify|verification|confirm|confirmation|activate|activation|validate|bestaetigen|bestätigen)(?:[/#?&=_.-]|$)/i,
+  },
+  {
+    action: 'signIn',
+    text: /\bmagic[\s-]?link\b|\bsign[\s-]?in\b|\blog[\s-]?in\b|\banmelde(?:n|link)\b|\beinloggen\b/i,
+    target:
+      /(?:^|[/#?&=_.-])(?:login|log-in|signin|sign-in|sign_in|magic|magic-?link|magiclink)(?:[/#?&=_.-]|$)/i,
+  },
+]
+const mentionsEmail = /\be-?mail\b|\b(?:email\s+)?address\b|\badresse\b/i
+
+/**
+ * Names a link's action from the closest evidence first: the line introducing it (usually the
+ * button label), then the URL, then the surrounding text, then the subject.
+ */
+function linkAction(before: string, target: string, subject: string): AuthLinkAction | undefined {
+  const lines = before.split('\n').map((line) => line.trim())
+  const label = (lines.reverse().find(Boolean) || '').slice(-120)
+  const sources: [text: string, isTarget: boolean][] = [
+    [label, false],
+    [target, true],
+    [before, false],
+    [subject, false],
+  ]
+  for (const [source, isTarget] of sources) {
+    const match = linkActions.find((action) =>
+      (isTarget ? action.target : action.text).test(source),
+    )
+    if (!match) continue
+    if (match.action !== 'verify') return match.action
+    return !isTarget && mentionsEmail.test(source) ? 'verifyEmail' : 'verify'
+  }
+  return undefined
+}
+
 /** Pure, local extraction. HTML is parsed as text; no links or images are fetched. */
 export function extractAuthCandidates({
   html,
   text,
   subject,
+  partial,
 }: {
   html?: string
   text?: string
   subject?: string
+  /** The text is an excerpt cut off at the end: a value reaching the end may be incomplete. */
+  partial?: boolean
 }): AuthCandidate[] {
   // Keep both MIME alternatives: either may carry the usable value. Repeated
   // values are deduplicated below and never gain confidence through repetition.
@@ -122,9 +185,12 @@ export function extractAuthCandidates({
       )[0]
       .replace(/^>.*$/gm, '')
     const emailBody = `${heading}\n\n${content}`.replace(/[\u00a0\u202f]/g, ' ')
+    // Trailing punctuation or an ellipsis may follow a cut-off value.
+    const end = partial && content.trim() ? emailBody.replace(/[\s.…]+$/, '').length : Infinity
     const linkRegex = /https?:\/\/[^\s<>"']+/gi
     for (const match of emailBody.matchAll(linkRegex)) {
       const link = match[0].replace(/[.,;:)\]}]+$/g, '')
+      if (match.index + match[0].length >= end) continue
       let url: URL
       try {
         url = new URL(link)
@@ -159,15 +225,30 @@ export function extractAuthCandidates({
       if (targetContext) score += 30
       // Opaque button links still qualify when the button clearly names the action.
       if (hasContext(before)) score += 20
-      add({ type: 'link', value: link, score })
+      const action = linkAction(emailBody.slice(Math.max(0, index - 300), index), target, heading)
+      add({ type: 'link', value: link, score, ...(action ? { action } : {}) })
     }
 
     // Preserve positions when removing URLs; their tokens must not become codes.
     const withoutLinks = emailBody.replace(linkRegex, (link) => ' '.repeat(link.length))
     const codeRegex = new RegExp(`(?<![A-Za-z0-9@/])(?:${codeBodyRegex})(?![A-Za-z0-9@/])`, 'g')
-    for (const match of withoutLinks.matchAll(codeRegex)) {
-      const raw = match[0],
-        index = match.index
+    for (let match: RegExpExecArray | null; (match = codeRegex.exec(withoutLinks));) {
+      let raw = match[0]
+      const index = match.index
+      // Collapsed whitespace (as in a preview) can join a code and the next word into one
+      // grouped match. Keep the code, or retry after a leading word.
+      const groups = raw.split(codeGroups)
+      const word =
+        groups.length > 1 ? groups.findIndex((group, i) => i % 2 === 0 && isWord(group)) : -1
+      if (word === 0) {
+        codeRegex.lastIndex = index + groups[0].length + groups[1].length
+        continue
+      }
+      if (word > 0) {
+        raw = groups.slice(0, word - 1).join('')
+        if (!wholeCode.test(raw)) continue
+      }
+      if (index + raw.length >= end) continue
       const value = raw.replace(/[\s*_\-.]/g, '')
       const before = withoutLinks.slice(Math.max(0, index - 80), index)
       const lineBefore = before.slice(before.lastIndexOf('\n') + 1)
@@ -211,4 +292,13 @@ export function selectAuthCandidate(
   const [best, second] = candidates
   if (!best || (second && best.score - second.score < 15)) return undefined
   return best
+}
+
+/** The value shown and copied in inlark. Never reads encrypted text. */
+export const detectAuth: AuthDetector = (input) => {
+  if (/-----BEGIN PGP MESSAGE-----/.test((input.text || '') + (input.html || ''))) return undefined
+  const candidate = selectAuthCandidate(input)
+  if (!candidate) return undefined
+  const { type, value, action } = candidate
+  return { type, value, ...(action ? { action } : {}) }
 }

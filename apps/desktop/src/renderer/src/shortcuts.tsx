@@ -30,6 +30,13 @@ export const shortcutDefinitions = [
   },
   { id: 'open', section: 'Navigate', label: 'Open conversation', defaults: [['Enter'], ['O']] },
   {
+    id: 'authAction',
+    section: 'Navigate',
+    label: 'Copy code or open link',
+    description: 'In a sign-in, verification, or password reset email.',
+    defaults: [['Y'], ['Shift+C']],
+  },
+  {
     id: 'back',
     section: 'Navigate',
     label: 'Back to list',

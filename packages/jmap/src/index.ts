@@ -3,11 +3,14 @@ import {
   accountColors,
   conversationFromMessages,
   draftFingerprint,
+  isDraft,
   parseUnsubscribe,
   plainTextHtml,
   ProviderError,
   type Account,
   type Address,
+  type AuthDetector,
+  type Conversation,
   type Mailbox,
   type Identity,
   type Message,
@@ -66,7 +69,11 @@ export interface JmapOptions {
   name: string
   fetch?: typeof fetch
   timeoutMs?: number
+  /** Finds a list row's code or link in its subject and opening text. */
+  detectAuth?: AuthDetector
 }
+/** The opening text fetched with each list row for its code or link. */
+const excerptBytes = 4096
 const summaryProperties = [
   'id',
   'threadId',
@@ -209,6 +216,25 @@ function asMessage(account: Account, raw: Json, bodies: boolean): Message {
     result.security = { encrypted: true, state: 'locked', signature: 'unknown', confirmed: false }
   }
   return result
+}
+/** The row's code or link, from the opening text fetched with it or else its preview. */
+function listAuth(message: Message, raw: Json, detect: AuthDetector): Conversation['auth'] {
+  if (isDraft(message) || message.security?.encrypted) return { messageId: message.id }
+  const part = (raw.textBody || []).find((part: Json) =>
+    raw.bodyValues?.[part.partId]?.value?.trim(),
+  )
+  const excerpt = part && raw.bodyValues[part.partId]
+  const candidate = detect(
+    excerpt
+      ? {
+          subject: message.subject,
+          [part.type?.toLowerCase() === 'text/html' ? 'html' : 'text']: excerpt.value,
+          partial: !!excerpt.isTruncated,
+        }
+      : // A preview has at most 256 characters; one that long was probably cut off.
+        { subject: message.subject, text: message.preview, partial: message.preview.length >= 256 },
+  )
+  return { messageId: message.id, ...(candidate ? { candidate } : {}) }
 }
 export class JmapProvider implements MailProvider {
   capabilities: ProviderCapabilities = {
@@ -399,6 +425,38 @@ export class JmapProvider implements MailProvider {
       accountId: account.id,
     }))
   }
+  /** List rows, with the opening text of each fetched in the same request for its code or link. */
+  private async summaries(
+    account: Account,
+    ids: string[],
+  ): Promise<{ message: Message; auth?: Conversation['auth'] }[]> {
+    const detect = this.options.detectAuth
+    if (!detect) return (await this.messages(account, ids)).map((message) => ({ message }))
+    const result: { message: Message; auth?: Conversation['auth'] }[] = []
+    for (const batch of batches([...new Set(ids)], this.capabilities.maxObjectsInGet)) {
+      if (!batch.length) continue
+      const [data] = await this.call([
+        [
+          'Email/get',
+          {
+            accountId: account.remoteId,
+            ids: batch,
+            properties: [...summaryProperties, 'textBody', 'bodyValues'],
+            fetchTextBodyValues: true,
+            maxBodyValueBytes: excerptBytes,
+            bodyProperties: ['partId', 'type'],
+          },
+          'e',
+        ],
+      ])
+      if (data.state) this.emailState.set(account.id, data.state)
+      for (const raw of data.list) {
+        const message = asMessage(account, raw, false)
+        result.push({ message, auth: listAuth(message, raw, detect) })
+      }
+    }
+    return result
+  }
   async messages(account: Account, ids: string[], bodies = false): Promise<Message[]> {
     const result: Message[] = []
     for (const batch of batches([...new Set(ids)], this.capabilities.maxObjectsInGet)) {
@@ -504,9 +562,11 @@ export class JmapProvider implements MailProvider {
         'q',
       ],
     ])
-    const fetched = new Map((await this.messages(account, result.ids)).map((m) => [m.id, m]))
+    const fetched = new Map(
+      (await this.summaries(account, result.ids)).map((item) => [item.message.id, item]),
+    )
     const messages: Message[] = result.ids.flatMap((id: string) =>
-      fetched.has(id) ? [fetched.get(id)!] : [],
+      fetched.has(id) ? [fetched.get(id)!.message] : [],
     )
     // Only fetch thread metadata for this page, never all IDs in the mailbox.
     const threads: Json[] = []
@@ -532,6 +592,8 @@ export class JmapProvider implements MailProvider {
       c.subject = m.subject || '(No subject)'
       c.preview = m.preview
       c.count = threads.find((t) => t.id === m.threadId)?.emailIds.length || 1
+      const auth = fetched.get(m.id)?.auth
+      if (auth) c.auth = auth
       return c
     })
     return {

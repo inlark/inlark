@@ -4,7 +4,7 @@ import { randomUUID, X509Certificate, createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile, copyFile, rm, stat, chmod, open } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
 import { app, clipboard, dialog, shell, Notification } from 'electron'
-import { selectAuthCandidate, type AuthCandidate } from './auth-detection'
+import { detectAuth, selectAuthCandidate, type AuthCandidate } from './auth-detection'
 import {
   defaultSettings,
   mergePages,
@@ -14,7 +14,9 @@ import {
   draftFingerprint,
   connectionErrorCodes,
   isProviderError,
+  isDraft,
   ProviderError,
+  scopeKey,
   type Account,
   type AccountAppearance,
   type Address,
@@ -46,6 +48,9 @@ import {
   type ServerSettings,
   type SubmissionSummary,
   type Message,
+  type AuthDetector,
+  type AuthValue,
+  type Conversation,
 } from '@inlark/core'
 import { JmapProvider } from '@inlark/jmap'
 import { publicFetch } from './public-fetch'
@@ -130,6 +135,11 @@ type Journal = {
 }
 /** Attempts that ended with nothing sent, so the same draft may be sent again. */
 const resendable: Journal['state'][] = ['rejected', 'unsent']
+/** Rows whose reader finding is kept, and rows remembered for comparison while running. */
+const maxAuthCorrections = 5000
+const maxListedAuth = 5000
+const sameAuth = (a: AuthValue | null, b: AuthValue | null) =>
+  a?.type === b?.type && a?.value === b?.value && a?.action === b?.action
 /** Errors that prove nothing left for recipients during submission. */
 const definiteSubmissionCodes = [
   'submissionRejected',
@@ -157,6 +167,8 @@ export type ProviderFactory = (input: {
   /** Where this connection may keep local data, removed when it is disconnected. */
   directory: string
   readAttachment: (id: string) => Promise<Uint8Array>
+  /** Finds the code or link a list row shows. */
+  detectAuth?: AuthDetector
 }) => MailProvider
 export interface ServiceOptions {
   providers?: ProviderFactory
@@ -219,6 +231,13 @@ export class MailService {
   private authArrivals = new Map<string, { since: number; seen: Map<string, number> }>()
   private authCopyQueue: Promise<unknown> = Promise.resolve()
   private latestAuthCopy = 0
+  /**
+   * What the reader found where a row's opening text said otherwise, by message. Kept on disk so
+   * an opened row stays as it is; never holds values from encrypted mail.
+   */
+  private authCorrections = new Map<string, AuthValue | null>()
+  /** What each recently listed row showed, so opening it can tell whether the reader differs. */
+  private listedAuth = new Map<string, AuthValue | null>()
   private disposed = false
   private indexingEmit?: ReturnType<typeof setTimeout>
   private timer?: ReturnType<typeof setInterval>
@@ -260,6 +279,16 @@ export class MailService {
       })),
     )
     this.localDrafts = new Map((await this.store.read<Draft[]>('drafts', [])).map((d) => [d.id, d]))
+    try {
+      this.authCorrections = new Map(
+        Object.entries(
+          await this.store.read<Record<string, AuthValue | null>>('auth-corrections', {}),
+        ),
+      )
+    } catch {
+      // Losing corrections only shows a row's own finding again; it must not stop startup.
+      this.log('auth-corrections-unreadable')
+    }
     this.journals = new Map(
       (await this.store.read<Journal[]>('submissions', [])).map((j) => [j.draftId, j]),
     )
@@ -520,6 +549,7 @@ export class MailService {
           'Basic ' + Buffer.from(config.username + ':' + input.password).toString('base64'),
         connectionId: id,
         name: input.name,
+        detectAuth,
       })
     if (!this.options.providers) throw new Error('IMAP accounts are not available in this build.')
     return this.options.providers({
@@ -531,6 +561,7 @@ export class MailService {
       temporary,
       directory: join(this.store.directory, 'index', id),
       readAttachment: this.readStagedAttachment,
+      detectAuth,
     })
   }
   discover = async (email: string): Promise<DiscoveryResult> => {
@@ -832,6 +863,9 @@ export class MailService {
       this.authArrivals.delete(key)
       this.unreadCounts.delete(key)
     }
+    for (const map of [this.authCorrections, this.listedAuth])
+      for (const key of map.keys()) if (accountIds.has(JSON.parse(key)[0])) map.delete(key)
+    await this.persistAuthCorrections()
     // The local message index belongs to this connection only.
     await rm(join(this.store.directory, 'index', id), { recursive: true, force: true })
     this.emit({
@@ -880,7 +914,7 @@ export class MailService {
   conversation = (id: string, threadId: string) =>
     this.guard(id, async (p, a) => {
       const messages = await p.conversation(a, threadId)
-      return Promise.all(
+      const read = await Promise.all(
         messages.map(async (message) => {
           const read = p.rawMessage
             ? await this.encryption.read(
@@ -891,11 +925,65 @@ export class MailService {
           const candidate = this.messageAuthCandidate(read)
           return {
             ...read,
-            authCandidate: candidate && { type: candidate.type, value: candidate.value },
+            authCandidate: candidate && {
+              type: candidate.type,
+              value: candidate.value,
+              ...(candidate.action ? { action: candidate.action } : {}),
+            },
           }
         }),
       )
+      await this.correctListedAuth(a.id, read)
+      return read
     })
+  /**
+   * The reader sees the whole message, so where it disagrees with what the row showed from the
+   * opening text, the row takes the reader's finding from now on.
+   */
+  private async correctListedAuth(accountId: string, messages: Message[]) {
+    let changed = false
+    for (const message of messages) {
+      const key = scopeKey(accountId, message.id)
+      if (!this.listedAuth.has(key) || isDraft(message) || message.security?.encrypted) continue
+      const found = message.authCandidate ?? null
+      if (sameAuth(this.listedAuth.get(key)!, found)) continue
+      this.authCorrections.delete(key)
+      this.authCorrections.set(key, found)
+      this.listedAuth.set(key, found)
+      changed = true
+    }
+    if (!changed) return
+    for (const key of this.authCorrections.keys()) {
+      if (this.authCorrections.size <= maxAuthCorrections) break
+      this.authCorrections.delete(key)
+    }
+    await this.persistAuthCorrections()
+    this.emit({ type: 'changed', accountId })
+  }
+  private async persistAuthCorrections() {
+    try {
+      await this.store.write('auth-corrections', Object.fromEntries(this.authCorrections))
+    } catch {
+      this.log('auth-corrections-write-failed')
+    }
+  }
+  /** Applies the reader's corrections and remembers what each row shows. */
+  private listAuth(items: Conversation[]) {
+    for (const c of items) {
+      if (!c.auth) continue
+      const key = scopeKey(c.accountId, c.auth.messageId)
+      if (this.authCorrections.has(key)) {
+        const corrected = this.authCorrections.get(key)
+        c.auth = { messageId: c.auth.messageId, ...(corrected ? { candidate: corrected } : {}) }
+      }
+      this.listedAuth.delete(key)
+      this.listedAuth.set(key, c.auth.candidate ?? null)
+    }
+    for (const key of this.listedAuth.keys()) {
+      if (this.listedAuth.size <= maxListedAuth) break
+      this.listedAuth.delete(key)
+    }
+  }
   query = async (query: MailQuery, cursor?: Record<string, number>): Promise<QueryPage> => {
     const accounts = this.accounts.filter(
       (a) => (!query.accountId || query.accountId === a.id) && (!cursor || a.id in cursor),
@@ -916,6 +1004,7 @@ export class MailService {
         'Mail is unavailable. Reconnect an account or try again shortly. Previously opened messages remain in your cache.',
       )
     const result = mergePages(pages, 50)
+    this.listAuth(result.items)
     result.failedAccounts = accounts
       .filter((_, i) => settled[i].status === 'rejected')
       .map((a) => a.id)

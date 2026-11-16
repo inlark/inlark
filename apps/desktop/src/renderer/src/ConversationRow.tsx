@@ -1,7 +1,20 @@
 import { cn } from '@inlark/ui'
-import { Archive, Lock, Mail, MailOpen, Paperclip, Star, Trash2 } from '@inlark/ui/icons'
+import {
+  Archive,
+  Check,
+  Copy,
+  ExternalLink,
+  Lock,
+  Mail,
+  MailOpen,
+  Paperclip,
+  Star,
+  Trash2,
+} from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
-import { isDraft, type Account, type Conversation } from '@inlark/core'
+import { Tooltip } from '@base-ui/react/tooltip'
+import { isDraft, type Account, type AuthValue, type Conversation } from '@inlark/core'
+import { authKey, authLabel, linkHost, SwapLabel, useAuthCopied } from './auth-action'
 import { shortDate } from './mail-date'
 import { SenderAvatar } from './SenderAvatar'
 import { AccountMark } from './AccountMark'
@@ -11,6 +24,78 @@ import { useShortcutText } from './shortcuts'
 
 export function senderLabel(conversation: Conversation) {
   return conversation.from.map((sender) => sender.name || sender.email.split('@')[0]).join(', ')
+}
+
+/** Copies the row's code, or opens its link, without opening the conversation. */
+function RowAuth({
+  candidate,
+  copyKey,
+  shortcut,
+  onRun,
+}: {
+  candidate: AuthValue
+  copyKey: string
+  shortcut?: string
+  onRun: () => void
+}) {
+  const copied = useAuthCopied(copyKey)
+  const code = candidate.type === 'code'
+  const label = authLabel(candidate)
+  const host = code ? '' : linkHost(candidate.value)
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              'row-auth inline-flex items-center gap-1.5 h-6 max-w-60 min-w-0 px-2 rounded-md shrink-0',
+              'border border-solid border-border bg-transparent text-secondary text-[12px] leading-none',
+              'transition-[background-color,border-color,color] duration-120 ease-[ease]',
+              'hover:bg-strong/8 hover:border-border-strong hover:text-strong',
+              '[&_svg]:shrink-0 [&_svg]:text-muted',
+              'hover:[&_svg]:text-secondary [.unread_&]:text-strong',
+              copied && '[&_svg]:text-success! border-border-strong',
+            )}
+            aria-label={code ? 'Copy code ' + candidate.value : label + ', opens ' + host}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRun()
+            }}
+          />
+        }
+      >
+        {code ? (
+          <>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            <SwapLabel
+              showAlternate={copied}
+              label={<span className="font-mono tracking-wider">{candidate.value}</span>}
+              alternate="Copied"
+            />
+          </>
+        ) : (
+          <>
+            <ExternalLink size={12} />
+            <span className="whitespace-nowrap @max-[440px]/mail:hidden">{label}</span>
+            <span className="text-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[1100px]/mail:hidden">
+              {host}
+            </span>
+          </>
+        )}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={7}>
+          <Tooltip.Popup className="tooltip flex gap-3 items-center py-1.5 px-2.25 bg-raised border border-solid border-border-strong rounded-md text-[11px] shadow-popup z-200 max-w-80">
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+              {code ? 'Copy code' : label + ' · opens ' + host}
+            </span>
+            {shortcut && <kbd>{shortcut}</kbd>}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  )
 }
 
 export function ConversationRow({
@@ -27,6 +112,7 @@ export function ConversationRow({
   onArchive,
   onTrash,
   onToggleRead,
+  onAuth,
 }: {
   conversation: Conversation
   account?: Account
@@ -41,6 +127,8 @@ export function ConversationRow({
   onArchive?: () => void
   onTrash?: () => void
   onToggleRead: () => void
+  /** Copies the code or opens the link found in the shown message. */
+  onAuth?: () => void
 }) {
   const keys = useShortcutText()
   const moveLimit = actionLimit(a, 'move')
@@ -48,6 +136,7 @@ export function ConversationRow({
   // An unsent reply is flagged rather than counted, so it never reads as sent.
   const drafts = c.messages.filter(isDraft).length
   const count = c.count - drafts
+  const auth = c.auth?.candidate && { candidate: c.auth.candidate, messageId: c.auth.messageId }
   return (
     <div
       className={cn(
@@ -169,6 +258,14 @@ export function ConversationRow({
         )}
         role="gridcell"
       >
+        {auth && onAuth && (
+          <RowAuth
+            candidate={auth.candidate}
+            copyKey={authKey(c.accountId, auth.messageId)}
+            shortcut={keys('authAction')}
+            onRun={onAuth}
+          />
+        )}
         <span className="row-attachment w-3.25">
           {c.hasAttachment && <Paperclip size={13} aria-label="Has attachments" />}
         </span>

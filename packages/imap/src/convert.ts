@@ -110,6 +110,8 @@ export function parseBlobId(value: string): { messageId: string; part: string } 
 }
 
 const previewInputLimit = 4096
+/** A preview this long was probably cut off. */
+export const previewLength = 256
 
 /** Skip non-visible blocks in a forward scan, including an unterminated final block. */
 function withoutHiddenBlocks(value: string): string {
@@ -151,7 +153,7 @@ export function previewText(value: string, html = false): string {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 256)
+    .slice(0, previewLength)
 }
 
 export const metadataQuery = {

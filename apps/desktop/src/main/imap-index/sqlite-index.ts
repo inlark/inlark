@@ -2,6 +2,7 @@ import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlit
 import { chmodSync, closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { AuthValue } from '@inlark/core'
 import type {
   ConversationCursor,
   ConversationFilter,
@@ -49,7 +50,7 @@ const methodTable: Record<keyof MetadataIndex, true> = {
 }
 export const indexMethods = Object.keys(methodTable) as (keyof MetadataIndex)[]
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 const MAX_REFERENCES = 50
 
 const migrations = [
@@ -141,6 +142,8 @@ const migrations = [
   CREATE INDEX messages_email_id ON messages (account_id, email_id) WHERE email_id IS NOT NULL;
   -- Refresh metadata for existing locations without discarding their stable IDs or threads.
   UPDATE mailboxes SET uid_next = NULL, highest_modseq = NULL, indexed_from = NULL, complete = 0;`,
+  // The code or link found with the preview, as JSON; '' when none was found, NULL if unchecked.
+  `ALTER TABLE messages ADD COLUMN auth TEXT;`,
 ]
 
 interface MailboxRow {
@@ -187,6 +190,7 @@ interface MessageRow {
   preview: string
   body_structure: string | null
   unsubscribe: string | null
+  auth: string | null
 }
 
 /** Message-IDs without brackets or whitespace; a header value may hold several. */
@@ -256,12 +260,13 @@ function toMessage(row: MessageRow): IndexedMessage {
   if (row.sent_at !== null) message.sentAt = row.sent_at
   if (row.body_structure !== null) message.bodyStructure = JSON.parse(row.body_structure)
   if (row.unsubscribe !== null) message.unsubscribe = JSON.parse(row.unsubscribe)
+  if (row.auth !== null) message.auth = row.auth ? JSON.parse(row.auth) : null
   return message
 }
 
 const MESSAGE_COLUMNS = `seq, id, mailbox_id, uid_validity, uid, modseq, message_id, email_id, in_reply_to, refs,
   thread_id, subject, from_addr, to_addr, cc_addr, bcc_addr, reply_to, received_at, sent_at, size,
-  flags, has_attachment, preview, body_structure, unsubscribe`
+  flags, has_attachment, preview, body_structure, unsubscribe, auth`
 
 function prepareFile(path: string) {
   if (path === ':memory:') return
@@ -770,10 +775,11 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
     })
   }
 
-  setPreview(accountId: string, id: string, preview: string) {
+  setPreview(accountId: string, id: string, preview: string, auth?: AuthValue | null) {
     this.run(
-      'UPDATE messages SET preview = ? WHERE account_id = ? AND id = ?',
+      'UPDATE messages SET preview = ?, auth = coalesce(?, auth) WHERE account_id = ? AND id = ?',
       preview,
+      auth === undefined ? null : auth ? json(auth) : '',
       accountId,
       id,
     )

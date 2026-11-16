@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { extractAuthCandidates, selectAuthCandidate } from '../apps/desktop/src/main/auth-detection'
+import {
+  detectAuth,
+  extractAuthCandidates,
+  selectAuthCandidate,
+} from '../apps/desktop/src/main/auth-detection'
 
 describe('authentication value extraction adapted from AuthFill', () => {
   it.each([
@@ -117,6 +121,109 @@ describe('authentication value extraction adapted from AuthFill', () => {
       selectAuthCandidate({
         text: 'Thanks\nOn Tuesday someone wrote:\nYour verification code: 012345',
       }),
+    ).toBeUndefined()
+  })
+})
+
+describe('opening text shown in the conversation list', () => {
+  it('finds a code in the subject or a cut-off preview', () => {
+    expect(
+      detectAuth({
+        subject: '813718 is your verification code',
+        text: 'Enter this code to finish signing in. It expires in',
+        partial: true,
+      }),
+    ).toEqual({ type: 'code', value: '813718' })
+    expect(
+      detectAuth({
+        subject: 'Sign in to Example',
+        text: 'Your verification code is 482913. It expires in 10 minutes. If you didn’t',
+        partial: true,
+      }),
+    ).toEqual({ type: 'code', value: '482913' })
+  })
+  it.each([
+    ['Your verification code is 4829', 'a code'],
+    ['Your verification code is 4829…', 'a code before an ellipsis'],
+    ['Your verification code is 4829...', 'a code before dots'],
+    ['Verify your email: https://example.com/verify?token=ab', 'a link'],
+  ])('never offers %s reaching the end of a cut-off excerpt (%s)', (text) => {
+    expect(detectAuth({ subject: 'Your account', text, partial: true })).toBeUndefined()
+  })
+  it('keeps a value ending complete text, and in the subject of an empty excerpt', () => {
+    expect(detectAuth({ text: 'Your verification code is 482913' })?.value).toBe('482913')
+    expect(
+      detectAuth({ subject: 'Your verification code: 482913', text: '', partial: true })?.value,
+    ).toBe('482913')
+  })
+  it.each([
+    ['Your verification code is 731904. Thanks for signing up.', '731904'],
+    ['Your verification code is 731904 Thanks for signing up', '731904'],
+    ['Your security code 4829', '4829'],
+    ['Your verification code: 123 456 Thanks', '123456'],
+  ])('does not join a code and a neighboring word: %s', (text, value) => {
+    expect(detectAuth({ text })).toEqual({ type: 'code', value })
+  })
+  it('never reads encrypted text', () => {
+    expect(
+      detectAuth({
+        subject: 'Your verification code: 482913',
+        text: '-----BEGIN PGP MESSAGE-----\nabc',
+      }),
+    ).toBeUndefined()
+  })
+})
+
+describe('link actions', () => {
+  const action = (input: Parameters<typeof detectAuth>[0]) => {
+    const found = detectAuth(input)
+    expect(found?.type).toBe('link')
+    return found?.action
+  }
+  it.each([
+    ['Reset your password: https://example.com/e?token=9f8e7d', 'resetPassword'],
+    ['Forgot your password? Choose a new one: https://example.com/e?token=9f8e7d', 'resetPassword'],
+    ['Passwort zurücksetzen: https://example.com/e?token=9f8e7d', 'resetPassword'],
+    ['Click the link below to sign in:\n\nhttps://example.com/e?token=9f8e7d', 'signIn'],
+    ['Your magic link: https://example.com/e?token=9f8e7d', 'signIn'],
+    ['Dein Anmeldelink: https://example.com/e?token=9f8e7d', 'signIn'],
+    ['Verify your email address: https://example.com/e?token=9f8e7d', 'verifyEmail'],
+    ['Bestätigen Sie Ihre E-Mail-Adresse: https://example.com/e?token=9f8e7d', 'verifyEmail'],
+    ['Confirm your sign-in from a new device: https://example.com/e?token=9f8e7d', 'verify'],
+    ['Activate your account: https://example.com/e?token=9f8e7d', 'verify'],
+  ])('names %s', (text, expected) => {
+    expect(action({ text })).toBe(expected)
+  })
+  it('prefers the button label to the surrounding text', () => {
+    expect(
+      action({
+        html: '<p>Thanks for signing up. Please confirm your email.</p><a href="https://example.com/e?token=9f8e7d">Sign in to Example</a>',
+      }),
+    ).toBe('signIn')
+  })
+  it('reads the URL when the label says nothing', () => {
+    expect(
+      action({
+        subject: 'Your account',
+        html: '<p>Use this link to continue your login.</p><a href="https://example.com/password/reset?token=9f8e7d">Continue</a>',
+      }),
+    ).toBe('resetPassword')
+  })
+  it('falls back to the subject, and to no action at all', () => {
+    expect(
+      action({
+        subject: 'Reset your password',
+        text: 'Use this link to continue your login request: https://example.com/e?token=9f8e7d',
+      }),
+    ).toBe('signIn')
+    expect(
+      action({
+        subject: 'Reset your password',
+        text: 'Your requested link to proceed (security): https://example.com/e?token=9f8e7d',
+      }),
+    ).toBe('resetPassword')
+    expect(
+      detectAuth({ text: 'Your security link: https://example.com/e?token=9f8e7d' })?.action,
     ).toBeUndefined()
   })
 })
