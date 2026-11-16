@@ -64,8 +64,9 @@ const askAfter = 3
  * Returns true exactly once, on the switch that makes it a pattern, so inlark can ask whether
  * white should be the default. The count survives restarts; after asking, it never asks again.
  */
-export function countLightSwitch(store: Store = localStorage): boolean {
+export function countLightSwitch(given?: Store): boolean {
   try {
+    const store = given ?? localStorage
     if (store.getItem(askedKey) === 'true') return false
     const count = Number(store.getItem(lightSwitchesKey)) + 1 || 1
     if (count < askAfter) {

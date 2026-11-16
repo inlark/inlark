@@ -120,7 +120,7 @@ import { SubmissionList } from './SendingStatus'
 import { useHeldSends } from './held-sends'
 import { ProgressToast, Toaster, toasts } from './Toasts'
 import { AuthAnnouncer, authCommandLabel, authKey, linkHost, runAuth } from './auth-action'
-import type { LiveToast } from './toast-stack'
+import type { LiveToast, ToastInput } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
@@ -1164,8 +1164,10 @@ export function App() {
       const latest = queryClient.getQueryData<Bootstrap>(['bootstrap'])?.settings ?? settings
       const next = await api.settings({ ...latest, ...patch })
       queryClient.setQueryData<Bootstrap>(['bootstrap'], (old) => old && { ...old, settings: next })
+      return true
     } catch (e) {
       fail(e)
+      return false
     }
   }
   /**
@@ -1174,30 +1176,36 @@ export function App() {
    */
   const switchedToLight = () => {
     if (defaultColors(settings) !== 'dark' || !countLightSwitch()) return
-    const previous = settings.messageColors
-    const id = toasts.show({
+    let id = 0
+    const question: ToastInput = {
       text: 'Prefer light backgrounds for emails?',
       tone: 'info',
       sticky: true,
-      action: {
-        label: 'Make default',
-        run: () => {
-          // A new default applies to every email again, like changing it in Settings.
-          clearColorOverrides()
-          void savePreferences({ messageColors: 'light' })
-          toasts.show(
-            {
-              text: 'Emails now use a light background.',
-              onUndo: () => {
-                clearColorOverrides()
-                void savePreferences({ messageColors: previous })
-              },
-            },
-            id,
-          )
-        },
-      },
-    })
+      action: { label: 'Make default', run: () => void makeDefault() },
+    }
+    // Each step is confirmed only once it's saved. A failed save brings back the step before,
+    // so it can be tried again.
+    const makeDefault = async () => {
+      const previous = queryClient.getQueryData<Bootstrap>(['bootstrap'])?.settings.messageColors
+      toasts.show({ text: 'Saving…', tone: 'progress' }, id)
+      if (!(await savePreferences({ messageColors: 'light' })))
+        return void toasts.show(question, id)
+      // A new default applies to every email again, like changing it in Settings.
+      clearColorOverrides()
+      const confirmation: ToastInput = {
+        text: 'Emails now use a light background.',
+        onUndo: () => void restore(),
+      }
+      const restore = async () => {
+        toasts.show({ text: 'Undoing…', tone: 'progress' }, id)
+        if (!(await savePreferences({ messageColors: previous })))
+          return void toasts.show(confirmation, id)
+        clearColorOverrides()
+        toasts.show({ text: 'Undone.' }, id)
+      }
+      toasts.show(confirmation, id)
+    }
+    id = toasts.show(question)
   }
   const title = currentFolder?.name || views.find((v) => v.id === view)?.title || 'All mail'
   const location: MailLocation = { view, account: route.account, folder: route.folder }
