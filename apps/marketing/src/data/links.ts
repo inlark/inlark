@@ -9,6 +9,8 @@ export const links = {
   readme: repo + '#readme',
   issues: repo + '/issues',
   download: '/download',
+  /** Redirects to the support page; see `worker/routes.ts`. */
+  support: '/support',
   imprint: '/imprint',
 }
 

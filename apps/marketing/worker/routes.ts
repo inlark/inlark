@@ -19,6 +19,19 @@ async function release(token?: string) {
   return json(latest.body, latest.status, 'public, max-age=120')
 }
 
+/**
+ * Where inlark.com/support leads. The app links here rather than to the platform directly, so the
+ * destination can change without an app update. One-time support there needs no account.
+ */
+export const supportPage = 'https://buymeacoffee.com/poeck'
+
+// Temporary, so browsers ask again rather than remember the destination for good.
+const redirect = (location: string) =>
+  new Response(null, {
+    status: 302,
+    headers: { Location: location, 'Cache-Control': 'public, max-age=300' },
+  })
+
 const json = (body: string, status: number, cache: string) =>
   new Response(body, {
     status,
@@ -70,5 +83,6 @@ export function handle(request: Request, token?: string): Promise<Response> | Re
   if (request.method !== 'GET' && request.method !== 'HEAD') return null
   if (url.pathname === '/api/release') return release(token)
   if (url.pathname === '/api/reminder.ics') return reminder(url)
+  if (url.pathname === '/support' || url.pathname === '/support/') return redirect(supportPage)
   return null
 }

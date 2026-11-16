@@ -1,8 +1,8 @@
 /**
- * Where inlark sends people who want to support it. One-time support there needs no account,
- * which suits people who found inlark as an app rather than on GitHub.
+ * Where inlark sends people who want to support it. The site redirects to Buy Me a Coffee, where
+ * one-time support needs no account, and the destination can change without an app update.
  */
-export const supportUrl = 'https://buymeacoffee.com/poeck'
+export const supportUrl = 'https://inlark.com/support'
 
 /**
  * What the sidebar's support card remembers, on this device only. Nothing here leaves the
