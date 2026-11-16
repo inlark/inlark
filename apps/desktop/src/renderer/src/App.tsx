@@ -117,6 +117,13 @@ import { SubmissionList } from './SendingStatus'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
+import {
+  draftMatches,
+  locationOptions,
+  matchesWords,
+  widerLocation,
+  type MailLocation,
+} from './search-scope'
 import { version as packagedVersion } from '../../../package.json'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
@@ -239,9 +246,10 @@ export function App() {
       ),
   })
   const currentFolder = boxes.data?.find((b) => b.id === route.folder)
+  // A search narrows the list the user is looking at; it never moves them somewhere else.
   const query: MailQuery = useMemo(
     () => ({
-      view: route.q ? 'all' : view,
+      view,
       // A remembered location can name an account that was removed since; show all mail instead.
       accountId: accounts.some((a) => a.id === route.account) ? route.account : undefined,
       mailboxId: route.folder,
@@ -303,6 +311,16 @@ export function App() {
     },
     enabled: !!accounts.length,
   })
+  // The server searches its own drafts; drafts that only exist here are matched on this device.
+  const localDraftsHere = useMemo(
+    () =>
+      (drafts.data || []).filter(
+        (draft) =>
+          (!route.account || draft.accountId === route.account) &&
+          (!route.q || draftMatches(draft, route.q)),
+      ),
+    [drafts.data, route.account, route.q],
+  )
   const allDraftItems = useMemo<DraftItem[]>(
     () => [
       ...unlinkedServerDrafts(conversations, drafts.data || []).map((message) => ({
@@ -310,11 +328,13 @@ export function App() {
         key: 'server:' + scopeKey(message.accountId, message.id),
         message,
       })),
-      ...(drafts.data || [])
-        .filter((draft) => !route.account || draft.accountId === route.account)
-        .map((draft) => ({ kind: 'local' as const, key: 'local:' + draft.id, draft })),
+      ...localDraftsHere.map((draft) => ({
+        kind: 'local' as const,
+        key: 'local:' + draft.id,
+        draft,
+      })),
     ],
-    [conversations, drafts.data, route.account],
+    [conversations, drafts.data, localDraftsHere],
   )
   const draftItems = allDraftItems.filter((item) => !discarding.has(item.key))
   const submissions = useQuery({
@@ -324,6 +344,15 @@ export function App() {
   })
   const pendingSends = (submissions.data || []).filter((s) =>
     accounts.some((a) => a.id === s.accountId),
+  )
+  const pendingSendsHere = pendingSends.filter(
+    (s) =>
+      (!route.account || s.accountId === route.account) &&
+      (!route.q ||
+        matchesWords(
+          [s.subject, ...(s.rejected || []).flatMap((a) => [a.name, a.email])],
+          route.q,
+        )),
   )
   const readerAccount = accounts.find((a) => a.id === route.threadAccount)
   const listed = conversations.find(
@@ -1101,6 +1130,24 @@ export function App() {
       fail(e)
     }
   }
+  const title = currentFolder?.name || views.find((v) => v.id === view)?.title || 'All mail'
+  const location: MailLocation = { view, account: route.account, folder: route.folder }
+  // Named in the search field and when nothing matches, so the scope is never a surprise.
+  const narrowed = !!route.folder || view !== 'all'
+  const searchName = narrowed ? title : 'all mail'
+  const wider = widerLocation(location, accounts.length)
+  const searchWider = () => {
+    if (!wider) return
+    setDraftSelected(new Set())
+    go({ view: wider.location.view, account: wider.location.account, folder: undefined }, false)
+  }
+  const filterLocations = locationOptions({
+    location,
+    views,
+    accounts,
+    boxesByAccount: mailboxCounts.boxesByAccount,
+    currentLabel: title,
+  })
   const commandTarget = view !== 'drafts' && (route.thread || selected.size || focused)
   const limited = (action: MailAction) => {
     const reason = commandTarget ? unavailable(action) : undefined
@@ -1258,10 +1305,10 @@ export function App() {
     {
       id: 'search-mail',
       group: 'Mail',
-      label: 'Search mail',
+      label: 'Search ' + searchName,
       icon: Search,
       key: keys('search'),
-      keywords: 'find',
+      keywords: 'find mail',
       run: focusSearch,
     },
     {
@@ -1462,9 +1509,6 @@ export function App() {
   const activeIndex = conversations.findIndex(
     (c) => c.id === route.thread && c.accountId === route.threadAccount,
   )
-  const title = route.q
-    ? 'Search results'
-    : currentFolder?.name || views.find((v) => v.id === view)?.title || 'All mail'
   const hasFilters = Object.values(filters).some(Boolean)
   // The Unread tab is a filter too, but an empty Unread list isn't a failed search.
   const hasSearchFilters = Object.entries(filters).some(([key, value]) => key !== 'unread' && value)
@@ -1486,8 +1530,6 @@ export function App() {
       timeZone: 'UTC',
     })
   const selectedCount = allMatching ? total : selected.size
-  // Search results can come from anywhere, so they offer every action.
-  const listView: View = route.q ? 'all' : view
   const selectedConversations = conversations.filter((c) => selected.has(c.key))
   const selectionStarred =
     !allMatching && !!selectedConversations.length && selectedConversations.every((c) => c.starred)
@@ -1590,7 +1632,7 @@ export function App() {
               messages={thread.data.filter(
                 (m) => !discarding.has('server:' + scopeKey(m.accountId, m.id)),
               )}
-              view={route.q ? 'all' : view}
+              view={view}
               backLabel={title}
               busy={busy}
               account={readerAccount}
@@ -1718,15 +1760,32 @@ export function App() {
                     {view === 'drafts'
                       ? (
                           total +
-                          (drafts.data?.filter(
-                            (d) => (!route.account || d.accountId === route.account) && !d.serverId,
-                          ).length || 0) -
+                          localDraftsHere.filter((d) => !d.serverId).length -
                           (allDraftItems.length - draftItems.length)
                         ).toLocaleString()
                       : total.toLocaleString() + (incomplete.length ? '+' : '')}
                   </span>
                 </h1>
-                {route.q && <p>Results for “{route.q}”</p>}
+                {route.q && (
+                  <p className="search-summary flex items-baseline gap-1.5 min-w-0">
+                    <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                      Results for “{route.q}”
+                    </span>
+                    {wider && (
+                      <>
+                        <span className="text-faint" aria-hidden="true">
+                          ·
+                        </span>
+                        <button
+                          className="search-wider shrink-0 border-0 bg-none bg-transparent p-0 text-primary text-[12px] hover:underline"
+                          onClick={searchWider}
+                        >
+                          {wider.label}
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="list-heading-actions flex items-center gap-1.25 @max-[680px]/mail:gap-[2px]">
                 <IconButton
@@ -1741,7 +1800,11 @@ export function App() {
                     )}
                   />
                 </IconButton>
-                <IconButton label="Search mail" shortcut={keys('search')} onClick={focusSearch}>
+                <IconButton
+                  label={'Search ' + searchName}
+                  shortcut={keys('search')}
+                  onClick={focusSearch}
+                >
                   <Search size={16} />
                 </IconButton>
                 {view !== 'drafts' && (
@@ -1782,14 +1845,14 @@ export function App() {
                 )}
                 onSubmit={(e) => {
                   e.preventDefault()
-                  go({ q: search || undefined, ...(search ? { view: 'all' } : {}) }, false)
+                  go({ q: search.trim() || undefined }, false)
                 }}
               >
                 <Search size={16} />
                 <input
                   ref={searchInput}
-                  placeholder="Search mail"
-                  aria-label="Search email"
+                  placeholder={'Search ' + searchName}
+                  aria-label={'Search ' + searchName}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -1937,7 +2000,7 @@ export function App() {
                   )}
                 </div>
                 <span className="toolbar-divider w-[1px] h-4.25 bg-border-strong my-0 mx-1" />
-                {offersAction(listView, 'archive') && (
+                {offersAction(view, 'archive') && (
                   <HintIconButton
                     label="Archive selected"
                     shortcut={keys('archive')}
@@ -1956,7 +2019,7 @@ export function App() {
                 >
                   <MailOpen size={16} />
                 </IconButton>
-                {offersAction(listView, 'trash') && (
+                {offersAction(view, 'trash') && (
                   <HintIconButton
                     label="Move selected to trash"
                     shortcut={keys('trash')}
@@ -1997,14 +2060,14 @@ export function App() {
                     Move to folder
                     <ShortcutHint id="move" className="menu-shortcut ml-auto" />
                   </MenuItem>
-                  {offersAction(listView, 'spam') && (
+                  {offersAction(view, 'spam') && (
                     <MenuItem onClick={() => void act('spam')} disabled={!!unavailable('spam')}>
                       <ShieldX size={14} />
                       Mark as spam
                       <ShortcutHint id="spam" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
-                  {offersAction(listView, 'notSpam') && (
+                  {offersAction(view, 'notSpam') && (
                     <MenuItem
                       onClick={() => void act('notSpam')}
                       disabled={!!unavailable('notSpam')}
@@ -2014,7 +2077,7 @@ export function App() {
                       <ShortcutHint id="notSpam" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
-                  {offersAction(listView, 'restore') && (
+                  {offersAction(view, 'restore') && (
                     <MenuItem
                       onClick={() => void act('restore')}
                       disabled={!!unavailable('restore')}
@@ -2024,7 +2087,7 @@ export function App() {
                       <ShortcutHint id="restore" className="menu-shortcut ml-auto" />
                     </MenuItem>
                   )}
-                  {offersAction(listView, 'destroy') && (
+                  {offersAction(view, 'destroy') && (
                     <MenuItem
                       danger
                       onClick={() => void act('destroy')}
@@ -2037,7 +2100,7 @@ export function App() {
                   {[
                     ...new Set([
                       unavailable('move'),
-                      offersAction(listView, 'destroy') && unavailable('destroy'),
+                      offersAction(view, 'destroy') && unavailable('destroy'),
                     ]),
                   ]
                     .filter(Boolean)
@@ -2110,14 +2173,12 @@ export function App() {
             {view === 'drafts' ? (
               <div className="draft-list flex-1 overflow-auto">
                 <SubmissionList
-                  submissions={pendingSends.filter(
-                    (s) => !route.account || s.accountId === route.account,
-                  )}
+                  submissions={pendingSendsHere}
                   accounts={accounts}
                   onOpenDraft={setComposer}
                   notify={notify}
                 />
-                {!!pendingSends.length && !!draftItems.length && (
+                {!!pendingSendsHere.length && !!draftItems.length && (
                   <h2 className="draft-section-label m-0 pt-4.5 pb-1.5 px-8 text-[11px] font-medium text-muted @max-[680px]/mail:pl-5 @max-[680px]/mail:pr-5">
                     Drafts
                   </h2>
@@ -2140,15 +2201,28 @@ export function App() {
                     </Button>
                   </div>
                 )}
-                {!draftItems.length && !pendingSends.length && (
-                  <EmptyState
-                    icon={FileText}
-                    title="No drafts"
-                    description="Messages you start writing are saved here automatically."
-                  >
-                    <Button onClick={() => void compose()}>Write a message</Button>
-                  </EmptyState>
-                )}
+                {!draftItems.length &&
+                  !pendingSendsHere.length &&
+                  !mail.isLoading &&
+                  (route.q ? (
+                    <EmptyState
+                      {...emptyListState(view, {
+                        searching: true,
+                        unreadOnly: false,
+                        scope: title,
+                      })}
+                    >
+                      {wider && <Button onClick={searchWider}>{wider.label}</Button>}
+                    </EmptyState>
+                  ) : (
+                    <EmptyState
+                      icon={FileText}
+                      title="No drafts"
+                      description="Messages you start writing are saved here automatically."
+                    >
+                      <Button onClick={() => void compose()}>Write a message</Button>
+                    </EmptyState>
+                  ))}
               </div>
             ) : !conversations.length && mail.isLoading ? (
               <div
@@ -2254,11 +2328,17 @@ export function App() {
                   {...emptyListState(view, {
                     searching: !!route.q || hasSearchFilters,
                     unreadOnly: !!filters.unread,
+                    scope: narrowed ? title : undefined,
                     keys,
                   })}
                 >
-                  {hasSearchFilters && (
-                    <Button onClick={() => setFilters({})}>Clear filters</Button>
+                  {(hasSearchFilters || (!!route.q && wider)) && (
+                    <div className="empty-actions flex flex-wrap justify-center gap-2">
+                      {wider && <Button onClick={searchWider}>{wider.label}</Button>}
+                      {hasSearchFilters && (
+                        <Button onClick={() => setFilters({})}>Clear filters</Button>
+                      )}
+                    </div>
                   )}
                   {view === 'inbox' && !route.q && !hasFilters && keys('compose') && (
                     <span className="empty-hint inline-flex items-center gap-2 text-[12px] text-faint">
@@ -2279,7 +2359,7 @@ export function App() {
                 focused={focused}
                 busy={busy}
                 remoteImages={settings.remoteImages}
-                view={listView}
+                view={view}
                 hasNextPage={!!mail.hasNextPage}
                 isFetchingNextPage={mail.isFetchingNextPage}
                 listRef={listRef}
@@ -2468,10 +2548,19 @@ export function App() {
         key={filterOpen ? 'filter-open' : 'filter-closed'}
         open={filterOpen}
         filters={filters}
+        location={filterLocations.value}
+        locations={filterLocations.options}
         onClose={() => setFilterOpen(false)}
-        onApply={(next) => {
+        onApply={(next, place) => {
           setFilters(next)
           setFilterOpen(false)
+          // Picking a folder moves the list there, so clearing the search later stays in it.
+          if (
+            place.view !== view ||
+            place.account !== route.account ||
+            place.folder !== route.folder
+          )
+            go({ view: place.view, account: place.account, folder: place.folder }, false)
         }}
       />
       <FolderDialog
