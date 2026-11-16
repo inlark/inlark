@@ -259,7 +259,104 @@ const rights = {
 const folders = new Map<string, Mailbox[]>()
 const stress = typeof location !== 'undefined' && new URLSearchParams(location.search).has('stress')
 const perAccount = stress ? 50_000 : 36
+const demoImageHost = 'https://demo.inlark.test/'
+const demoImageUrl = (kind: string, name: string) =>
+  demoImageHost + kind + '/' + encodeURIComponent(name)
+const svg = (width: number, height: number, content: string) =>
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${content}</svg>`,
+  )
+/** Logos for the designed demo emails, drawn the way senders draw them: for white paper. */
+function demoImage(url: string): string | null {
+  if (!url.startsWith(demoImageHost)) return null
+  const [kind, encoded = ''] = url.slice(demoImageHost.length).split('/')
+  const name = decodeURIComponent(encoded).replace(/[<>&"']/g, '')
+  const width = 52 + name.length * 15
+  const text = (x: number, y: number, fill: string) =>
+    `<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="${fill}">${name}</text>`
+  if (kind === 'ink')
+    return svg(
+      width,
+      36,
+      '<circle cx="16" cy="18" r="11" fill="none" stroke="#111" stroke-width="5"/>' +
+        text(38, 27, '#111'),
+    )
+  if (kind === 'light')
+    return svg(width, 36, '<circle cx="16" cy="18" r="11" fill="#fff"/>' + text(38, 27, '#fff'))
+  if (kind === 'brand')
+    return svg(
+      width + 14,
+      36,
+      '<circle cx="14" cy="18" r="10" fill="#ef4444"/><circle cx="27" cy="18" r="10" fill="#f59e0b"/><circle cx="40" cy="18" r="10" fill="#3b82f6"/>' +
+        text(58, 27, '#1e293b'),
+    )
+  if (kind === 'boxed')
+    return svg(
+      width + 24,
+      52,
+      '<rect width="100%" height="100%" fill="#fff"/><rect x="14" y="14" width="24" height="24" fill="#d0021b"/>' +
+        text(48, 35, '#111'),
+    )
+  return null
+}
+/** A newsletter laid out on a grey wrapper and white card, with a logo drawn for white. */
+const newsletterBody = (name: string, subject: string, preview: string) => `
+<span style="color:#ffffff;font-size:1px;line-height:1px">${preview}</span>
+<table width="100%" bgcolor="#f4f4f5" cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif"><tr><td align="center" style="padding:28px 12px">
+<table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e4e4e7;border-radius:8px">
+<tr><td style="padding:26px 32px 0"><img src="${demoImageUrl('ink', name)}" alt="${name}"></td></tr>
+<tr><td style="padding:18px 32px 28px">
+<h1 style="font-size:24px;line-height:1.3;color:#18181b;margin:0 0 12px">${subject}</h1>
+<p style="color:#52525b;font-size:15px;line-height:1.65;margin:0 0 22px">${preview} We picked three pieces worth a slow read, and one small tool we keep coming back to.</p>
+<table cellpadding="0" cellspacing="0"><tr><td style="background:#2563eb;border-radius:6px;padding:11px 20px"><a href="https://example.com/read" style="color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px">Read this issue</a></td></tr></table>
+<p style="border-top:1px solid #e4e4e7;margin:28px 0 0;padding-top:18px;color:#71717a;font-size:13px;line-height:1.6"><span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:4px;font-weight:bold;font-size:11px">NEW</span>&nbsp; Replies to this email reach a real person.</p>
+</td></tr></table>
+<p style="color:#a1a1aa;font-size:11px;margin:16px 0 0">You’re receiving this because you subscribed to ${name}. <a href="https://example.com/unsubscribe" style="color:#a1a1aa">Unsubscribe</a></p>
+</td></tr></table>`
+/** A newsletter its sender already designed for a dark background. */
+const darkNewsletterBody = (name: string, subject: string, preview: string) => `
+<table width="100%" bgcolor="#0b0b0f" cellpadding="0" cellspacing="0" style="font-family:Georgia,serif"><tr><td align="center" style="padding:36px 28px">
+<img src="${demoImageUrl('light', name)}" alt="${name}">
+<h1 style="color:#ffffff;font-size:26px;font-weight:normal;margin:22px 0 10px">${subject}</h1>
+<p style="color:#9ca3af;font-size:16px;line-height:1.7;margin:0 0 24px">${preview}</p>
+<table cellpadding="0" cellspacing="0"><tr><td style="background:#22d3ee;border-radius:999px;padding:11px 22px"><a href="https://example.com/read" style="color:#0b0b0f;font-family:Arial,sans-serif;font-weight:bold;font-size:14px;text-decoration:none">Read online</a></td></tr></table>
+<p style="color:#6b7280;font-size:12px;margin:26px 0 0">You subscribed at ${name.toLowerCase()}.email · <a href="https://example.com/unsubscribe" style="color:#6b7280">Unsubscribe</a></p>
+</td></tr></table>`
+const pill = (text: string, background: string, color: string) =>
+  `<span style="background:${background};color:${color};border-radius:10px;padding:2px 8px;font-size:12px">${text}</span>`
+/** A weekly report: a colourful logo, a zebra-striped table and coloured change pills. */
+const reportBody = (name: string, subject: string, preview: string) => `
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"><tr><td style="padding:26px 30px">
+<img src="${demoImageUrl('brand', name)}" alt="${name}">
+<h2 style="color:#111827;font-size:20px;margin:20px 0 4px">${subject}</h2>
+<p style="color:#6b7280;font-size:13px;margin:0 0 18px">${preview}</p>
+<table width="100%" cellpadding="10" cellspacing="0" style="border:1px solid #e5e7eb;border-collapse:collapse;font-size:14px;color:#374151">
+<tr style="background:#f9fafb"><td style="border-bottom:1px solid #e5e7eb;font-weight:600">This week</td><td align="right" style="border-bottom:1px solid #e5e7eb;font-weight:600">Total</td><td align="right" style="border-bottom:1px solid #e5e7eb;font-weight:600">Change</td></tr>
+<tr><td style="border-bottom:1px solid #e5e7eb">Visitors</td><td align="right" style="border-bottom:1px solid #e5e7eb">1,284</td><td align="right" style="border-bottom:1px solid #e5e7eb">${pill('+12%', '#dcfce7', '#166534')}</td></tr>
+<tr style="background:#f9fafb"><td style="border-bottom:1px solid #e5e7eb">Requests</td><td align="right" style="border-bottom:1px solid #e5e7eb">48.2k</td><td align="right" style="border-bottom:1px solid #e5e7eb">${pill('+8%', '#dcfce7', '#166534')}</td></tr>
+<tr><td>Errors</td><td align="right">0.4%</td><td align="right">${pill('+0.1%', '#fee2e2', '#991b1b')}</td></tr>
+</table>
+<p style="color:#9ca3af;font-size:12px;margin:18px 0 0">Sent by ${name} · You can change how often you get reports in your settings.</p>
+</td></tr></table>`
+/** A deployment notice: a logo saved on a white box, a status pill and a code block. */
+const deploymentBody = (name: string, subject: string, preview: string) => `
+<div style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;color:#24292f;background:#ffffff">
+<img src="${demoImageUrl('boxed', name)}" alt="${name}">
+<p style="margin:16px 0 6px"><b>${subject}</b> &nbsp;<span style="background:#dafbe1;color:#1a7f37;border:1px solid #aceebb;border-radius:12px;padding:1px 8px;font-size:12px">Ready</span></p>
+<p style="color:#57606a;font-size:13px;margin:0 0 12px">${preview}</p>
+<pre style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:10px 12px;font-size:12px;color:#24292f;margin:0 0 14px"><span style="color:#6e7781">$</span> git log -1 --oneline
+<span style="color:#9a6700">4f2a9c1</span> <span style="color:#0550ae">(HEAD -&gt; main)</span> update dependencies</pre>
+<p style="margin:0"><a href="https://example.com/deployment" style="color:#0969da">View deployment</a> · <a href="https://example.com/logs" style="color:#0969da">Build logs</a></p>
+<p style="color:#57606a;font-size:12px;border-top:1px solid #d0d7de;padding-top:10px;margin:16px 0 0">You are receiving this because you own this project.</p>
+</div>`
 function body(name: string, subject: string, preview: string, type: string) {
+  if (type === 'newsletter')
+    return name === 'Buttondown'
+      ? darkNewsletterBody(name, subject, preview)
+      : newsletterBody(name, subject, preview)
+  if (type === 'report') return reportBody(name, subject, preview)
+  if (type === 'deployment') return deploymentBody(name, subject, preview)
   if (type === 'personal')
     return (
       '<p>Hey Paul,</p><p>' +
@@ -1525,7 +1622,7 @@ export const demoAPI: DesktopMailAPI = {
     throw new Error('Attachment downloads require the desktop app.')
   },
   inlineImage: async () => '',
-  remoteImage: async () => '',
+  remoteImage: async (url) => demoImage(url) ?? '',
   senderAvatar: async (email) => {
     if (!settings.remoteImages) return null
     // Medium's fetched icon can render as an empty dark tile; show the sender initial instead.

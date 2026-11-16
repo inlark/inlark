@@ -120,10 +120,16 @@ import { SubmissionList } from './SendingStatus'
 import { useHeldSends } from './held-sends'
 import { ProgressToast, Toaster, toasts } from './Toasts'
 import { AuthAnnouncer, authCommandLabel, authKey, linkHost, runAuth } from './auth-action'
-import type { LiveToast } from './toast-stack'
+import type { LiveToast, ToastInput } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
 import { UpdateNotice } from './UpdateNotice'
 import { offersAction } from './view-actions'
+import {
+  clearColorOverrides,
+  countLightSwitch,
+  defaultColors,
+  useColorSwitch,
+} from './message-colors'
 import {
   draftMatches,
   locationOptions,
@@ -1035,6 +1041,7 @@ export function App() {
   const authFromRow = (c: Conversation) => {
     if (c.auth?.candidate) void applyAuth(c.auth.candidate, authKey(c.accountId, c.auth.messageId))
   }
+  const colorSwitch = useColorSwitch()
   useShortcutHandlers(
     shortcuts.bindings,
     {
@@ -1122,6 +1129,7 @@ export function App() {
         run: () => void unsubscribe(),
         enabled: !blocked && unsubscribeState === 'available',
       },
+      messageColors: { run: () => colorSwitch?.toggle(), enabled: inThread && !!colorSwitch },
       goInbox: { run: () => go({ view: 'inbox' }) },
       goStarred: { run: () => go({ view: 'starred' }) },
       goSent: { run: () => go({ view: 'sent' }) },
@@ -1152,11 +1160,52 @@ export function App() {
   }, [conversations, accounts])
   const savePreferences = async (patch: Partial<typeof settings>) => {
     try {
-      const next = await api.settings({ ...settings, ...patch })
+      // The latest settings, in case this runs from a toast after other settings changed.
+      const latest = queryClient.getQueryData<Bootstrap>(['bootstrap'])?.settings ?? settings
+      const next = await api.settings({ ...latest, ...patch })
       queryClient.setQueryData<Bootstrap>(['bootstrap'], (old) => old && { ...old, settings: next })
+      return true
     } catch (e) {
       fail(e)
+      return false
     }
+  }
+  /**
+   * Switching an email back to its white background now and then is expected. The third time it
+   * happens with dark colours as the default, inlark asks once whether white should be the default.
+   */
+  const switchedToLight = () => {
+    if (defaultColors(settings) !== 'dark' || !countLightSwitch()) return
+    let id = 0
+    const question: ToastInput = {
+      text: 'Prefer light backgrounds for emails?',
+      tone: 'info',
+      sticky: true,
+      action: { label: 'Make default', run: () => void makeDefault() },
+    }
+    // Each step is confirmed only once it's saved. A failed save brings back the step before,
+    // so it can be tried again.
+    const makeDefault = async () => {
+      const previous = queryClient.getQueryData<Bootstrap>(['bootstrap'])?.settings.messageColors
+      toasts.show({ text: 'Saving…', tone: 'progress' }, id)
+      if (!(await savePreferences({ messageColors: 'light' })))
+        return void toasts.show(question, id)
+      // A new default applies to every email again, like changing it in Settings.
+      clearColorOverrides()
+      const confirmation: ToastInput = {
+        text: 'Emails now use a light background.',
+        onUndo: () => void restore(),
+      }
+      const restore = async () => {
+        toasts.show({ text: 'Undoing…', tone: 'progress' }, id)
+        if (!(await savePreferences({ messageColors: previous })))
+          return void toasts.show(confirmation, id)
+        clearColorOverrides()
+        toasts.show({ text: 'Undone.' }, id)
+      }
+      toasts.show(confirmation, id)
+    }
+    id = toasts.show(question)
   }
   const title = currentFolder?.name || views.find((v) => v.id === view)?.title || 'All mail'
   const location: MailLocation = { view, account: route.account, folder: route.folder }
@@ -1284,6 +1333,18 @@ export function App() {
                 icon: Forward,
                 key: keys('forward'),
                 run: () => void compose(latest, 'forward'),
+              },
+            ]
+          : []),
+        ...(colorSwitch && route.thread
+          ? [
+              {
+                id: 'message-colors',
+                label: colorSwitch.dark ? 'Show with light background' : 'Show in dark colors',
+                icon: colorSwitch.dark ? Sun : Moon,
+                key: keys('messageColors'),
+                keywords: 'dark mode light theme colors white background invert',
+                run: colorSwitch.toggle,
               },
             ]
           : []),
@@ -1715,6 +1776,7 @@ export function App() {
               onUnsubscribe={() => void unsubscribe()}
               onUnlock={() => void unlock()}
               onOpenEncryption={() => openSettings('encryption')}
+              onSwitchedToLight={switchedToLight}
             />
           ) : (
             <EmptyState

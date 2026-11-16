@@ -205,6 +205,7 @@ export const settingsSchema = z.object({
   signatures: z.record(z.string(), z.string().max(100_000)),
   htmlSignatures: z.record(z.string(), z.boolean()).optional(),
   afterArchive: z.enum(['next', 'previous', 'list']).optional(),
+  messageColors: z.enum(['light', 'dark']).optional(),
   undoSendSeconds: z
     .union([z.literal(0), z.literal(5), z.literal(10), z.literal(20), z.literal(30)])
     .optional(),

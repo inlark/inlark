@@ -129,6 +129,13 @@ export const shortcutDefinitions = [
   },
   { id: 'refresh', section: 'App', label: 'Refresh mail', defaults: [['Mod+R'], ['F5']] },
   { id: 'toggleDensity', section: 'App', label: 'Toggle message density', defaults: [] },
+  {
+    id: 'messageColors',
+    section: 'App',
+    label: 'Switch email between dark and light',
+    description: 'For emails with their own design, while inlark is dark.',
+    defaults: [['Shift+D']],
+  },
   { id: 'settings', section: 'App', label: 'Open settings', defaults: [['Mod+,']] },
   { id: 'shortcuts', section: 'App', label: 'Keyboard shortcuts', defaults: [['?']] },
 ] as const satisfies readonly {
