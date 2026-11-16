@@ -97,6 +97,34 @@ export function parseColor(value: string): Rgba | null {
   if (parts.length < 3 || parts.some(Number.isNaN)) return null
   return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
 }
+const resolvedColors = new Map<string, Rgba | null>()
+let colorProbe: CanvasRenderingContext2D | null | undefined
+/**
+ * Like `parseColor`, but also understands what the browser keeps in other notations, such as
+ * `color(srgb …)` or `oklch(…)`, by painting it. Without a browser those stay unreadable.
+ */
+function readColor(value: string): Rgba | null {
+  const parsed = parseColor(value)
+  if (parsed || typeof document === 'undefined' || typeof CSS === 'undefined') return parsed
+  if (resolvedColors.has(value)) return resolvedColors.get(value)!
+  let resolved: Rgba | null = null
+  if (CSS.supports('color', value)) {
+    colorProbe ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+    if (colorProbe) {
+      colorProbe.clearRect(0, 0, 1, 1)
+      colorProbe.fillStyle = value
+      colorProbe.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = colorProbe.getImageData(0, 0, 1, 1).data
+      resolved = { r, g, b, a: a / 255 }
+    }
+  }
+  if (resolvedColors.size > 256) resolvedColors.clear()
+  resolvedColors.set(value, resolved)
+  return resolved
+}
+/** Every colour in a computed gradient, in order. */
+const colorTokens =
+  /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)|#[\da-f]{3,8}\b|\b(?:transparent|currentcolor)\b/gi
 const over = (top: Rgba, under: Rgb): Rgb =>
   top.a >= 1
     ? { r: top.r, g: top.g, b: top.b }
@@ -229,7 +257,7 @@ export function recolorPixels(
 }
 
 /** `density` above 1 means `src` was drawn larger than the image's own size, for sharp vectors. */
-type DarkImage = { src?: string; density?: number; rounded?: boolean } | null
+export type DarkImage = { src?: string; density?: number; rounded?: boolean } | null
 /** Recoloured images by base colour and source. Logos repeat across messages from one sender. */
 const darkImages = new Map<string, DarkImage>()
 const preparing = new Map<string, Promise<void>>()
@@ -237,6 +265,10 @@ const imageCacheSize = 48
 /** Larger sources and images are photos and banners in practice; they are never recoloured. */
 const maxImageSource = 400_000
 const maxImagePixels = 1_000_000
+/** Recolouring touches every pixel on the renderer thread; logos are far smaller than this. */
+const maxRecolorPixels = 400_000
+/** Distinct images recoloured per email. Logos and icons are few; the rest keep their colours. */
+const imageBudget = 16
 const imageKey = (src: string, base: Rgb) => css(base) + ' ' + src
 const canRecolor = (src: string | null): src is string =>
   !!src && /^(data|blob):/.test(src) && src.length <= maxImageSource
@@ -262,8 +294,11 @@ async function recolorImage(src: string, base: Rgb): Promise<DarkImage> {
   )
   const treatment = imageTreatment(stats)
   if (treatment === 'keep') return stats.edgeLight > 0.85 ? { rounded: true } : null
+  // Recolouring runs on the renderer thread, so only logo-sized images are worth the wait.
+  if (width * height > maxRecolorPixels) return null
   // Vector logos are drawn at three times their size so they stay sharp on high-density screens.
-  const density = /^data:image\/svg\+xml/i.test(src) && width * height * 9 <= maxImagePixels ? 3 : 1
+  const density =
+    /^data:image\/svg\+xml/i.test(src) && width * height * 9 <= maxRecolorPixels ? 3 : 1
   const canvas = document.createElement('canvas')
   canvas.width = width * density
   canvas.height = height * density
@@ -276,14 +311,21 @@ async function recolorImage(src: string, base: Rgb): Promise<DarkImage> {
   return { src: canvas.toDataURL('image/png'), density }
 }
 
-/** Works out an image's dark version ahead of time, so it can be swapped in without a flash. */
-export function prepareDarkImage(src: string | null, base: Rgb): Promise<void> {
+/**
+ * Works out an image's dark version ahead of time, so it can be swapped in without a flash.
+ * `recolor` is replaceable so tests can control when the work finishes.
+ */
+export function prepareDarkImage(
+  src: string | null,
+  base: Rgb,
+  recolor: (src: string, base: Rgb) => Promise<DarkImage> = recolorImage,
+): Promise<void> {
   if (!canRecolor(src)) return Promise.resolve()
   const key = imageKey(src, base)
   if (darkImages.has(key)) return Promise.resolve()
   const running = preparing.get(key)
   if (running) return running
-  const job = recolorImage(src, base)
+  const job = recolor(src, base)
     .catch(() => null)
     .then((result) => {
       darkImages.set(key, result)
@@ -292,6 +334,22 @@ export function prepareDarkImage(src: string | null, base: Rgb): Promise<void> {
     })
   preparing.set(key, job)
   return job
+}
+
+/**
+ * Prepares an email's images one at a time, at most `imageBudget` of them, and stops as soon as
+ * the email is gone or back in its own colours. Images past the budget simply keep their colours.
+ */
+export async function prepareDarkImages(
+  sources: (string | null)[],
+  base: Rgb,
+  isWanted: () => boolean,
+) {
+  const unique = [...new Set(sources.filter(canRecolor))].slice(0, imageBudget)
+  for (const src of unique) {
+    if (!isWanted()) return
+    await prepareDarkImage(src, base)
+  }
 }
 
 /** Emails with more elements than this keep their original colours; reading them would be slow. */
@@ -311,6 +369,52 @@ interface Region {
 }
 type Styled = Element & ElementCSSInlineStyle
 const sides = ['top', 'right', 'bottom', 'left']
+const average = (colors: Rgb[]): Rgb => {
+  const mean = (channel: keyof Rgb) =>
+    colors.reduce((sum, color) => sum + color[channel], 0) / colors.length
+  return { r: mean('r'), g: mean('g'), b: mean('b') }
+}
+
+/**
+ * What one element's own background becomes, or `'keep'` when its area must stay exactly as
+ * sent: a picture behind the text, a colour the reader can't read, or a gradient that would end
+ * up half dark and half light, where no single text colour reads well across it.
+ */
+function planBackground(
+  style: Snapshot,
+  parent: Region,
+  base: Rgb,
+): 'keep' | { before: Rgb; after: Rgb; color?: string; image?: string } {
+  // Remote background images never load in the reader, so only embedded ones are pictures.
+  if (/url\(\s*["']?(data|blob):/i.test(style.image)) return 'keep'
+  let before = parent.before
+  let after = parent.after
+  let color: string | undefined
+  const background = readColor(style.background)
+  if (!background) return 'keep'
+  if (background.a > 0) {
+    before = over(background, parent.before)
+    after = darkBackground(before, base)
+    if (!same(before, after)) color = css(after)
+  }
+  if (!/gradient\(/i.test(style.image)) return { before, after, color }
+  const tokens = style.image.match(colorTokens) ?? []
+  const stops = tokens.map((token) => (/^currentcolor$/i.test(token) ? null : readColor(token)))
+  if (!stops.length || stops.some((stop) => !stop)) return 'keep'
+  const under = before
+  const original = stops.map((stop) => over(stop!, under))
+  const mapped = original.map((stop) => darkBackground(stop, base))
+  const changed = original.filter((stop, index) => !same(stop, mapped[index])).length
+  if (!changed) return { before: average(original), after: average(original), color }
+  if (changed < original.length) return 'keep'
+  let index = 0
+  return {
+    before: average(original),
+    after: average(mapped),
+    color,
+    image: style.image.replace(colorTokens, () => css(mapped[index++])),
+  }
+}
 
 /**
  * Darkens a designed email that is already laid out in `doc`, returning a function that restores
@@ -351,6 +455,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
       image.setAttribute('src', dark.src)
     }
   }
+  const later: [HTMLImageElement, string][] = []
   try {
     const computed = doc.defaultView?.getComputedStyle.bind(doc.defaultView) ?? getComputedStyle
     // Document order, so every parent is handled before its children.
@@ -379,31 +484,14 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
       const style = snapshot.get(element)!
       const parent = (element.parentElement && regions.get(element.parentElement)) || paper
       const region = { ...parent }
-      // Remote background images never load in the reader, so only embedded ones are pictures.
-      if (!parent.keep && /url\(\s*["']?(data|blob):/i.test(style.image)) region.keep = true
-      else if (!parent.keep) {
-        const background = parseColor(style.background)
-        if (background && background.a > 0) {
-          region.before = over(background, parent.before)
-          region.after = darkBackground(region.before, base)
-          if (!same(region.before, region.after))
-            set(element, 'background-color', css(region.after))
-        }
-        const stops = style.image.match(/rgba?\([^)]*\)/g)
-        if (stops && /gradient\(/.test(style.image)) {
-          const under = region.before
-          const colors = stops.map((stop) => over(parseColor(stop) ?? { ...under, a: 1 }, under))
-          set(
-            element,
-            'background-image',
-            style.image.replace(/rgba?\([^)]*\)/g, (stop) =>
-              css(darkBackground(over(parseColor(stop) ?? { ...under, a: 1 }, under), base)),
-            ),
-          )
-          const average = (channel: keyof Rgb) =>
-            colors.reduce((sum, color) => sum + color[channel], 0) / colors.length
-          region.before = { r: average('r'), g: average('g'), b: average('b') }
-          region.after = darkBackground(region.before, base)
+      if (!parent.keep) {
+        const plan = planBackground(style, parent, base)
+        if (plan === 'keep') region.keep = true
+        else {
+          if (plan.color) set(element, 'background-color', plan.color)
+          if (plan.image) set(element, 'background-image', plan.image)
+          region.before = plan.before
+          region.after = plan.after
         }
       }
       regions.set(element, region)
@@ -418,7 +506,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
         set(element, 'color', style.color)
         continue
       }
-      const color = parseColor(style.color)
+      const color = readColor(style.color)
       if (color)
         set(
           element,
@@ -426,7 +514,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
           css(darkForeground(over(color, region.before), region.before, region.after, 'text')),
         )
       for (const border of style.borders) {
-        const borderColor = parseColor(border.color)
+        const borderColor = readColor(border.color)
         if (border.width > 0 && !['none', 'hidden'].includes(border.style) && borderColor?.a)
           set(
             element,
@@ -444,10 +532,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
       if (element.tagName === 'IMG') {
         const image = element as HTMLImageElement
         const src = image.getAttribute('src')
-        if (canRecolor(src) && !darkImages.has(imageKey(src, base)))
-          void prepareDarkImage(src, base).then(() => {
-            if (active && image.getAttribute('src') === src) swap(image, src)
-          })
+        if (canRecolor(src) && !darkImages.has(imageKey(src, base))) later.push([image, src])
         else swap(image, src)
       }
     }
@@ -455,5 +540,16 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
     restore()
     throw error
   }
+  // Images not prepared ahead (the email was switched after it opened) follow shortly after,
+  // unless the email is back in its own colours or replaced by then.
+  if (later.length)
+    void prepareDarkImages(
+      later.map(([, src]) => src),
+      base,
+      () => active,
+    ).then(() => {
+      for (const [image, src] of later)
+        if (active && image.getAttribute('src') === src) swap(image, src)
+    })
   return restore
 }

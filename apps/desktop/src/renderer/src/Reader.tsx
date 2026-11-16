@@ -56,7 +56,13 @@ import { HintIconButton } from './HintIconButton'
 import { actionLimit } from './account-limits'
 import { ShortcutHint, useShortcutText } from './shortcuts'
 import { emailBodyHtml, emailSanitizeOptions } from './email-html'
-import { darkElementLimit, darkenFrame, parseColor, prepareDarkImage, type Rgb } from './email-dark'
+import {
+  darkElementLimit,
+  darkenFrame,
+  parseColor,
+  prepareDarkImages,
+  type Rgb,
+} from './email-dark'
 import {
   colorKey,
   publishColorSwitch,
@@ -389,15 +395,19 @@ export function EmailBody({
         setSource(html())
       }
       await Promise.allSettled(imageJobs)
-      // Recolour logos before the email shows them, so they never flash dark-on-dark.
-      if (ownStyling && theme === 'dark' && wantsDark.current) {
-        const paper = darkPaper()
-        await Promise.allSettled(
-          [...template.content.querySelectorAll('img')].map((image) =>
-            prepareDarkImage(image.getAttribute('src'), paper),
-          ),
+      // Recolour logos before the email shows them, so they never flash dark-on-dark. Emails too
+      // large to switch are skipped, and the work stops once this email is no longer shown.
+      if (
+        ownStyling &&
+        theme === 'dark' &&
+        wantsDark.current &&
+        template.content.querySelectorAll('*').length <= darkElementLimit
+      )
+        await prepareDarkImages(
+          [...template.content.querySelectorAll('img')].map((image) => image.getAttribute('src')),
+          darkPaper(),
+          () => active && wantsDark.current,
         )
-      }
       if (active) setSource(html())
     }
     setBlocked(false)

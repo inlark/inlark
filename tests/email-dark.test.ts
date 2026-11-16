@@ -3,12 +3,15 @@ import { settingsSchema, defaultSettings } from '../packages/core/src'
 import {
   contrast,
   darkBackground,
+  darkenFrame,
   darkForeground,
   imageStats,
   imageTreatment,
   oklab,
   parseColor,
+  prepareDarkImage,
   recolorPixels,
+  type DarkImage,
   type Rgb,
 } from '../apps/desktop/src/renderer/src/email-dark'
 
@@ -147,5 +150,189 @@ describe('email dark colours: parsing and settings', () => {
     expect(settingsSchema.safeParse({ ...defaultSettings, messageColors: 'blue' }).success).toBe(
       false,
     )
+  })
+})
+
+/** Just enough of an email frame for `darkenFrame`: computed colours and inline style attributes. */
+interface FakeComputed {
+  background?: string
+  image?: string
+  color?: string
+  border?: string
+}
+class FakeElement {
+  parentElement: FakeElement | null = null
+  children: FakeElement[] = []
+  private attributes = new Map<string, string>()
+  private inline = new Map<string, string>()
+  readonly style = {
+    setProperty: (name: string, value: string, priority = '') => {
+      this.inline.set(name, value)
+      this.attributes.set(
+        'style',
+        [...this.inline]
+          .map(([key, val]) => `${key}: ${val}${priority ? ' !' + priority : ''}`)
+          .join('; '),
+      )
+    },
+  }
+  constructor(
+    readonly tagName: string,
+    readonly computed: FakeComputed = {},
+    attributes: Record<string, string> = {},
+  ) {
+    for (const [name, value] of Object.entries(attributes)) this.attributes.set(name, value)
+  }
+  getAttribute(name: string) {
+    return this.attributes.get(name) ?? null
+  }
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value)
+    if (name === 'style') this.inline.clear()
+  }
+  removeAttribute(name: string) {
+    this.attributes.delete(name)
+    if (name === 'style') this.inline.clear()
+  }
+  /** What the conversion wrote for a property, if anything. */
+  written(name: string) {
+    return this.inline.get(name)
+  }
+  append(...children: FakeElement[]) {
+    for (const child of children) {
+      child.parentElement = this
+      this.children.push(child)
+    }
+    return this
+  }
+  getElementsByTagName() {
+    const all: FakeElement[] = []
+    const walk = (element: FakeElement) =>
+      element.children.forEach((child) => {
+        all.push(child)
+        walk(child)
+      })
+    walk(this)
+    return all
+  }
+}
+/** The frame as inlark writes it: white paper with dark grey text on `<html>`. */
+function frame(...content: FakeElement[]) {
+  const body = new FakeElement('BODY').append(...content)
+  const html = new FakeElement('HTML', { background: 'rgb(255, 255, 255)' }).append(body)
+  const colorOf = (element: FakeElement | null): string =>
+    element ? (element.computed.color ?? colorOf(element.parentElement)) : 'rgb(36, 38, 43)'
+  const getComputedStyle = (element: FakeElement) => ({
+    backgroundColor: element.computed.background ?? 'rgba(0, 0, 0, 0)',
+    backgroundImage: element.computed.image ?? 'none',
+    color: colorOf(element),
+    getPropertyValue: (name: string) => {
+      const border = element.computed.border
+      if (name.endsWith('-width')) return border ? '1px' : '0px'
+      if (name.endsWith('-style')) return border ? 'solid' : 'none'
+      return border ?? colorOf(element)
+    },
+  })
+  return {
+    html,
+    doc: { documentElement: html, body, defaultView: { getComputedStyle } } as unknown as Document,
+  }
+}
+const written = (element: FakeElement, name: string) => {
+  const value = element.written(name)
+  return value ? hex(value) : undefined
+}
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+describe('email dark colours: converting a frame', () => {
+  it('darkens paper, text and borders, then restores every attribute exactly', () => {
+    const quote = new FakeElement('SPAN')
+    const paragraph = new FakeElement(
+      'P',
+      { color: 'rgb(0, 0, 0)', border: 'rgb(229, 231, 235)' },
+      { style: 'color:#000;border:1px solid #e5e7eb' },
+    ).append(quote)
+    const { html, doc } = frame(paragraph)
+    const restore = darkenFrame(doc, surface)
+    expect(written(html, 'background-color')).toEqual(surface)
+    expect(contrast(written(paragraph, 'color')!, surface)).toBeGreaterThan(12)
+    expect(oklab(written(paragraph, 'border-top-color')!).L).toBeGreaterThan(oklab(surface).L)
+    restore()
+    expect(paragraph.getAttribute('style')).toBe('color:#000;border:1px solid #e5e7eb')
+    expect(html.getAttribute('style')).toBeNull()
+    expect(quote.getAttribute('style')).toBeNull()
+  })
+  it('keeps a highlight and the text on it as sent', () => {
+    const highlight = new FakeElement('SPAN', { background: 'rgb(255, 255, 0)' })
+    const { doc } = frame(new FakeElement('P', { color: 'rgb(0, 0, 0)' }).append(highlight))
+    darkenFrame(doc, surface)
+    expect(highlight.written('background-color')).toBeUndefined()
+    // Pinned, so it doesn't inherit the light text colour of the paragraph around it.
+    expect(highlight.written('color')).toBe('rgb(0, 0, 0)')
+  })
+  it('keeps a gradient that would end up half dark and half light, with its text', () => {
+    const banner = new FakeElement('DIV', {
+      image: 'linear-gradient(rgb(255, 255, 255), rgb(37, 99, 235))',
+      color: 'rgb(0, 0, 0)',
+    })
+    const { doc } = frame(banner)
+    darkenFrame(doc, surface)
+    expect(banner.written('background-image')).toBeUndefined()
+    expect(banner.written('color')).toBe('rgb(0, 0, 0)')
+  })
+  it('darkens light gradients stop by stop and lightens the text on them', () => {
+    const banner = new FakeElement('DIV', {
+      image: 'linear-gradient(rgb(238, 242, 255) 0%, rgb(255, 255, 255) 100%)',
+      color: 'rgb(55, 48, 163)',
+    })
+    const { doc } = frame(banner)
+    darkenFrame(doc, surface)
+    const stops = banner
+      .written('background-image')!
+      .match(/rgb\([^)]*\)/g)!
+      .map(hex)
+    expect(stops).toHaveLength(2)
+    for (const stop of stops) expect(oklab(stop).L).toBeLessThan(0.35)
+    expect(banner.written('background-image')).toContain('0%')
+    for (const stop of stops)
+      expect(contrast(written(banner, 'color')!, stop)).toBeGreaterThan(4.49)
+  })
+  it('leaves an area alone when its background colour can’t be read', () => {
+    const card = new FakeElement('DIV', {
+      background: 'color(srgb 0.05 0.05 0.05)',
+      color: 'rgb(255, 255, 255)',
+    })
+    const { doc } = frame(card)
+    darkenFrame(doc, surface)
+    expect(card.written('background-color')).toBeUndefined()
+    // Not mistaken for white text hidden on white paper.
+    expect(card.written('color')).toBe('rgb(255, 255, 255)')
+  })
+  it('swaps a late image in only while the dark colours are still shown', async () => {
+    const late = (name: string) => {
+      const src = 'data:image/png;base64,' + name
+      let finish!: (image: DarkImage) => void
+      const prepared = prepareDarkImage(src, surface, () => new Promise((done) => (finish = done)))
+      const image = new FakeElement('IMG', {}, { src })
+      const restore = darkenFrame(frame(image).doc, surface)
+      return { src, image, restore, prepared, finish: () => finish({ src: src + '-dark' }) }
+    }
+    const shown = late('shown')
+    shown.finish()
+    await shown.prepared
+    await settle()
+    expect(shown.image.getAttribute('src')).toBe(shown.src + '-dark')
+    expect(shown.image.getAttribute('srcset')).toBe(shown.src + '-dark 1x')
+    shown.restore()
+    expect(shown.image.getAttribute('src')).toBe(shown.src)
+    expect(shown.image.getAttribute('srcset')).toBeNull()
+
+    const switchedBack = late('switched-back')
+    switchedBack.restore()
+    switchedBack.finish()
+    await switchedBack.prepared
+    await settle()
+    expect(switchedBack.image.getAttribute('src')).toBe(switchedBack.src)
+    expect(switchedBack.image.getAttribute('srcset')).toBeNull()
   })
 })
