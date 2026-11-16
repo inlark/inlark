@@ -39,7 +39,7 @@ When making product decisions, ask whether the change makes everyday email clear
 
 ## Review before completion
 
-Before completing an implementation or opening a PR, have a GPT-6.1 Sol subagent in the Codex harness review the changes with high reasoning effort. Address valid findings and repeat until both agents agree they’re ready. Reviewers must not spawn further reviewers. If the requested configuration is unavailable, report it.
+Before committing, completing an implementation, or opening a PR, have a GPT-6.1 Sol subagent in the Codex harness review the changes with high reasoning effort. Address valid findings and repeat until both agents agree they’re ready, sending each new round to the same reviewer when possible rather than spawning a new one. Reviewers must not spawn further reviewers. If the requested configuration is unavailable, report it.
 
 ## UI screenshots
 
