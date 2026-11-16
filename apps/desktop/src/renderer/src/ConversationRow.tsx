@@ -49,7 +49,10 @@ function RowAuth({
           <button
             type="button"
             className={cn(
-              'row-auth inline-flex items-center gap-1.5 h-6 max-w-60 min-w-0 px-2 rounded-md shrink-0',
+              // It shrinks, truncating its text, rather than letting a narrow row overflow; narrow
+              // rows cap it so a long code cannot crowd out the sender.
+              'row-auth inline-flex items-center gap-1.5 h-6 max-w-60 min-w-0 px-2 rounded-md shrink',
+              '@max-[680px]/mail:max-w-36 @max-[440px]/mail:max-w-26',
               'border border-solid border-border bg-transparent text-secondary text-[12px] leading-none',
               'transition-[background-color,border-color,color] duration-120 ease-[ease]',
               'hover:bg-strong/8 hover:border-border-strong hover:text-strong',
@@ -85,8 +88,8 @@ function RowAuth({
         ) : (
           <>
             <ExternalLink size={12} />
-            <span className="whitespace-nowrap @max-[440px]/mail:hidden">{label}</span>
-            <span className="text-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[1100px]/mail:hidden">
+            <span className="min-w-0 truncate @max-[440px]/mail:hidden">{label}</span>
+            <span className="text-muted min-w-0 shrink-[4] truncate @max-[1100px]/mail:hidden">
               {host}
             </span>
           </>
@@ -96,7 +99,8 @@ function RowAuth({
         <Tooltip.Positioner sideOffset={7}>
           <Tooltip.Popup className="tooltip flex gap-3 items-center py-1.5 px-2.25 bg-raised border border-solid border-border-strong rounded-md text-[11px] shadow-popup z-200 max-w-80">
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-              {code ? 'Copy code' : label + ' · opens ' + host}
+              {/* The whole code, even where the button has to truncate it. */}
+              {code ? 'Copy ' + candidate.value : label + ' · opens ' + host}
             </span>
             {shortcut && <kbd>{shortcut}</kbd>}
           </Tooltip.Popup>
@@ -264,6 +268,8 @@ export function ConversationRow({
           '@max-[680px]/mail:[.density-comfortable_&]:row-start-1 @max-[680px]/mail:[.density-comfortable_&]:gap-1.75',
           '@max-[680px]/mail:[&_time]:text-[10px] @max-[680px]/mail:[&_time]:w-13.5 @max-[680px]/mail:gap-1.5',
           '@max-[440px]/mail:[.density-compact_&_time]:hidden',
+          // With a code or link, this end may shrink (the button truncates) instead of overflowing.
+          auth && 'min-w-0 shrink',
         )}
         role="gridcell"
       >

@@ -106,7 +106,7 @@ export function SwapLabel({
   alternate: ReactNode
 }) {
   return (
-    <span className="grid [&>*]:col-start-1 [&>*]:row-start-1 [&>*]:text-left">
+    <span className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1 [&>*]:text-left [&>*]:truncate">
       <span className={showAlternate ? 'invisible' : undefined} aria-hidden={showAlternate}>
         {label}
       </span>
