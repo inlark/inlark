@@ -1321,6 +1321,7 @@ function TransferDialog({
               variant="ghost"
               onClick={() => {
                 setError('')
+                setCopied(false)
                 void navigator.clipboard.writeText(code).then(
                   () => setCopied(true),
                   () => setError('Couldn’t copy. Select the code and copy it manually.'),
