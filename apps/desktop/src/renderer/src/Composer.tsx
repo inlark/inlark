@@ -29,12 +29,12 @@ import {
   type Address,
   type Account,
   type Draft,
-  type SendResult,
   type Settings,
   type Identity,
 } from '@inlark/core'
 import { api, isDemo } from './api'
 import { localSaveDraft, localDeleteDraft } from './cache'
+import { sentMessage, undoSendDelay } from './held-sends'
 import { RecipientField, type ChipSecurity } from './RecipientField'
 import { recipientProblems, useEncryption } from './encryption-ui'
 import { ContactKeyDialog, keysChanged, useUnlock } from './encryption-actions'
@@ -56,24 +56,6 @@ const senderKey = (accountId: string, identityId: string) => JSON.stringify([acc
 /** The editor's own formatting keys, which follow the platform (⌘ on macOS, Ctrl elsewhere). */
 const boldKeys = bindingText(['Mod+B'])
 const italicKeys = bindingText(['Mod+I'])
-
-/** Plain wording for a finished send; the Drafts view offers recovery for anything left over. */
-function sentMessage(result: SendResult): string {
-  const copy = result.sentCopy === 'pending' ? ' Its copy in Sent isn’t saved yet.' : ''
-  if (result.status === 'partial') {
-    const refused = result.rejected || []
-    return (
-      (refused.length
-        ? 'Sent, but refused by ' +
-          (refused.length === 1 ? refused[0].email : refused.length + ' recipients') +
-          '.'
-        : 'Sent, but some recipients refused it.') +
-      copy +
-      ' Drafts has the details.'
-    )
-  }
-  return copy ? 'Message sent.' + copy + ' Drafts shows its status.' : result.message
-}
 
 /** What went wrong with a draft, in terms of what the user can do next. */
 function draftProblem(draft: Draft): { text: string; detail?: string } | undefined {
@@ -466,6 +448,14 @@ export function Composer({
     try {
       await sync.current
       await localSaveDraft(latest.current)
+      // With undo send on, the message waits in the main process and the composer closes now.
+      // Checking an unconfirmed delivery never waits: it must not send anything new.
+      if (latest.current.status !== 'uncertain' && undoSendDelay(settings) > 0) {
+        await api.holdSend(latest.current)
+        onSaved()
+        onClose()
+        return
+      }
       const result =
         latest.current.status === 'uncertain'
           ? await api.reconcile(latest.current.id)

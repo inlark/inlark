@@ -346,6 +346,10 @@ else {
         deleteDraft: service.deleteDraft,
         deleteServerDraft: service.deleteServerDraft,
         send: service.send,
+        holdSend: service.holdSend,
+        heldSends: service.heldSends,
+        cancelSend: service.cancelSend,
+        sendNow: service.sendNow,
         reconcile: service.reconcile,
         submissions: service.submissions,
         retrySentCopy: service.retrySentCopy,
@@ -435,8 +439,18 @@ else {
       app.quit()
     })
 }
-app.on('before-quit', () => {
+let flushingSends = false
+app.on('before-quit', (event) => {
   quitting = true
+  // Quitting doesn't take back a send: messages still in their undo window go now.
+  if (service?.hasHeldSends()) {
+    event.preventDefault()
+    if (flushingSends) return
+    flushingSends = true
+    window?.hide()
+    void service.flushHeldSends().finally(() => app.quit())
+    return
+  }
   service?.dispose()
 })
 app.on('window-all-closed', () => {

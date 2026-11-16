@@ -18,7 +18,13 @@ vi.mock('electron', () => ({
 import { MailService } from '../apps/desktop/src/main/service'
 import { JsonStore, encryptSecret } from '../apps/desktop/src/main/storage'
 import { JmapProvider, JmapError, draftFingerprint } from '../packages/jmap/src'
-import { type Account, type Draft, type Mailbox, type Message } from '../packages/core/src'
+import {
+  type Account,
+  type AppEvent,
+  type Draft,
+  type Mailbox,
+  type Message,
+} from '../packages/core/src'
 import { publicAddress, publicFetch } from '../apps/desktop/src/main/public-fetch'
 const account: Account = {
   id: 'account',
@@ -80,10 +86,12 @@ const boxes = ['inbox', 'archive', 'drafts', 'sent', 'trash', 'custom'].map((id)
   },
 })) satisfies Mailbox[]
 let directory: string, service: MailService, store: JsonStore
+let events: AppEvent[] = []
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'inlark-test-'))
   store = new JsonStore(directory)
-  service = new MailService(store, () => {})
+  events = []
+  service = new MailService(store, (event) => events.push(event))
   await service.init()
   vi.spyOn(JmapProvider.prototype, 'connect').mockResolvedValue([account])
   vi.spyOn(JmapProvider.prototype, 'identities').mockResolvedValue([
@@ -508,6 +516,140 @@ describe('durable mail operations', () => {
     expect(log).not.toContain('Hello')
   })
 })
+describe('undo send', () => {
+  type Finished = Extract<AppEvent, { type: 'sendFinished' }>
+  let submit: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    submit = vi
+      .spyOn(JmapProvider.prototype, 'submit')
+      .mockResolvedValue({ accepted: ['recipient@example.com'], rejected: [] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  const finished = () =>
+    vi.waitFor(() => {
+      const event = events.find((e): e is Finished => e.type === 'sendFinished')
+      expect(event).toBeTruthy()
+      return event!
+    })
+  const restart = async () => {
+    service.dispose()
+    service = new MailService(new JsonStore(directory), () => {})
+    await service.init()
+  }
+
+  it('waits out the undo window, then sends the message once', async () => {
+    const held = await service.holdSend(draft)
+    expect(Date.parse(held.sendAt) - Date.now()).toBeGreaterThan(4500)
+    expect((await service.drafts())[0].status).toBe('sending')
+    expect(await service.heldSends()).toEqual([held])
+    await vi.advanceTimersByTimeAsync(4900)
+    expect(submit).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(100)
+    expect((await finished()).result?.status).toBe('sent')
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(await service.heldSends()).toEqual([])
+    expect((await service.drafts())[0].status).toBe('sent')
+  })
+
+  it('uses the chosen delay', async () => {
+    await service.setSettings({ ...service.settings, undoSendSeconds: 20 })
+    const held = await service.holdSend(draft)
+    expect(Date.parse(held.sendAt) - Date.now()).toBeGreaterThan(19_500)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('undoing leaves nothing on the server and hands the draft back unchanged', async () => {
+    await service.holdSend(draft)
+    const restored = await service.cancelSend(draft.id)
+    expect(restored).toMatchObject({ text: 'Hello', status: 'local' })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(submit).not.toHaveBeenCalled()
+    expect(await service.heldSends()).toEqual([])
+    expect(await service.submissions()).toEqual([])
+    // The draft is editable and sendable again.
+    await service.saveDraft({ ...draft, text: 'Edited', updatedAt: '2026-09-23T10:01:00.000Z' })
+    expect((await service.drafts())[0].text).toBe('Edited')
+    expect((await service.send({ ...draft, text: 'Edited' })).status).toBe('sent')
+  })
+
+  it('can’t be undone once the message has left', async () => {
+    await service.holdSend(draft)
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(service.cancelSend(draft.id)).rejects.toThrow('already been sent')
+    await finished()
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends at once on request, and only once', async () => {
+    await service.holdSend(draft)
+    await service.sendNow(draft.id)
+    expect((await finished()).result?.status).toBe('sent')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a held message from being changed, deleted or locked away', async () => {
+    await service.holdSend(draft)
+    await service.saveDraft({ ...draft, text: 'Late autosave', updatedAt: '2026-09-23T11:00:00Z' })
+    expect((await service.drafts())[0].text).toBe('Hello')
+    await expect(service.deleteDraft(draft.id)).rejects.toThrow()
+    await expect(service.lockEncryption()).rejects.toThrow('Wait for drafts and sends')
+    await expect(service.holdSend(draft)).rejects.toThrow()
+  })
+
+  it('reports a send that fails after the window, keeping the draft', async () => {
+    submit.mockRejectedValue(new JmapError('submissionRejected', 'Recipient rejected'))
+    await service.holdSend(draft)
+    await vi.advanceTimersByTimeAsync(5000)
+    const event = await finished()
+    expect(event.result).toBeUndefined()
+    expect(event.error).toContain('Recipient rejected')
+    expect((await service.drafts())[0]).toMatchObject({ text: 'Hello', status: 'error' })
+  })
+
+  it('sends held messages when quitting', async () => {
+    await service.holdSend(draft)
+    expect(service.hasHeldSends()).toBe(true)
+    await service.flushHeldSends()
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(service.hasHeldSends()).toBe(false)
+  })
+
+  it('reports a message interrupted during its window as not sent, and sends nothing', async () => {
+    await service.holdSend(draft)
+    await restart()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(submit).not.toHaveBeenCalled()
+    expect(await service.heldSends()).toEqual([])
+    const [saved] = await service.drafts()
+    expect(saved).toMatchObject({ text: 'Hello', status: 'local' })
+    expect(saved.error).toContain('Nothing was delivered')
+    expect(await service.submissions()).toMatchObject([{ draftId: draft.id, state: 'unsent' }])
+    // Sending it again is allowed and replaces the notice.
+    await service.connect({
+      config: { protocol: 'jmap', serverUrl: 'https://mail.example', username: 'test' },
+      password: 'disposable',
+      name: 'Test',
+      remember: false,
+      connectionId: 'connection',
+    })
+    expect((await service.send(saved)).status).toBe('sent')
+    expect(await service.submissions()).toEqual([])
+  })
+
+  it('dismissing a not-sent notice keeps the draft', async () => {
+    await service.holdSend(draft)
+    await restart()
+    await service.dismissSubmission(draft.id)
+    expect(await service.submissions()).toEqual([])
+    expect((await service.drafts())[0]).toMatchObject({ text: 'Hello', status: 'local' })
+  })
+})
+
 describe('untrusted message resource boundaries', () => {
   it('rejects local and reserved IP ranges, including mapped IPv6', async () => {
     for (const address of [

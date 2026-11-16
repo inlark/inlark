@@ -25,6 +25,13 @@ const copyState = {
 
 /** What happened to a send, in words, and how much it needs the user. */
 function describe(s: SubmissionSummary): { state: string; detail: string; tone: string } {
+  if (s.state === 'unsent')
+    return {
+      state: 'Not sent',
+      detail:
+        'inlark closed while this message was waiting to be sent, so it never left. It’s back in your drafts.',
+      tone: 'attention',
+    }
   if (s.state === 'uncertain')
     return {
       state: 'Delivery unconfirmed',
@@ -155,6 +162,25 @@ export function SubmissionList({
           {dismissButton}
         </>
       )
+    if (s.state === 'unsent')
+      return (
+        <>
+          <Button
+            size="small"
+            disabled={!!busy}
+            onClick={() =>
+              void run(s, 'open', async () => {
+                const draft = (await api.drafts()).find((d) => d.id === s.draftId)
+                if (!draft) throw new Error('This draft is no longer available.')
+                await openDraft(draft)
+              })
+            }
+          >
+            {label('open', 'Open draft')}
+          </Button>
+          {dismissButton}
+        </>
+      )
     if (s.state === 'partial')
       return (
         <>
@@ -207,7 +233,7 @@ export function SubmissionList({
             key={s.draftId}
           >
             <span className="submission-icon flex mt-[1px] text-muted" aria-hidden="true">
-              {s.state === 'uncertain' ? (
+              {s.state === 'uncertain' || s.state === 'unsent' ? (
                 <AlertCircle size={16} />
               ) : s.state === 'partial' ? (
                 <Send size={16} />

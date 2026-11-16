@@ -23,10 +23,12 @@ import {
 import { Button, Dropdown, EmptyState, MenuItem, Modal, Select, Switch } from '@inlark/ui'
 import {
   friendlyError,
+  undoSendChoices,
   type Account,
   type AccountAppearance,
   type Settings as Preferences,
   type Bootstrap,
+  type UndoSendSeconds,
 } from '@inlark/core'
 import { api } from './api'
 import { queryClient, purgeAccountCache } from './cache'
@@ -40,6 +42,7 @@ import { StartupSettings } from './StartupSettings'
 import { ShortcutEditor } from './ShortcutEditor'
 import { EncryptionPanel } from './EncryptionSettings'
 import { newMessageAccount } from './compose-account'
+import { undoSendDelay } from './held-sends'
 
 /** A miniature of the app window in one theme. */
 function ThemePreview({ theme, className }: { theme: 'dark' | 'light'; className?: string }) {
@@ -145,6 +148,11 @@ function AccountDetailsForm({
     </form>
   )
 }
+
+const undoSendOptions = undoSendChoices.map((seconds) => ({
+  value: String(seconds),
+  label: seconds ? seconds + ' seconds' : 'Off',
+}))
 
 const afterArchiveOptions: { value: NonNullable<Preferences['afterArchive']>; label: string }[] = [
   { value: 'next', label: 'Open the next conversation' },
@@ -487,15 +495,36 @@ export function SettingsPanel({
                   </div>
                   <StartupSettings notify={notify} />
                 </div>
-                {bootstrap.accounts.length > 1 && (
+                <div
+                  className={cn(
+                    'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
+                    '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
+                    '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                  )}
+                >
+                  <h4>Writing</h4>
                   <div
                     className={cn(
-                      'setting-section my-6.25 mx-0 [&_h4]:text-[11px] [&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-3 [&_h4]:mx-0',
-                      '[&_h4]:text-secondary [&+.setting-section]:border-t [&+.setting-section]:border-solid',
-                      '[&+.setting-section]:border-t-border [&+.setting-section]:pt-5.5',
+                      'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
+                      '[&_p]:my-[3px] [&_p]:mx-0 [&_input]:shrink-0 [&>.button]:shrink-0 [&_p]:text-[12px] [&_p]:leading-[1.6]',
+                      '[&_strong]:text-[13px] max-[700px]:gap-3.5',
                     )}
                   >
-                    <h4>Writing</h4>
+                    <div>
+                      <strong>Undo send</strong>
+                      <p>How long a sent message waits, so you can still take it back.</p>
+                    </div>
+                    <Select
+                      aria-label="Undo send"
+                      className="setting-select w-auto min-w-60 shrink-0"
+                      value={String(undoSendDelay(bootstrap.settings))}
+                      options={undoSendOptions}
+                      onValueChange={(value) =>
+                        void update({ undoSendSeconds: Number(value) as UndoSendSeconds })
+                      }
+                    />
+                  </div>
+                  {bootstrap.accounts.length > 1 && (
                     <div
                       className={cn(
                         'setting-row flex items-center justify-between my-3.5 mx-0 gap-6 [&_strong]:font-normal [&_p]:text-muted',
@@ -524,8 +553,8 @@ export function SettingsPanel({
                         onValueChange={(defaultAccountId) => void update({ defaultAccountId })}
                       />
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </>
             )}
             {tab === 'accounts' &&

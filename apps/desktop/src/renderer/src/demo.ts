@@ -3,6 +3,7 @@ import {
   conversationFromMessages,
   defaultSettings,
   folderRoles,
+  friendlyError,
   mergePages,
   nextAccountColor,
   type Account,
@@ -21,6 +22,7 @@ import {
   type RecipientReadiness,
   type FolderMappingReview,
   type FolderMappings,
+  type HeldSend,
   type Mailbox,
   type Message,
   type MailQuery,
@@ -542,6 +544,34 @@ let submissions: SubmissionSummary[] = (() => {
     },
   ]
 })()
+// Messages in their undo window, as the desktop service keeps them.
+const held = new Map<
+  string,
+  { send: HeldSend; status: Draft['status']; timer: ReturnType<typeof setTimeout> }
+>()
+const emitHeld = () =>
+  listeners.forEach((fn) => fn({ type: 'held', held: [...held.values()].map((h) => h.send) }))
+async function releaseHeld(draftId: string) {
+  const entry = held.get(draftId)
+  if (!entry) return
+  clearTimeout(entry.timer)
+  held.delete(draftId)
+  emitHeld()
+  const draft = drafts.get(draftId)
+  if (!draft) return
+  const finished = {
+    type: 'sendFinished' as const,
+    draftId,
+    accountId: draft.accountId,
+    subject: draft.subject,
+  }
+  try {
+    const result = await demoAPI.send({ ...draft, status: entry.status })
+    listeners.forEach((fn) => fn({ ...finished, result }))
+  } catch (error) {
+    listeners.forEach((fn) => fn({ ...finished, error: friendlyError(error) }))
+  }
+}
 const emitSubmissions = () =>
   listeners.forEach((fn) => fn({ type: 'submissions', submissions: [...submissions] }))
 const submissionFor = (draftId: string) => {
@@ -1372,6 +1402,38 @@ export const demoAPI: DesktopMailAPI = {
     }
     return { status: 'sent', message: 'Demo · no email was sent.', sentCopy: 'filed' }
   },
+  holdSend: async (draft) => {
+    await pause(120)
+    const seconds = settings.undoSendSeconds ?? 5
+    const send: HeldSend = {
+      draftId: draft.id,
+      accountId: draft.accountId,
+      subject: draft.subject,
+      sendAt: new Date(Date.now() + seconds * 1000).toISOString(),
+    }
+    held.set(draft.id, {
+      send,
+      status: draft.status,
+      timer: setTimeout(() => void releaseHeld(draft.id), seconds * 1000),
+    })
+    drafts.set(draft.id, { ...draft, status: 'sending' })
+    emitHeld()
+    changed()
+    return send
+  },
+  heldSends: async () => [...held.values()].map((h) => h.send),
+  cancelSend: async (draftId) => {
+    const entry = held.get(draftId)
+    if (!entry) throw new Error('This message has already been sent, so it can’t be undone.')
+    clearTimeout(entry.timer)
+    held.delete(draftId)
+    const draft = { ...drafts.get(draftId)!, status: entry.status }
+    drafts.set(draftId, draft)
+    emitHeld()
+    changed()
+    return draft
+  },
+  sendNow: (draftId) => releaseHeld(draftId),
   reconcile: async (draftId) => {
     await pause(600)
     const submission = submissions.find((s) => s.draftId === draftId)

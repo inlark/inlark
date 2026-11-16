@@ -101,9 +101,7 @@ export function Sidebar({
       ? unavailable[0].name + ' ' + statusLabel[unavailable[0].status]
       : unavailable.length + ' accounts unavailable'
   const sendingText =
-    sendingIssues === 1
-      ? '1 sent message needs attention'
-      : sendingIssues + ' sent messages need attention'
+    sendingIssues === 1 ? '1 message needs attention' : sendingIssues + ' messages need attention'
   const [accountsExpanded, setAccountsExpanded] = useState(
     () => localStorage.getItem('sidebar-accounts-expanded') !== 'false',
   )

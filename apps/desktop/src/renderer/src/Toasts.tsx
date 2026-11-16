@@ -1,9 +1,26 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Toaster as SonnerToaster, toast as sonner } from 'sonner'
 import { cn, Spinner } from '@inlark/ui'
 import { AlertCircle, Check, Info, X } from '@inlark/ui/icons'
 import { ShortcutHint } from './shortcuts'
 import { canUndo, ToastStack, type LiveToast, type ToastControls } from './toast-stack'
+
+const secondsUntil = (time: string) =>
+  Math.max(0, Math.ceil((Date.parse(time) - Date.now()) / 1000))
+
+/** Seconds left until `to`, ticking down on its own so the toast isn't replaced every second. */
+export function Countdown({ to, className }: { to: string; className?: string }) {
+  const [seconds, setSeconds] = useState(() => secondsUntil(to))
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds(secondsUntil(to)), 250)
+    return () => clearInterval(timer)
+  }, [to])
+  return (
+    <span className={cn('shrink-0 tabular-nums text-muted', className)} aria-hidden="true">
+      {seconds}s
+    </span>
+  )
+}
 
 function ToastCard({ toast, controls }: { toast: LiveToast; controls: ToastControls }) {
   const progress = toast.tone === 'progress'
@@ -12,7 +29,7 @@ function ToastCard({ toast, controls }: { toast: LiveToast; controls: ToastContr
       className={cn(
         'toast-card flex gap-3.25 items-center w-full h-full bg-raised border border-solid',
         'border-border-strong shadow-popup py-2.75 px-3.75 rounded-lg text-[12px] overflow-hidden',
-        '[&>svg]:shrink-0 [&>svg]:text-primary [&>span]:flex-1 [&>span]:min-w-0',
+        '[&>svg]:shrink-0 [&>svg]:text-primary',
         '[&_button]:border-0 [&_button]:bg-transparent [&_button]:text-primary [&_button]:text-[11px]',
         '[&_button]:p-[3px] [&_button]:shrink-0',
         toast.tone === 'error' && '[&>svg:first-child]:text-danger',
@@ -28,7 +45,16 @@ function ToastCard({ toast, controls }: { toast: LiveToast; controls: ToastContr
       ) : (
         <Check size={15} />
       )}
-      <span>{toast.text}</span>
+      <span className="flex-1 min-w-0">{toast.text}</span>
+      {toast.countdownTo && <Countdown to={toast.countdownTo} />}
+      {toast.action && (
+        <button
+          className="rounded-sm py-[3px] px-2 font-medium hover:bg-primary-tint"
+          onClick={toast.action.run}
+        >
+          {toast.action.label}
+        </button>
+      )}
       {canUndo(toast) && (
         <button
           className={cn(

@@ -33,6 +33,7 @@ import {
   ReplyAll,
   Forward,
   Undo2,
+  Send,
   Folder,
   FolderPlus,
   Moon,
@@ -112,6 +113,7 @@ import { HintIconButton } from './HintIconButton'
 import { targetAccounts, targetLimit } from './account-limits'
 import { newMessageAccount } from './compose-account'
 import { SubmissionList } from './SendingStatus'
+import { useHeldSends } from './held-sends'
 import { ProgressToast, Toaster, toasts } from './Toasts'
 import type { LiveToast } from './toast-stack'
 import { IndexingMeter } from './IndexingMeter'
@@ -191,6 +193,7 @@ export function App() {
   const pendingMailto = useRef<string | undefined>(undefined)
   const notify = (text: string, tone?: 'error' | 'info') => toasts.show({ text, tone })
   const fail = (error: unknown) => notify(friendlyError(error), 'error')
+  const heldSends = useHeldSends({ onReopen: setComposer })
   const shortcuts = useShortcuts()
   const keys = useShortcutText()
   const explain = ({ account, reason }: { account: { name: string }; reason: string }) =>
@@ -287,6 +290,7 @@ export function App() {
           (old.encryption !== 'encrypt' &&
             old.status !== 'sent' &&
             old.status !== 'uncertain' &&
+            old.status !== 'sending' &&
             old.updatedAt < draft.updatedAt)
         )
           merged.set(draft.id, draft)
@@ -711,6 +715,15 @@ export function App() {
     if (!range || !draftAnchor.current) draftAnchor.current = key
   }
   const openDraft = async (item: DraftItem) => {
+    if (item.kind === 'local' && item.draft.status === 'sending') {
+      notify(
+        '“' +
+          (item.draft.subject || 'No subject') +
+          '” is about to be sent. Undo it from its notification to make changes.',
+        'info',
+      )
+      return
+    }
     if (item.kind === 'local') return setComposer(item.draft)
     try {
       const draft = await api.resumeDraft(item.message.accountId, item.message.id)
@@ -1260,6 +1273,13 @@ export function App() {
       }))
     : []
   const commands: Command[] = [
+    ...heldSends.held.map((send) => ({
+      id: 'send-now:' + send.draftId,
+      group: 'Suggested',
+      label: 'Send “' + (send.subject || 'No subject') + '” now',
+      icon: Send,
+      run: () => heldSends.sendNow(send),
+    })),
     ...(undoTarget
       ? [
           {
@@ -2165,6 +2185,7 @@ export function App() {
                 )}
                 <DraftRows
                   items={draftItems}
+                  held={heldSends.held}
                   accounts={accounts}
                   selected={draftSelected}
                   onOpen={(item) => void openDraft(item)}
