@@ -375,40 +375,57 @@ const average = (colors: Rgb[]): Rgb => {
   return { r: mean('r'), g: mean('g'), b: mean('b') }
 }
 
+type BackgroundPlan =
+  | { keep: true; color?: string }
+  | { keep: false; before: Rgb; after: Rgb; color?: string; image?: string }
+
 /**
- * What one element's own background becomes, or `'keep'` when its area must stay exactly as
- * sent: a picture behind the text, a colour the reader can't read, or a gradient that would end
- * up half dark and half light, where no single text colour reads well across it.
+ * What one element's own background becomes. Some areas are kept exactly as sent: a picture
+ * behind the text, a colour the reader can't read, or a gradient that would end up half dark and
+ * half light, where no single text colour reads well across it. Kept areas are given the solid
+ * paper they were designed on, so their see-through parts don't show the darkened page.
  */
-function planBackground(
-  style: Snapshot,
-  parent: Region,
-  base: Rgb,
-): 'keep' | { before: Rgb; after: Rgb; color?: string; image?: string } {
+function planBackground(style: Snapshot, parent: Region, base: Rgb): BackgroundPlan {
+  const background = readColor(style.background)
+  // The paper behind this element is changing colour.
+  const repainted = !same(parent.before, parent.after)
+  const backing = background && background.a > 0 ? over(background, parent.before) : parent.before
+  const keep = (): BackgroundPlan => ({
+    keep: true,
+    color: repainted && background ? css(backing) : undefined,
+  })
   // Remote background images never load in the reader, so only embedded ones are pictures.
-  if (/url\(\s*["']?(data|blob):/i.test(style.image)) return 'keep'
+  if (/url\(\s*["']?(data|blob):/i.test(style.image)) return keep()
+  // A colour the reader can't read can't be matched either; it stays exactly as sent.
+  if (!background) return { keep: true }
   let before = parent.before
   let after = parent.after
   let color: string | undefined
-  const background = readColor(style.background)
-  if (!background) return 'keep'
   if (background.a > 0) {
-    before = over(background, parent.before)
+    before = backing
     after = darkBackground(before, base)
-    if (!same(before, after)) color = css(after)
+    // A see-through colour would otherwise mix with the new paper behind it.
+    if (!same(before, after) || (background.a < 1 && repainted)) color = css(after)
   }
-  if (!/gradient\(/i.test(style.image)) return { before, after, color }
+  if (!/gradient\(/i.test(style.image)) return { keep: false, before, after, color }
   const tokens = style.image.match(colorTokens) ?? []
   const stops = tokens.map((token) => (/^currentcolor$/i.test(token) ? null : readColor(token)))
-  if (!stops.length || stops.some((stop) => !stop)) return 'keep'
-  const under = before
-  const original = stops.map((stop) => over(stop!, under))
+  if (!stops.length || stops.some((stop) => !stop)) return keep()
+  const original = stops.map((stop) => over(stop!, backing))
   const mapped = original.map((stop) => darkBackground(stop, base))
   const changed = original.filter((stop, index) => !same(stop, mapped[index])).length
-  if (!changed) return { before: average(original), after: average(original), color }
-  if (changed < original.length) return 'keep'
+  if (changed && changed < original.length) return keep()
+  if (!changed)
+    // The gradient stays; see-through stops keep showing the paper they were designed on.
+    return {
+      keep: false,
+      before: average(original),
+      after: average(original),
+      color: repainted ? css(backing) : color,
+    }
   let index = 0
   return {
+    keep: false,
     before: average(original),
     after: average(mapped),
     color,
@@ -486,9 +503,9 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
       const region = { ...parent }
       if (!parent.keep) {
         const plan = planBackground(style, parent, base)
-        if (plan === 'keep') region.keep = true
+        if (plan.color) set(element, 'background-color', plan.color)
+        if (plan.keep) region.keep = true
         else {
-          if (plan.color) set(element, 'background-color', plan.color)
           if (plan.image) set(element, 'background-image', plan.image)
           region.before = plan.before
           region.after = plan.after

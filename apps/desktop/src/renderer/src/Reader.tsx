@@ -557,7 +557,9 @@ export function EmailBody({
       setRenderIssue(null)
       writtenSource.current = null
       linkedDocument.current = null
-      // The elements a dark conversion would restore are about to be replaced.
+      // The elements a dark conversion changed are about to be replaced; restoring also stops
+      // any image work it still has queued.
+      restoreColors.current?.()
       restoreColors.current = null
       doc.open()
       doc.write(source)
@@ -579,7 +581,15 @@ export function EmailBody({
     const doc = frame.current?.contentDocument
     if (frameReady && doc?.body && writtenSource.current === source) syncColors(doc)
   }, [darkColors])
-  useEffect(() => () => observer.current?.disconnect(), [])
+  useEffect(
+    () => () => {
+      observer.current?.disconnect()
+      // Stops image work queued for dark colours once the email is no longer shown.
+      restoreColors.current?.()
+      restoreColors.current = null
+    },
+    [],
+  )
   if (message.security && withheld(message.security) && !loading)
     return (
       <WithheldBody

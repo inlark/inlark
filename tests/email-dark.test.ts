@@ -280,6 +280,29 @@ describe('email dark colours: converting a frame', () => {
     expect(banner.written('background-image')).toBeUndefined()
     expect(banner.written('color')).toBe('rgb(0, 0, 0)')
   })
+  it('keeps the paper under a kept gradient that fades from transparent', () => {
+    const banner = new FakeElement('DIV', {
+      image: 'linear-gradient(90deg, rgba(0, 0, 0, 0), rgb(37, 99, 235))',
+      color: 'rgb(0, 0, 0)',
+    })
+    const { doc } = frame(banner)
+    darkenFrame(doc, surface)
+    expect(banner.written('background-image')).toBeUndefined()
+    // The see-through end still shows the white it was designed on, not the darkened page.
+    expect(written(banner, 'background-color')).toEqual(white)
+    expect(banner.written('color')).toBe('rgb(0, 0, 0)')
+  })
+  it('flattens a see-through colour onto the paper it was designed on', () => {
+    const tint = new FakeElement('DIV', {
+      background: 'rgba(37, 99, 235, 0.6)',
+      color: 'rgb(255, 255, 255)',
+    })
+    const { doc } = frame(tint)
+    darkenFrame(doc, surface)
+    const backing = written(tint, 'background-color')!
+    expect(backing).toEqual({ r: 124, g: 161, b: 243 })
+    expect(contrast(hex(tint.written('color')!), backing)).toBeCloseTo(contrast(white, backing), 5)
+  })
   it('darkens light gradients stop by stop and lightens the text on them', () => {
     const banner = new FakeElement('DIV', {
       image: 'linear-gradient(rgb(238, 242, 255) 0%, rgb(255, 255, 255) 100%)',
