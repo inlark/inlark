@@ -112,6 +112,19 @@ const byMailbox = <T extends { mailboxId: string }>(items: T[]) => {
     groups.set(item.mailboxId, [...(groups.get(item.mailboxId) || []), item])
   return groups
 }
+/**
+ * Gmail labels expose one email at several mailbox + UID locations. Keeps the first location of
+ * each server identity, so the list summary and the opened conversation show the same messages.
+ */
+const distinctEmails = <T extends { emailId?: string }>(items: T[]) => {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    if (!item.emailId) return true
+    if (seen.has(item.emailId)) return false
+    seen.add(item.emailId)
+    return true
+  })
+}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export class ImapProvider implements MailProvider {
@@ -753,12 +766,17 @@ export class ImapProvider implements MailProvider {
       page.items.map((i) => i.threadId),
     )
     const items = page.items.map((row) => {
-      const messages = threads.filter((m) => m.threadId === row.threadId)
+      const found = threads.filter((m) => m.threadId === row.threadId)
+      const locations = found.length ? found : [row.latest]
       const c = conversationFromMessages(
         account.id,
         row.threadId,
-        (messages.length ? messages : [row.latest]).map((m) => toMessage(account.id, m)),
+        locations.map((m) => toMessage(account.id, m)),
       )
+      // Flags consider every location, like the index filters, but the summary lists each email
+      // once. It is what the reader shows while the conversation's bodies load.
+      const shown = new Set(distinctEmails(locations).map((m) => m.id))
+      c.messages = c.messages.filter((m) => shown.has(m.id))
       // Display the matching representative, even if the thread has newer mail elsewhere.
       c.receivedAt = row.latest.receivedAt
       c.subject = row.latest.subject || '(No subject)'
@@ -889,33 +907,45 @@ export class ImapProvider implements MailProvider {
     const boxes = await this.index.listMailboxes(this.accountId)
     const result: Message[] = []
     const displayed = new Set<string>()
-    for (const [mailboxId, items] of byMailbox(rows)) {
-      const box = boxes.find((b) => b.id === mailboxId)
-      if (!box) continue
-      await this.run(async (port) => {
-        const selected = await port.select(box.path)
-        for (const row of items) {
-          if (row.uidValidity !== selected.uidValidity) continue
-          // Gmail labels expose the same email at several UIDs. Keep every location for
-          // mutations, but read its body once. A missing/stale location allows another to load.
-          if (deduplicate && row.emailId && displayed.has(row.emailId)) continue
-          const body = await this.body(port, row)
-          if (!body) {
-            await this.index.removeMessages(this.accountId, [row.id])
-            continue
+    const load = async (rows: IndexedMessage[]) => {
+      for (const [mailboxId, items] of byMailbox(rows)) {
+        const box = boxes.find((b) => b.id === mailboxId)
+        if (!box) continue
+        await this.run(async (port) => {
+          const selected = await port.select(box.path)
+          for (const row of items) {
+            if (row.uidValidity !== selected.uidValidity) continue
+            if (deduplicate && row.emailId && displayed.has(row.emailId)) continue
+            const body = await this.body(port, row)
+            if (!body) {
+              await this.index.removeMessages(this.accountId, [row.id])
+              continue
+            }
+            const preview = row.preview || previewText(body.text || body.html, !body.text)
+            if (preview && !row.preview)
+              await this.index.setPreview(this.accountId, row.id, preview)
+            result.push({
+              ...toMessage(account.id, { ...row, preview }),
+              html: body.html,
+              text: body.text,
+              attachments: attachmentsOf(row),
+            })
+            if (row.emailId) displayed.add(row.emailId)
           }
-          const preview = row.preview || previewText(body.text || body.html, !body.text)
-          if (preview && !row.preview) await this.index.setPreview(this.accountId, row.id, preview)
-          result.push({
-            ...toMessage(account.id, { ...row, preview }),
-            html: body.html,
-            text: body.text,
-            attachments: attachmentsOf(row),
-          })
-          if (row.emailId) displayed.add(row.emailId)
-        }
-      })
+        })
+      }
     }
+    if (!deduplicate) {
+      await load(rows)
+      return result
+    }
+    // Gmail labels expose the same email at several UIDs. Keep every location for mutations, but
+    // read each body once, from the location the list summary shows, so the reader keeps its
+    // messages when bodies arrive. A missing or stale location lets another one load instead.
+    const preferred = distinctEmails(rows)
+    await load(preferred)
+    const tried = new Set(preferred)
+    await load(rows.filter((row) => row.emailId && !displayed.has(row.emailId) && !tried.has(row)))
     return result
   }
   private async body(port: ImapPort, row: IndexedMessage) {
