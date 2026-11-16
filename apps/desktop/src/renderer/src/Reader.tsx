@@ -159,7 +159,7 @@ const fontStack = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
 const paperStyles =
   'html,body{margin:0;background:#fff;color:#24262b;font:16px/1.75 ' +
   fontStack +
-  ';overflow-wrap:anywhere}body{padding:22px 24px 26px}p{margin:0 0 16px}a{color:#5a4fb0}blockquote{margin:16px 0;padding-left:16px;border-l:2px solid #d5d5dc;color:#5d6068}hr{border:0;border-t:1px solid #e3e3e8;margin:24px 0}summary{color:#70737d}summary:hover{background:#f0f0f3}'
+  ';overflow-wrap:anywhere}body{padding:22px 24px 26px}p{margin:0 0 16px}a{color:#5a4fb0}blockquote{margin:16px 0;padding-left:16px;border-left:2px solid #d5d5dc;color:#5d6068}hr{border:0;border-top:1px solid #e3e3e8;margin:24px 0}summary{color:#70737d}summary:hover{background:#f0f0f3}'
 const adaptiveStyles = (theme: 'light' | 'dark') =>
   'html,body{margin:0;background:transparent;color:' +
   token('--text') +
@@ -171,11 +171,11 @@ const adaptiveStyles = (theme: 'light' | 'dark') =>
   token('--accent') +
   ';text-decoration:underline;text-decoration-color:' +
   token('--border-strong') +
-  ';text-underline-offset:3px}a:hover{text-decoration-color:currentColor}blockquote{margin:14px 0;padding-left:14px;border-l:2px solid ' +
+  ';text-underline-offset:3px}a:hover{text-decoration-color:currentColor}blockquote{margin:14px 0;padding-left:14px;border-left:2px solid ' +
   token('--border-strong') +
   ';color:' +
   token('--muted') +
-  '}hr{border:0;border-t:1px solid ' +
+  '}hr{border:0;border-top:1px solid ' +
   token('--border-strong') +
   ';margin:22px 0}summary{color:' +
   token('--muted') +
