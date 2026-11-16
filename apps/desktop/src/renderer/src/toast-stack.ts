@@ -8,6 +8,12 @@ export interface ToastInput {
   undoId?: string
   /** Undoes a change the client has not committed yet. */
   onUndo?: () => void
+  /** One more thing the toast offers, shown before Undo. */
+  action?: { label: string; run: () => void }
+  /** Shows the seconds left until this time, e.g. before a held message leaves. */
+  countdownTo?: string
+  /** Stays until dismissed, for problems the user must not miss. */
+  sticky?: boolean
   /**
    * Runs once when this toast leaves the screen: it timed out or was dismissed. It does not run
    * when the toast is replaced in place, so an undone change is never committed.
@@ -35,7 +41,7 @@ export interface ToastPresenter {
 export const canUndo = (toast: ToastInput) => !!toast.undoId || !!toast.onUndo
 
 export const toastDuration = (toast: ToastInput) =>
-  toast.tone === 'progress'
+  toast.tone === 'progress' || toast.sticky
     ? Infinity
     : canUndo(toast)
       ? 9000

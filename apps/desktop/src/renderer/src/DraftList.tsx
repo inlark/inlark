@@ -1,19 +1,33 @@
 import { cn } from '@inlark/ui'
 import { ArrowUpRight, FileText, Trash2, X } from '@inlark/ui/icons'
 import { Checkbox, IconButton } from '@inlark/ui'
-import type { Account, Draft, Message } from '@inlark/core'
+import type { Account, Draft, HeldSend, Message } from '@inlark/core'
 import { shortDate } from './mail-date'
 import { useShortcutText } from './shortcuts'
+import { Countdown } from './Toasts'
 
 export type DraftItem =
   { kind: 'local'; key: string; draft: Draft } | { kind: 'server'; key: string; message: Message }
 
-/** A send whose delivery is unconfirmed must be resolved before its draft can go. */
+/**
+ * A send whose delivery is unconfirmed must be resolved before its draft can go, and a message
+ * waiting to be sent is undone from its notification instead.
+ */
 export const deletable = (item: DraftItem) =>
-  item.kind === 'server' || item.draft.status !== 'uncertain'
+  item.kind === 'server' || !['uncertain', 'sending'].includes(item.draft.status)
+
+const sendingLabel = (send?: HeldSend) =>
+  send ? (
+    <>
+      Sending in <Countdown to={send.sendAt} className="inline! mt-0!" />
+    </>
+  ) : (
+    'Sending…'
+  )
 
 export function DraftRows({
   items,
+  held,
   accounts,
   selected,
   onOpen,
@@ -21,6 +35,8 @@ export function DraftRows({
   onDelete,
 }: {
   items: DraftItem[]
+  /** Messages waiting out their undo window. */
+  held: HeldSend[]
   accounts: Account[]
   selected: ReadonlySet<string>
   onOpen: (item: DraftItem) => void
@@ -89,7 +105,9 @@ export function DraftRows({
                   ? 'Server draft'
                   : item.draft.status === 'uncertain'
                     ? 'Delivery unconfirmed'
-                    : 'Saved draft'}
+                    : item.draft.status === 'sending'
+                      ? sendingLabel(held.find((h) => h.draftId === item.draft.id))
+                      : 'Saved draft'}
               </small>
               <time>
                 {shortDate(item.kind === 'server' ? item.message.receivedAt : item.draft.updatedAt)}

@@ -42,6 +42,7 @@ import {
   type DiscoveryResult,
   type OutgoingMessage,
   type SendResult,
+  type HeldSend,
   type ServerSettings,
   type SubmissionSummary,
   type Message,
@@ -107,7 +108,14 @@ type Journal = {
   /** The prepared MIME is stored beside the journal until its Sent copy is filed. */
   mime?: boolean
   subject?: string
-  state: 'preparing' | 'submitting' | 'sent' | 'partial' | 'uncertain' | 'rejected'
+  /**
+   * `held` waits out the undo window; nothing has left the device. `unsent` is a held message
+   * that inlark closed on before it left, kept so the user notices it was never sent.
+   */
+  state:
+    'held' | 'unsent' | 'preparing' | 'submitting' | 'sent' | 'partial' | 'uncertain' | 'rejected'
+  /** When a held message leaves. */
+  sendAt?: string
   accepted?: string[]
   rejected?: { email: string; reason: string }[]
   /**
@@ -120,6 +128,8 @@ type Journal = {
   dismissed?: boolean
   at: string
 }
+/** Attempts that ended with nothing sent, so the same draft may be sent again. */
+const resendable: Journal['state'][] = ['rejected', 'unsent']
 /** Errors that prove nothing left for recipients during submission. */
 const definiteSubmissionCodes = [
   'submissionRejected',
@@ -198,6 +208,10 @@ export class MailService {
   private undos = new Map<string, UndoEntry[]>()
   private writes = new Map<string, Promise<unknown>>()
   private busyDrafts = new Set<string>()
+  /** Timers of messages waiting out their undo window. Only these can still be undone. */
+  private holds = new Map<string, ReturnType<typeof setTimeout>>()
+  /** The status each held draft had, restored if its send is undone. */
+  private heldStatus = new Map<string, Draft['status']>()
   private refreshing = new Set<string>()
   private filing = new Set<string>()
   private unreadCounts = new Map<string, number>()
@@ -266,6 +280,19 @@ export class MailService {
             status: 'local',
             error: 'Sending was interrupted before the message left. Review it and send again.',
             errorKind: 'connection',
+          })
+      }
+      if (journal.state === 'held') {
+        // inlark closed during the undo window, so nothing left. Say so rather than sending
+        // something the user may have meant to stop, possibly long after they wrote it.
+        journal.state = 'unsent'
+        journal.sendAt = undefined
+        if (draft)
+          this.localDrafts.set(draft.id, {
+            ...draft,
+            status: 'local',
+            error: 'inlark closed before this message was sent. Nothing was delivered.',
+            errorKind: undefined,
           })
       }
       if (journal.state === 'submitting') {
@@ -1407,6 +1434,10 @@ export class MailService {
     }
     await this.deleteDraftLocal(id)
     await this.persistDrafts()
+    if (this.journals.get(id)?.state === 'unsent') {
+      this.journals.delete(id)
+      await this.persistJournal()
+    }
     this.emit({ type: 'changed' })
   }
   deleteServerDraft = async (accountId: string, messageId: string) => {
@@ -1488,7 +1519,9 @@ export class MailService {
       sentCopy: pending ? 'pending' : 'filed',
     }
   }
-  send = async (input: Draft): Promise<SendResult> => {
+  send = (input: Draft): Promise<SendResult> => this.deliver(input)
+  /** Sends a draft once. `held` continues a send whose undo window has just ended. */
+  private async deliver(input: Draft, held = false): Promise<SendResult> {
     if (this.protectionTransition) throw new Error('The vault is locking.')
     let draft = sendDraftSchema.parse(input)
     if (!draft.to.length && !draft.cc.length && !draft.bcc.length)
@@ -1496,7 +1529,8 @@ export class MailService {
     if (this.busyDrafts.has(draft.id))
       throw new Error('This draft is still saving. Try again in a moment.')
     const existing = this.journals.get(draft.id)
-    if (existing && existing.state !== 'rejected') return this.reconcile(draft.id)
+    if (existing && !resendable.includes(existing.state) && !(held && existing.state === 'held'))
+      return this.reconcile(draft.id)
     draft = sendDraftSchema.parse(await this.saveDraft(draft))
     const { provider, account } = this.provider(draft.accountId)
     this.busyDrafts.add(draft.id)
@@ -1621,6 +1655,155 @@ export class MailService {
       this.busyDrafts.delete(draft.id)
     }
   }
+  private heldList(): HeldSend[] {
+    return [...this.journals.values()]
+      .filter((j) => j.state === 'held' && this.holds.has(j.draftId))
+      .map((j) => ({
+        draftId: j.draftId,
+        accountId: j.accountId,
+        subject: j.subject ?? '',
+        sendAt: j.sendAt!,
+      }))
+  }
+  private emitHeld() {
+    this.emit({ type: 'held', held: this.heldList() })
+  }
+  heldSends = async () => this.heldList()
+  /**
+   * Holds a message for the undo window. Nothing is uploaded or prepared until the window ends,
+   * so undoing leaves nothing to clean up on the server.
+   */
+  holdSend = async (input: Draft): Promise<HeldSend> => {
+    if (this.protectionTransition) throw new Error('The vault is locking.')
+    let draft = sendDraftSchema.parse(input)
+    if (!draft.to.length && !draft.cc.length && !draft.bcc.length)
+      throw new Error('Add at least one recipient.')
+    if (this.busyDrafts.has(draft.id))
+      throw new Error('This draft is still saving. Try again in a moment.')
+    const existing = this.journals.get(draft.id)
+    if (existing && !resendable.includes(existing.state))
+      throw new Error('This message was already sent. Check its status in Drafts.')
+    draft = sendDraftSchema.parse(await this.saveDraft(draft))
+    this.provider(draft.accountId)
+    if (this.busyDrafts.has(draft.id))
+      throw new Error('This draft is still saving. Try again in a moment.')
+    const seconds = this.settings.undoSendSeconds ?? defaultSettings.undoSendSeconds ?? 0
+    const now = Date.now()
+    const journal: Journal = {
+      draftId: draft.id,
+      accountId: draft.accountId,
+      subject: draft.subject,
+      state: 'held',
+      sendAt: new Date(now + seconds * 1000).toISOString(),
+      at: new Date(now).toISOString(),
+    }
+    // A held draft counts as busy: autosave can't change it, it can't be deleted, and the
+    // vault waits before locking, so the message that leaves is the one the user approved.
+    this.busyDrafts.add(draft.id)
+    this.heldStatus.set(draft.id, draft.status)
+    this.journals.set(draft.id, journal)
+    this.localDrafts.set(draft.id, {
+      ...draft,
+      status: 'sending',
+      error: undefined,
+      errorKind: undefined,
+    })
+    try {
+      await this.persistJournal()
+      await this.persistDrafts()
+    } catch (error) {
+      this.busyDrafts.delete(draft.id)
+      this.heldStatus.delete(draft.id)
+      if (existing) this.journals.set(draft.id, existing)
+      else this.journals.delete(draft.id)
+      this.localDrafts.set(draft.id, draft)
+      throw error
+    }
+    this.holds.set(
+      draft.id,
+      setTimeout(() => void this.release(draft.id), seconds * 1000),
+    )
+    this.emitHeld()
+    this.emit({ type: 'changed', accountId: draft.accountId })
+    return this.heldList().find((h) => h.draftId === draft.id)!
+  }
+  /** Ends a message's undo window and sends it. Reports the outcome as an event. */
+  private async release(id: string): Promise<void> {
+    const timer = this.holds.get(id)
+    if (!timer) return
+    // From here on the send can't be undone. This part runs before any other call can interleave.
+    clearTimeout(timer)
+    this.holds.delete(id)
+    this.heldStatus.delete(id)
+    this.busyDrafts.delete(id)
+    this.emitHeld()
+    const draft = this.localDrafts.get(id)
+    if (!draft || this.journals.get(id)?.state !== 'held') return
+    let result: SendResult | undefined
+    let error: unknown
+    try {
+      result = await this.deliver(draft, true)
+    } catch (e) {
+      error = e
+      // Sending stopped before its own record replaced the hold, e.g. the account went offline.
+      if (this.journals.get(id)?.state === 'held') {
+        this.journals.delete(id)
+        this.localDrafts.set(id, {
+          ...draft,
+          status: 'error',
+          error: friendlyError(e),
+          errorKind: errorKind(e),
+        })
+        await this.persistJournal().catch(() => this.log('held-journal-save-failed'))
+        await this.persistDrafts().catch(() => this.log('held-draft-save-failed'))
+      }
+    }
+    this.emit({
+      type: 'sendFinished',
+      draftId: id,
+      accountId: draft.accountId,
+      subject: draft.subject,
+      ...(result ? { result } : { error: friendlyError(error) }),
+    })
+  }
+  /** Stops a held message before it leaves and hands its draft back for editing. */
+  cancelSend = async (id: string): Promise<Draft> => {
+    const timer = this.holds.get(id)
+    if (!timer) throw new Error('This message has already been sent, so it can’t be undone.')
+    clearTimeout(timer)
+    this.holds.delete(id)
+    this.busyDrafts.delete(id)
+    if (this.journals.get(id)?.state === 'held') this.journals.delete(id)
+    // A draft that was on the server stays linked; anything else is a plain local draft again.
+    const draft: Draft = {
+      ...this.localDrafts.get(id)!,
+      status: this.heldStatus.get(id) === 'synced' ? 'synced' : 'local',
+    }
+    this.heldStatus.delete(id)
+    this.localDrafts.set(id, draft)
+    this.emitHeld()
+    await this.persistJournal()
+    await this.persistDrafts()
+    this.emit({ type: 'changed', accountId: draft.accountId })
+    return draft
+  }
+  /** Sends a held message without waiting for the rest of its undo window. */
+  sendNow = (id: string) => this.release(id)
+  hasHeldSends = () => this.holds.size > 0
+  /**
+   * Sends every held message now, for quitting: the user meant to send them. Waits at most
+   * `timeout`; a send still in flight by then is recovered as unconfirmed on the next start.
+   */
+  async flushHeldSends(timeout = 10_000) {
+    const sends = [...this.holds.keys()].map((id) => this.release(id))
+    if (!sends.length) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      Promise.allSettled(sends),
+      new Promise((resolve) => (timer = setTimeout(resolve, timeout))),
+    ])
+    clearTimeout(timer)
+  }
   /**
    * Files the Sent copy of an accepted message. Only filing is ever retried: the provider
    * looks for this attempt's Message-ID first, so an earlier unconfirmed append is never
@@ -1720,6 +1903,8 @@ export class MailService {
           ...(j.sentCopyError ? { error: j.sentCopyError } : {}),
         }
         if (j.state === 'uncertain') return [{ ...base, state: 'uncertain' }]
+        if (j.state === 'unsent')
+          return draft && draft.status !== 'sent' ? [{ ...base, state: 'unsent' }] : []
         if (j.state === 'partial')
           return [
             {
@@ -1814,6 +1999,11 @@ export class MailService {
   dismissSubmission = async (id: string): Promise<void> => {
     const journal = this.journals.get(id)
     if (!journal) return
+    // Nothing left for an unsent message, so dismissing only forgets the notice; the draft stays.
+    if (journal.state === 'unsent') {
+      this.journals.delete(id)
+      return this.persistJournal()
+    }
     const draft = this.localDrafts.get(id)
     if (draft && ['partial', 'uncertain'].includes(journal.state)) this.requireProtectedDraft(draft)
     journal.dismissed = true
@@ -2209,6 +2399,9 @@ export class MailService {
   }
   dispose() {
     this.disposed = true
+    // Held messages stay recorded; the next start reports them as not sent.
+    for (const timer of this.holds.values()) clearTimeout(timer)
+    this.holds.clear()
     void this.encryption.lock()
     if (this.timer) clearInterval(this.timer)
     if (this.indexingEmit) clearTimeout(this.indexingEmit)

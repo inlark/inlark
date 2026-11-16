@@ -242,12 +242,16 @@ export interface Settings {
   htmlSignatures?: Record<string, boolean>
   /** Where the reader goes after a conversation leaves the current view. */
   afterArchive?: 'next' | 'previous' | 'list'
+  /** Seconds a sent message waits before it leaves, so it can still be undone. 0 sends at once. */
+  undoSendSeconds?: UndoSendSeconds
   /**
    * Keyboard shortcuts changed from their defaults, by action. Each binding is a list of chords
    * pressed in turn, such as `['Mod+K']` or `['G', 'I']`; an empty list turns a shortcut off.
    */
   shortcuts?: Record<string, string[][]>
 }
+export const undoSendChoices = [0, 5, 10, 20, 30] as const
+export type UndoSendSeconds = (typeof undoSendChoices)[number]
 export const defaultSettings: Settings = {
   theme: 'dark',
   remoteImages: true,
@@ -256,6 +260,7 @@ export const defaultSettings: Settings = {
   closeToTray: true,
   systemTitleBar: false,
   signatures: {},
+  undoSendSeconds: 5,
 }
 export type MailAction =
   | 'archive'
@@ -535,6 +540,17 @@ export type AppEvent =
   | { type: 'open'; accountId: string; threadId: string }
   | { type: 'progress'; completed: number; total: number }
   | { type: 'submissions'; submissions: SubmissionSummary[] }
+  | { type: 'held'; held: HeldSend[] }
+  | {
+      type: 'sendFinished'
+      draftId: string
+      accountId: string
+      subject: string
+      /** Present when the message was submitted, even if delivery is unconfirmed. */
+      result?: SendResult
+      /** Why nothing was sent; the draft keeps the same explanation. */
+      error?: string
+    }
   | { type: 'update'; status: UpdateStatus }
 export type UpdateStatus =
   | { phase: 'idle' }
@@ -549,13 +565,22 @@ export interface SendResult {
   /** Recipients the server refused while accepting others. */
   rejected?: Address[]
 }
+/** A message waiting out its undo window. Nothing has left the device yet. */
+export interface HeldSend {
+  draftId: string
+  accountId: string
+  subject: string
+  /** When the message leaves unless it is undone first. */
+  sendAt: string
+}
 /** The state of a send that still needs the user's attention. Contains no message body. */
 export interface SubmissionSummary {
   draftId: string
   accountId: string
   subject: string
   at: string
-  state: 'sent' | 'partial' | 'uncertain'
+  /** `unsent`: inlark closed during the undo window, so the message never left. */
+  state: 'sent' | 'partial' | 'uncertain' | 'unsent'
   sentCopy?: 'pending' | 'uncertain' | 'failed'
   rejected?: Address[]
   error?: string
@@ -705,6 +730,16 @@ export interface DesktopMailAPI {
   /** Deletes a draft that exists only on the server, such as one started in another client. */
   deleteServerDraft(accountId: string, messageId: string): Promise<void>
   send(draft: Draft): Promise<SendResult>
+  /**
+   * Holds a message for the undo window, then sends it. The outcome arrives as a
+   * `sendFinished` event, because the composer has closed by then.
+   */
+  holdSend(draft: Draft): Promise<HeldSend>
+  heldSends(): Promise<HeldSend[]>
+  /** Stops a held message before it leaves and returns its draft for editing. */
+  cancelSend(draftId: string): Promise<Draft>
+  /** Sends a held message without waiting for the rest of its undo window. */
+  sendNow(draftId: string): Promise<void>
   reconcile(draftId: string): Promise<SendResult>
   submissions(): Promise<SubmissionSummary[]>
   /** Retries only the Sent copy of a message that was already sent. */

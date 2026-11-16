@@ -205,6 +205,9 @@ export const settingsSchema = z.object({
   signatures: z.record(z.string(), z.string().max(100_000)),
   htmlSignatures: z.record(z.string(), z.boolean()).optional(),
   afterArchive: z.enum(['next', 'previous', 'list']).optional(),
+  undoSendSeconds: z
+    .union([z.literal(0), z.literal(5), z.literal(10), z.literal(20), z.literal(30)])
+    .optional(),
   shortcuts: z
     .record(z.string().max(64), z.array(z.array(z.string().min(1).max(64)).min(1).max(4)).max(16))
     .optional(),
@@ -289,6 +292,10 @@ export const ipcSchemas = {
   deleteDraft: z.tuple([z.string().uuid()]),
   deleteServerDraft: z.tuple([id, id]),
   send: z.tuple([sendDraftSchema]),
+  holdSend: z.tuple([sendDraftSchema]),
+  heldSends: z.tuple([]),
+  cancelSend: z.tuple([z.string().uuid()]),
+  sendNow: z.tuple([z.string().uuid()]),
   reconcile: z.tuple([z.string().uuid()]),
   submissions: z.tuple([]),
   retrySentCopy: z.tuple([z.string().uuid()]),
