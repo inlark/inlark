@@ -962,8 +962,8 @@ export function SettingsPanel({
                     <div>
                       <strong>Enjoying inlark?</strong>
                       <p>
-                        It’s free, with no ads or subscriptions, and made by one person. A coffee
-                        helps keep it going.
+                        It’s free, with no ads or subscriptions, and made by one person. If you’d
+                        like to say thanks, a coffee is always appreciated.
                       </p>
                     </div>
                     <Button onClick={() => void openSupportPage()}>
