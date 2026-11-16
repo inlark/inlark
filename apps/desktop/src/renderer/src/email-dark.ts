@@ -162,18 +162,37 @@ export function darkBackground(color: Rgb, base: Rgb): Rgb {
  * the sender had at least that.
  */
 export function darkForeground(color: Rgb, before: Rgb, after: Rgb, kind: 'text' | 'border'): Rgb {
-  const original = contrast(color, before)
+  return darkForegroundOver(color, [[before, after]], kind)
+}
+/**
+ * The same over several backgrounds at once, such as the stops of a gradient: the text keeps the
+ * contrast it had with each of them, so no part of the gradient becomes harder to read.
+ */
+export function darkForegroundOver(
+  color: Rgb,
+  backgrounds: [before: Rgb, after: Rgb][],
+  kind: 'text' | 'border',
+): Rgb {
+  const originals = backgrounds.map(([before]) => contrast(color, before))
   // Text hidden against its own background, such as an inbox preview line, stays hidden.
-  if (kind === 'text' && original < 1.25) return after
-  let target = original ** contrastScale
-  if (kind === 'text') target = Math.max(target, Math.min(original, 4.5), 3)
-  const y = luminance(color),
-    yBefore = luminance(before),
-    yAfter = luminance(after)
-  // Dark text on paper that turned dark becomes light text, and the other way round.
-  const lighter = yAfter < yBefore ? y <= yBefore : y > yBefore
-  const goal = lighter ? target * (yAfter + 0.05) - 0.05 : (yAfter + 0.05) / target - 0.05
-  return withLuminance(color, Math.max(0, Math.min(1, goal)))
+  if (kind === 'text' && Math.max(...originals) < 1.25) return backgrounds[0][1]
+  const y = luminance(color)
+  let lightest = 0,
+    darkest = 1,
+    lighter: boolean | undefined
+  backgrounds.forEach(([before, after], index) => {
+    const original = originals[index]
+    let target = original ** contrastScale
+    if (kind === 'text') target = Math.max(target, Math.min(original, 4.5), 3)
+    const yBefore = luminance(before),
+      yAfter = luminance(after)
+    // Dark text on paper that turned dark becomes light text, and the other way round.
+    const up = yAfter < yBefore ? y <= yBefore : y > yBefore
+    lighter ??= up
+    if (up) lightest = Math.max(lightest, target * (yAfter + 0.05) - 0.05)
+    else darkest = Math.min(darkest, (yAfter + 0.05) / target - 0.05)
+  })
+  return withLuminance(color, Math.max(0, Math.min(1, lighter ? lightest : darkest)))
 }
 
 export interface ImageStats {
@@ -364,6 +383,8 @@ interface Snapshot {
 interface Region {
   before: Rgb
   after: Rgb
+  /** A converted gradient's stops, before and after, so text stays readable across all of it. */
+  stops?: [before: Rgb, after: Rgb][]
   /** Text here was designed for a picture behind it, so nothing inside changes. */
   keep: boolean
 }
@@ -377,7 +398,14 @@ const average = (colors: Rgb[]): Rgb => {
 
 type BackgroundPlan =
   | { keep: true; color?: string }
-  | { keep: false; before: Rgb; after: Rgb; color?: string; image?: string }
+  | {
+      keep: false
+      before: Rgb
+      after: Rgb
+      stops?: [before: Rgb, after: Rgb][]
+      color?: string
+      image?: string
+    }
 
 /**
  * What one element's own background becomes. Some areas are kept exactly as sent: a picture
@@ -400,18 +428,20 @@ function planBackground(style: Snapshot, parent: Region, base: Rgb): BackgroundP
   if (!background) return { keep: true }
   let before = parent.before
   let after = parent.after
+  let stops = parent.stops
   let color: string | undefined
   if (background.a > 0) {
+    stops = undefined
     before = backing
     after = darkBackground(before, base)
     // A see-through colour would otherwise mix with the new paper behind it.
     if (!same(before, after) || (background.a < 1 && repainted)) color = css(after)
   }
-  if (!/gradient\(/i.test(style.image)) return { keep: false, before, after, color }
+  if (!/gradient\(/i.test(style.image)) return { keep: false, before, after, stops, color }
   const tokens = style.image.match(colorTokens) ?? []
-  const stops = tokens.map((token) => (/^currentcolor$/i.test(token) ? null : readColor(token)))
-  if (!stops.length || stops.some((stop) => !stop)) return keep()
-  const original = stops.map((stop) => over(stop!, backing))
+  const colors = tokens.map((token) => (/^currentcolor$/i.test(token) ? null : readColor(token)))
+  if (!colors.length || colors.some((stop) => !stop)) return keep()
+  const original = colors.map((stop) => over(stop!, backing))
   const mapped = original.map((stop) => darkBackground(stop, base))
   const changed = original.filter((stop, index) => !same(stop, mapped[index])).length
   if (changed && changed < original.length) return keep()
@@ -429,6 +459,7 @@ function planBackground(style: Snapshot, parent: Region, base: Rgb): BackgroundP
     keep: false,
     before: average(original),
     after: average(mapped),
+    stops: original.map((stop, at) => [stop, mapped[at]]),
     color,
     image: style.image.replace(colorTokens, () => css(mapped[index++])),
   }
@@ -510,6 +541,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
           if (plan.image) set(element, 'background-image', plan.image)
           region.before = plan.before
           region.after = plan.after
+          region.stops = plan.stops
         }
       }
       regions.set(element, region)
@@ -524,12 +556,14 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
         set(element, 'color', style.color)
         continue
       }
+      // Against every stop of a converted gradient, otherwise against the one background.
+      const backgrounds = region.stops ?? [[region.before, region.after]]
       const color = readColor(style.color)
       if (color)
         set(
           element,
           'color',
-          css(darkForeground(over(color, region.before), region.before, region.after, 'text')),
+          css(darkForegroundOver(over(color, region.before), backgrounds, 'text')),
         )
       for (const border of style.borders) {
         const borderColor = readColor(border.color)
@@ -537,14 +571,7 @@ export function darkenFrame(doc: Document, base: Rgb): () => void {
           set(
             element,
             `border-${border.side}-color`,
-            css(
-              darkForeground(
-                over(borderColor, region.before),
-                region.before,
-                region.after,
-                'border',
-              ),
-            ),
+            css(darkForegroundOver(over(borderColor, region.before), backgrounds, 'border')),
           )
       }
       if (element.tagName === 'IMG') {

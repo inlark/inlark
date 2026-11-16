@@ -334,6 +334,22 @@ describe('email dark colours: converting a frame', () => {
     for (const stop of stops)
       expect(contrast(written(banner, 'color')!, stop)).toBeGreaterThan(4.49)
   })
+  it('keeps text readable against every stop of a converted gradient', () => {
+    const grey = hex('#5a5a5a')
+    const card = new FakeElement('DIV', {
+      image: 'linear-gradient(rgb(210, 210, 210), rgb(255, 255, 255))',
+      color: 'rgb(90, 90, 90)',
+    })
+    const { doc } = frame(card)
+    darkenFrame(doc, surface)
+    const text = written(card, 'color')!
+    const stops = card
+      .written('background-image')!
+      .match(/rgb\([^)]*\)/g)!
+      .map(hex)
+    expect(Math.min(contrast(grey, hex('#d2d2d2')), contrast(grey, white))).toBeGreaterThan(4.5)
+    for (const stop of stops) expect(contrast(text, stop)).toBeGreaterThan(4.49)
+  })
   it('leaves an area alone when its background colour can’t be read', () => {
     const card = new FakeElement('DIV', {
       background: 'color(srgb 0.05 0.05 0.05)',
