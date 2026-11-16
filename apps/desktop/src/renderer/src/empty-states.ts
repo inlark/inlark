@@ -40,14 +40,25 @@ export function emptyListState(
   {
     searching,
     unreadOnly,
+    scope,
     keys = () => undefined,
-  }: { searching: boolean; unreadOnly: boolean; keys?: KeyText },
+  }: {
+    searching: boolean
+    unreadOnly: boolean
+    /** The folder a search was limited to, named so a miss there isn't mistaken for a miss everywhere. */
+    scope?: string
+    keys?: KeyText
+  },
 ): { icon: IconComponent; title: string; description: string } {
   if (searching)
     return {
       icon: Search,
-      title: 'No conversations found',
-      description: 'Try a different search or adjust your filters.',
+      title: scope ? 'No results in ' + scope : 'No conversations found',
+      // Drafts has no filters to adjust.
+      description:
+        view === 'drafts'
+          ? 'Try a different search.'
+          : 'Try a different search or adjust your filters.',
     }
   const icon = views.find((v) => v.id === view)?.icon || Folder
   if (unreadOnly)

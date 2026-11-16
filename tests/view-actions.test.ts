@@ -16,7 +16,7 @@ describe('actions offered per view', () => {
     expect(offersAction('all', 'destroy')).toBe(false)
   })
 
-  it('offers every moving action in All mail, folders and search', () => {
+  it('offers every moving action in All mail and folders', () => {
     for (const action of ['archive', 'trash', 'spam', 'notSpam', 'restore'] as const)
       expect(offersAction('all', action)).toBe(true)
   })
@@ -51,6 +51,21 @@ describe('action wording', async () => {
       emptyListState('starred', { searching: false, unreadOnly: false, keys: () => undefined })
         .description,
     ).not.toMatch(/Press/)
+  })
+
+  it('names the folder a search missed in, so it is not read as a miss everywhere', () => {
+    expect(emptyListState('sent', { searching: true, unreadOnly: false, scope: 'Sent' })).toEqual(
+      expect.objectContaining({
+        title: 'No results in Sent',
+        description: 'Try a different search or adjust your filters.',
+      }),
+    )
+    expect(emptyListState('all', { searching: true, unreadOnly: false }).title).toBe(
+      'No conversations found',
+    )
+    expect(
+      emptyListState('drafts', { searching: true, unreadOnly: false, scope: 'Drafts' }).description,
+    ).toBe('Try a different search.')
   })
 
   it('finds folders by any part of their name, word starts first', () => {

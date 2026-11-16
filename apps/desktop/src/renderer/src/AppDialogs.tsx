@@ -1,8 +1,11 @@
 import { cn } from '@inlark/ui'
-import { Fragment, useState } from 'react'
-import { Button, DatePicker, Modal, Switch } from '@inlark/ui'
+import { Fragment, useId, useState } from 'react'
+import { Button, DatePicker, Modal, Select, Switch } from '@inlark/ui'
+import { Folder, Mail } from '@inlark/ui/icons'
 import type { MailAction, Mailbox, MailQuery } from '@inlark/core'
 import { ShortcutEditor } from './ShortcutEditor'
+import { views } from './Sidebar'
+import type { LocationOption, MailLocation } from './search-scope'
 
 export function ShortcutDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
@@ -30,15 +33,23 @@ const filterKeys = ['from', 'to', 'subject', 'after', 'before', 'hasAttachment']
 export function FilterDialog({
   open,
   filters,
+  location,
+  locations,
   onClose,
   onApply,
 }: {
   open: boolean
   filters: Partial<MailQuery>
+  /** The option for where the list is looking now. */
+  location: string
+  /** Places the results can be narrowed to, from `locationOptions`. */
+  locations: readonly LocationOption[]
   onClose: () => void
-  onApply: (filters: Partial<MailQuery>) => void
+  onApply: (filters: Partial<MailQuery>, location: MailLocation) => void
 }) {
   const [values, setValues] = useState<Partial<MailQuery>>(filters)
+  const [place, setPlace] = useState(location)
+  const folderId = useId()
   return (
     <Modal
       open={open}
@@ -46,16 +57,38 @@ export function FilterDialog({
         if (!value) onClose()
       }}
       title="Filter conversations"
-      description="Searches your whole mailbox on the server, not just what’s loaded."
+      description="Searches on the server, including mail that hasn’t loaded yet."
       className="filter-modal w-[min(520px,_calc(100vw_-_40px))]"
     >
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          onApply(values)
+          const chosen =
+            locations.find((option) => option.value === place) ||
+            locations.find((option) => option.value === location)
+          if (chosen) onApply(values, chosen.location)
         }}
       >
         <div className="filter-fields [&_input]:mt-1.5 [&_input]:text-[12px] grid grid-cols-[1fr_1fr] gap-[16px_12px]">
+          <div className="filter-field [&>label]:block [&>label]:text-[12px] [&>label]:text-secondary filter-wide col-span-full">
+            <label htmlFor={folderId}>Folder</label>
+            <Select
+              id={folderId}
+              className="filter-folder mt-1.5"
+              value={place}
+              options={locations.map((option) => ({
+                value: option.value,
+                label: option.label,
+                group: option.group,
+                icon: option.location.folder
+                  ? Folder
+                  : option.view === 'all'
+                    ? Mail
+                    : views.find((v) => v.id === option.view)?.icon,
+              }))}
+              onValueChange={setPlace}
+            />
+          </div>
           {(['from', 'to'] as const).map((key) => (
             <label key={key}>
               {{ from: 'From', to: 'To' }[key]}

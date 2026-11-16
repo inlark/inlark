@@ -64,7 +64,7 @@ export function Sidebar({
 }: {
   accounts: Account[]
   boxesByAccount: Record<string, Mailbox[]>
-  route: { account?: string; folder?: string; q?: string }
+  route: { account?: string; folder?: string }
   view: View
   draftCount: number
   hasServerDrafts: boolean
@@ -189,9 +189,7 @@ export function Sidebar({
                   (v.id === 'inbox' ? ' · ' + unreadCount + ' unread' : '') +
                   (v.shortcut && keys(v.shortcut) ? ' · ' + keys(v.shortcut) : '')
                 }
-                aria-current={
-                  view === v.id && !route.account && !route.folder && !route.q ? 'page' : undefined
-                }
+                aria-current={view === v.id && !route.account && !route.folder ? 'page' : undefined}
                 className={cn(
                   'nav-item flex gap-2.5 items-center w-full h-8.5 py-0 px-2.5 border-0 bg-none bg-transparent rounded-md',
                   'text-secondary text-[13px] text-left my-[2px] mx-0 transition-[color,background] duration-120 ease-[ease]',
@@ -204,7 +202,7 @@ export function Sidebar({
                   '[&>.account-mark]:my-0 [&>.account-mark]:mx-[-1px] [.sidebar-collapsed_&]:justify-center',
                   '[.sidebar-collapsed_&]:p-1.75',
                   v.id === 'archive' && 'nav-secondary-start mt-3.25',
-                  view === v.id && !route.account && !route.folder && !route.q && 'active',
+                  view === v.id && !route.account && !route.folder && 'active',
                 )}
                 onClick={() => go({ view: v.id })}
               >
@@ -331,14 +329,10 @@ export function Sidebar({
                               '[&.active_svg]:text-strong [&_small]:text-[11px] [&_small]:text-muted [&_small]:tabular-nums',
                               '[&>.account-mark]:my-0 [&>.account-mark]:mx-[-1px] [.sidebar-collapsed_&]:justify-center',
                               '[.sidebar-collapsed_&]:p-1.75',
-                              route.account === a.id &&
-                                !route.folder &&
-                                !route.q &&
-                                view === v.id &&
-                                'active',
+                              route.account === a.id && !route.folder && view === v.id && 'active',
                             )}
                             aria-current={
-                              route.account === a.id && !route.folder && !route.q && view === v.id
+                              route.account === a.id && !route.folder && view === v.id
                                 ? 'page'
                                 : undefined
                             }
