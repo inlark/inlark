@@ -457,9 +457,10 @@ function IdentityRow({
               </MenuItem>
               <MenuItem
                 onClick={() =>
-                  void navigator.clipboard
-                    .writeText(formatFingerprint(own.fingerprint))
-                    .then(() => notify('Fingerprint copied.'))
+                  void navigator.clipboard.writeText(formatFingerprint(own.fingerprint)).then(
+                    () => notify('Fingerprint copied.'),
+                    () => notify('Couldn’t copy the fingerprint.', 'error'),
+                  )
                 }
               >
                 <Copy size={14} />
@@ -1313,11 +1314,18 @@ function TransferDialog({
               key. It won’t be shown again.
             </p>
           </Callout>
+          {error && <FormError>{error}</FormError>}
           <div className={modalActions}>
             <Button
               className="modal-action-start"
               variant="ghost"
-              onClick={() => void navigator.clipboard.writeText(code).then(() => setCopied(true))}
+              onClick={() => {
+                setError('')
+                void navigator.clipboard.writeText(code).then(
+                  () => setCopied(true),
+                  () => setError('Couldn’t copy. Select the code and copy it manually.'),
+                )
+              }}
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
               {copied ? 'Copied' : 'Copy code'}

@@ -26,6 +26,7 @@ import { discover } from './discovery-transport'
 import { SenderAvatarResolver } from './sender-avatar'
 import { UpdateManager } from './updates'
 import { configureAppIdentity } from './app-identity'
+import { allowPermission, appOrigin } from './permissions'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 protocol.registerSchemesAsPrivileged([
@@ -97,7 +98,7 @@ function trusted(event: Electron.IpcMainInvokeEvent): boolean {
   if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame)
     return false
   try {
-    return frame?.origin === (devURL ? new URL(devURL).origin : 'inlark://mail')
+    return frame?.origin === appOrigin(devURL)
   } catch {
     return false
   }
@@ -171,10 +172,13 @@ function createWindow() {
     event.preventDefault()
     if (/^https?:|^mailto:/.test(event.url)) void service.openExternal(event.url).catch(() => {})
   })
-  window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) =>
-    callback(false),
+  window.webContents.session.setPermissionRequestHandler((wc, permission, callback, details) =>
+    callback(wc === window?.webContents && allowPermission(permission, details, devURL)),
   )
-  window.webContents.session.setPermissionCheckHandler(() => false)
+  window.webContents.session.setPermissionCheckHandler(
+    (wc, permission, _origin, details) =>
+      wc === window?.webContents && allowPermission(permission, details, devURL),
+  )
   window.webContents.on('did-finish-load', () => {
     if (smoke)
       void window!.webContents

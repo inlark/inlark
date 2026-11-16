@@ -236,12 +236,13 @@ export function KeyBadge({
 
 /** The whole fingerprint, in rows of five groups, with a way to copy it for comparison. */
 export function FingerprintBlock({ value, className }: { value: string; className?: string }) {
-  const [copied, setCopied] = useState(false)
+  const [copy, setCopy] = useState<'copied' | 'failed'>()
   useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1600)
+    if (!copy) return
+    // Leave a failure up long enough to read.
+    const timer = setTimeout(() => setCopy(undefined), copy === 'failed' ? 4000 : 1600)
     return () => clearTimeout(timer)
-  }, [copied])
+  }, [copy])
   const groups = value.toUpperCase().match(/.{1,4}/g) || []
   return (
     <div
@@ -259,13 +260,31 @@ export function FingerprintBlock({ value, className }: { value: string; classNam
         ))}
       </span>
       <IconButton
-        label={copied ? 'Copied' : 'Copy fingerprint'}
+        label={
+          copy === 'copied'
+            ? 'Copied'
+            : copy === 'failed'
+              ? 'Couldn’t copy. Select the fingerprint instead.'
+              : 'Copy fingerprint'
+        }
         onClick={() =>
-          void navigator.clipboard.writeText(groups.join(' ')).then(() => setCopied(true))
+          void navigator.clipboard.writeText(groups.join(' ')).then(
+            () => setCopy('copied'),
+            () => setCopy('failed'),
+          )
         }
       >
-        {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+        {copy === 'copied' ? (
+          <Check size={14} className="text-success" />
+        ) : copy === 'failed' ? (
+          <AlertCircle size={14} className="text-danger" />
+        ) : (
+          <Copy size={14} />
+        )}
       </IconButton>
+      <span role="status" className="sr-only">
+        {copy === 'copied' ? 'Copied' : copy === 'failed' ? 'Couldn’t copy the fingerprint.' : ''}
+      </span>
     </div>
   )
 }
