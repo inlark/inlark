@@ -43,6 +43,10 @@ import {
  * that other mailbox, INLARK_MICROSOFT_FIND=<the subject the first run printed> checks that the
  * message arrived there.
  *
+ * The run stops if Microsoft signs in another account than the mailbox, which a browser already
+ * signed in elsewhere does easily. A mailbox whose sign-in name differs from its address needs
+ * INLARK_MICROSOFT_SIGNIN=<sign-in name>.
+ *
  * INLARK_MICROSOFT_SMTP=<minutes> is for a mailbox whose administrator allows SMTP: the run waits
  * that long for Microsoft to accept the sign-in over SMTP, which can lag behind the setting, and
  * fails if the message then goes out any other way.
@@ -52,6 +56,7 @@ const sending = process.env.INLARK_MICROSOFT_SEND === '1'
 const hidden = process.env.INLARK_MICROSOFT_BCC
 const expected = process.env.INLARK_MICROSOFT_FIND
 const smtpWithin = Number(process.env.INLARK_MICROSOFT_SMTP || 0)
+const signInName = process.env.INLARK_MICROSOFT_SIGNIN || address || ''
 const minutes = (n: number) => n * 60_000
 const report = (line: string) => console.log('[microsoft] ' + line)
 
@@ -218,6 +223,13 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
       report(
         `signed in as ${signedIn.email} (${signedIn.personal ? 'personal' : 'work or school'})`,
       )
+      // A browser already signed in elsewhere can pick that account. Microsoft then refuses the
+      // mailbox in the words it uses for IMAP being off, which would send this run astray.
+      if (signedIn.email && signedIn.email.toLowerCase() !== signInName.toLowerCase())
+        throw new Error(
+          `Microsoft signed in ${signedIn.email}, and this run expected ${signInName}. ` +
+            'If that is this mailbox’s own sign-in name, set INLARK_MICROSOFT_SIGNIN to it.',
+        )
 
       if (smtpWithin) {
         const deadline = Date.now() + minutes(smtpWithin)
