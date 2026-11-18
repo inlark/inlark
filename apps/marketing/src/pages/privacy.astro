@@ -1,0 +1,237 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import { links } from '../data/links'
+
+interface Row {
+  title: string
+  text: string
+  /** A link that ends the row, for the one place that has more to say. */
+  more?: { label: string; href: string }
+}
+
+const app: Row[] = [
+  {
+    title: 'Your mail',
+    text: 'Your messages go between your computer and your mail provider over an encrypted connection, and nowhere else. The index that makes search fast, your drafts and your settings are files in your own user folder.',
+  },
+  {
+    title: 'Passwords and sign-ins',
+    text: 'A login you ask inlark to remember is stored on your computer, encrypted using your operating system’s credential protection. Where that isn’t available, inlark asks first, and then keeps it in an unencrypted file only your user account can read.',
+  },
+  {
+    title: 'Usage data',
+    text: 'None. inlark sends no telemetry, analytics or crash reports. Copy diagnostics in Settings puts a redacted summary on your clipboard and sends nothing.',
+  },
+  {
+    title: 'Setting up an account',
+    text: 'inlark looks up your address’s domain in DNS and asks the domain, or wherever the domain redirects, for its published mail settings. Only if that finds nothing, and the domain isn’t recognized as Google’s or Microsoft’s, it asks Thunderbird’s public settings directory, which receives the domain and never the full address. Set up manually skips all of it.',
+  },
+  {
+    title: 'Updates',
+    text: 'Installed from the Windows, macOS or Linux installer, inlark asks GitHub shortly after it starts, and then every six hours, whether a newer release exists, and downloads it from there. GitHub receives your IP address and a random ID the updater creates once and keeps in inlark’s data folder. There is no setting to turn this off. The Flatpak and Nix builds don’t check; they are updated through Flatpak and Nix.',
+  },
+  {
+    title: 'Images in email',
+    text: 'On by default, with one switch: Settings, Privacy, Load remote images. When you open a message, inlark requests its images from the addresses the message names, following redirects. Those servers, which can be the sender’s or a tracking or image service the sender uses, receive your IP address and can learn that you opened the message. inlark sends no cookies and no referrer, and skips images marked as hidden or as one pixel in size, which does not stop all tracking. Nothing else a message points to is loaded. In encrypted mail, images stay blocked until you ask for them.',
+  },
+  {
+    title: 'Sender pictures',
+    text: 'Under the same switch. For the picture beside a sender, inlark asks Gravatar, with a hash of the sender’s address, and then the website of the sender’s domain and of its parent domains, or wherever those sites keep their icons. If none has one, Twenty Icons receives the domain, and DuckDuckGo only if Twenty has none.',
+  },
+  {
+    title: 'Links and unsubscribing',
+    text: 'Links open in your browser, and inlark fetches nothing from them. That includes the links in inlark’s own setup guides to Google’s and Microsoft’s pages; the ones to Google carry the address you are setting up, so that Google opens the right account. Unsubscribe acts only when you select it: it sends the sender’s one-click request, opens the sender’s unsubscribe page, or prepares an email for you to send.',
+  },
+  {
+    title: 'Encryption keys',
+    text: 'When encryption is switched on for an identity, inlark looks for recipients’ public keys at their own domains. Creating a key checks your own address the same way, and you can look up an address by hand. Each lookup shows that domain the address being checked. inlark uses no public keyserver and runs no key directory. Mail sent from such an identity carries your public key in a header, and encrypted mail can carry the public keys of its visible recipients too. Switching encryption off for an identity stops its automatic lookups.',
+  },
+  {
+    title: 'Signing in with Microsoft',
+    text: 'Happens on Microsoft’s page in your browser. inlark passes along its app ID and the address you typed, and keeps what Microsoft hands back the way it keeps a password.',
+    more: { label: 'What inlark asks Microsoft for', href: '/microsoft/#permissions' },
+  },
+  {
+    title: 'Spell checking',
+    text: 'On Windows and Linux, the spell checker downloads its dictionary from Google’s servers, so Google receives that request and your IP address. What you type is checked on your computer and never sent. There is no setting in inlark to turn the download off. macOS uses its own spell checker and downloads nothing.',
+  },
+  {
+    title: 'Uninstalling on Windows',
+    text: 'Removing inlark by hand opens a short, optional survey in your browser, by way of this website. The link carries inlark’s version number and nothing else. What you choose to answer, including an email address if you leave one, is stored by Tally, which runs the form for us.',
+  },
+]
+
+const site: Row[] = [
+  {
+    title: 'Hosting',
+    text: 'inlark.com is served by Cloudflare, which processes your IP address and the pages you request, to deliver them and to protect the site. It also keeps traffic statistics, and uses some network and security data for its own purposes. If a page fails to load, your browser may report the failure to Cloudflare. The site’s own code sets no cookies, contains no analytics or tracking scripts, and loads no fonts, scripts or images from other servers.',
+  },
+  {
+    title: 'Downloads',
+    text: 'Installers are hosted by GitHub. When the download page recognizes a system it has an installer for, it can start the download by itself, and from then on your browser is talking to GitHub.',
+  },
+  {
+    title: 'Links that lead elsewhere',
+    text: 'Donate leads to Buy Me a Coffee, and the reminder on the mobile download page can open Google Calendar or Outlook. They only hear from you if you follow the link.',
+  },
+]
+
+/** Everyone named above, with the policy that says how they handle what they receive. */
+const others = [
+  { name: 'Cloudflare', href: 'https://www.cloudflare.com/privacypolicy/' },
+  {
+    name: 'GitHub',
+    href: 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
+  },
+  { name: 'Tally', href: 'https://tally.so/help/privacy-policy' },
+  { name: 'Buy Me a Coffee', href: 'https://buymeacoffee.com/privacy-policy' },
+  { name: 'Gravatar', href: 'https://automattic.com/privacy/' },
+  { name: 'Twenty', href: 'https://twenty.com/privacy-policy' },
+  { name: 'DuckDuckGo', href: 'https://duckduckgo.com/privacy' },
+  { name: 'Thunderbird', href: 'https://www.thunderbird.net/en-US/privacy/' },
+  { name: 'Microsoft', href: 'https://www.microsoft.com/en-us/privacy/privacystatement' },
+  { name: 'Google', href: 'https://policies.google.com/privacy' },
+]
+---
+
+<Layout
+  title="Privacy — inlark"
+  description="What inlark and inlark.com send, to whom, and what you can turn off."
+>
+  <Nav page="privacy" />
+  <main class="wrap pt-32 pb-28 sm:pt-44 sm:pb-40">
+    <header class="rise max-w-3xl">
+      <h1 class="display">Privacy</h1>
+      <p class="lede mt-7">
+        inlark is an app on your computer, not a service. There is no inlark account, no server of
+        ours that sees your mail, and no telemetry. This page lists what the app and this website
+        send to anyone other than your own mail provider, and what you can turn off.
+      </p>
+    </header>
+
+    <section class="rise mt-20 sm:mt-28" style="--delay:.06s" aria-labelledby="app">
+      <h2 id="app" class="statement text-[clamp(1.5rem,2.6vw,2rem)]">
+        The app
+      </h2>
+      <div class="mt-9 border-b border-line">
+        {app.map((row) => (
+          <div class="grid gap-x-10 gap-y-1.5 border-t border-line py-5 lg:grid-cols-12">
+            <h3 class="title lg:col-span-4">{row.title}</h3>
+            <p class="copy lg:col-span-8">
+              {row.text}
+              {row.more && (
+                <>
+                  {' '}
+                  <a href={row.more.href} class="link">
+                    {row.more.label}
+                  </a>
+                </>
+              )}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="rise mt-20 sm:mt-28" style="--delay:.1s" aria-labelledby="site">
+      <h2 id="site" class="statement text-[clamp(1.5rem,2.6vw,2rem)]">
+        This website
+      </h2>
+      <div class="mt-9 border-b border-line">
+        {site.map((row) => (
+          <div class="grid gap-x-10 gap-y-1.5 border-t border-line py-5 lg:grid-cols-12">
+            <h3 class="title lg:col-span-4">{row.title}</h3>
+            <p class="copy lg:col-span-8">{row.text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="rise mt-20 sm:mt-28" style="--delay:.12s" aria-labelledby="responsible">
+      <div class="grid gap-x-16 gap-y-8 lg:grid-cols-12">
+        <div class="lg:col-span-5">
+          <h2 id="responsible" class="statement text-[clamp(1.5rem,2.6vw,2rem)]">
+            Who is responsible
+          </h2>
+        </div>
+        <div class="copy grid gap-4 lg:col-span-7">
+          <p>
+            inlark and this website are run by Paul Köck in Feldkirch, Austria, who is the
+            controller under the GDPR. The full address is in the{' '}
+            <a href={links.imprint} class="link">
+              imprint
+            </a>
+            , and questions about privacy go to{' '}
+            <a href="mailto:legal@inlark.com" class="link">
+              legal@inlark.com
+            </a>
+            .
+          </p>
+          <p>
+            The app sends us no telemetry, analytics or crash reports, and no inlark service
+            receives your mail. Visits to this website, including the ones the app’s links and the
+            Windows uninstall survey lead to, and anything you choose to send us are handled as
+            described here.
+          </p>
+          <p>
+            Serving this website and keeping it safe is why your request is processed, on the basis
+            of our legitimate interest in doing so (Art. 6(1)(f) GDPR). Cloudflare processes the
+            traffic and its logs on our behalf under its{' '}
+            <a
+              href="https://www.cloudflare.com/cloudflare-customer-dpa/"
+              class="link"
+              rel="noreferrer"
+            >
+              data processing agreement
+            </a>
+            , which covers processing outside the EU through the EU–US Data Privacy Framework and
+            the EU’s standard contractual clauses. For logs processed on our behalf, that agreement
+            limits retention to when they are no longer needed to perform it or the agreement ends,
+            whichever comes first, unless the law requires further retention. We keep no copies.
+            Cloudflare also processes some network and security data for its own purposes; its
+            privacy policy describes how it uses that data and the criteria for keeping it.
+          </p>
+          <p>
+            An answer to the uninstall survey rests on your consent (Art. 6(1)(a)), and we use it to
+            improve inlark. You can withdraw your consent at any time by asking us to delete your
+            answer; this does not affect the lawfulness of processing before withdrawal. An email is
+            used to answer you, and an issue or comment on GitHub, which is public, to maintain
+            inlark; both rest on our legitimate interest in supporting and improving it (Art.
+            6(1)(f)). Survey answers and emails are kept for as long as they are needed for that and
+            deleted when you ask. Issues and comments stay on GitHub until they are deleted there,
+            and we keep no copies of them. A donation is handled by Buy Me a Coffee, which shows us
+            what you entered there; we keep the record because, and for as long as, tax law requires
+            (Art. 6(1)(c)).
+          </p>
+          <p>
+            Under the GDPR you can ask what is held about you, have it corrected, deleted or
+            restricted, receive it in a portable form, and object to its use. You can also complain
+            to a supervisory authority; in Austria that is the{' '}
+            <a href="https://www.dsb.gv.at" class="link" rel="noreferrer">
+              Datenschutzbehörde
+            </a>
+            .
+          </p>
+          <p>
+            Cloudflare and Tally process what is described above on our behalf where they act as our
+            processors. Everyone else named on this page receives it directly from you and decides
+            for itself what to do with it. Several of them are in the United States. Their policies
+            say how they handle it:{' '}
+            {others.map((other, index) => (
+              <>
+                <a href={other.href} class="link" rel="noreferrer">
+                  {other.name}
+                </a>
+                {index < others.length - 1 ? ', ' : '.'}
+              </>
+            ))}
+          </p>
+          <p class="text-[0.875rem] text-ink-3">Last updated 19 November 2026.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
