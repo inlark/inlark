@@ -407,8 +407,9 @@ export interface ConnectionSettings {
   remember: boolean
   folders?: FolderMappings
 }
+/** `mx` means the domain's mail exchanger belongs to a provider whose settings inlark knows. */
 export type DiscoverySource =
-  'jmap-srv' | 'jmap-well-known' | 'autoconfig' | 'imap-srv' | 'directory'
+  'jmap-srv' | 'jmap-well-known' | 'autoconfig' | 'imap-srv' | 'directory' | 'mx'
 export type DiscoveryCandidate =
   | { protocol: 'jmap'; source: DiscoverySource; serverUrl: string; username: string }
   | {

@@ -6,15 +6,26 @@ import {
   serverUrlSchema,
   type DiscoveryResponse,
   type DiscoveryTransport,
+  type MxRecord,
   type SrvRecord,
 } from '@inlark/core'
 
 type Reply =
-  Partial<DiscoveryResponse> | SrvRecord[] | Error | 'hang' | { delay: number; reply: Reply }
+  | Partial<DiscoveryResponse>
+  | SrvRecord[]
+  | MxRecord[]
+  | Error
+  | 'hang'
+  | { delay: number; reply: Reply }
 const hang = new Promise<never>(() => {})
-function fakeTransport(http: Record<string, Reply> = {}, srv: Record<string, Reply> = {}) {
+function fakeTransport(
+  http: Record<string, Reply> = {},
+  srv: Record<string, Reply> = {},
+  mx: Record<string, Reply> = {},
+) {
   const gets: { url: string; options: unknown }[] = []
   const lookups: string[] = []
+  const mxLookups: string[] = []
   const settle = async <T>(reply: unknown, map: (r: never) => T): Promise<T> => {
     if (reply === 'hang') return hang
     if (reply instanceof Error) throw reply
@@ -30,6 +41,10 @@ function fakeTransport(http: Record<string, Reply> = {}, srv: Record<string, Rep
       lookups.push(name)
       return settle(srv[name] ?? [], (r: SrvRecord[]) => r)
     },
+    resolveMx(name) {
+      mxLookups.push(name)
+      return settle(mx[name] ?? [], (r: MxRecord[]) => r)
+    },
     get(url, ...rest) {
       expect(rest).toHaveLength(1)
       gets.push({ url, options: rest[0] })
@@ -41,7 +56,7 @@ function fakeTransport(http: Record<string, Reply> = {}, srv: Record<string, Rep
       }))
     },
   }
-  return { transport, gets, lookups, urls: () => gets.map((g) => g.url) }
+  return { transport, gets, lookups, mxLookups, urls: () => gets.map((g) => g.url) }
 }
 
 const email = 'paul.private@example.com'
@@ -177,7 +192,9 @@ describe('account discovery privacy and bounds', () => {
       expect(url).not.toMatch(/paul|private|@|emailaddress/i)
       expect(options).toEqual({ timeoutMs: 6000, maxBytes: 256 * 1024 })
     }
-    for (const name of fake.lookups) expect(name).not.toMatch(/paul|private|@/)
+    expect(fake.mxLookups).toEqual(['example.com'])
+    for (const name of [...fake.lookups, ...fake.mxLookups])
+      expect(name).not.toMatch(/paul|private|@/)
   })
 
   it('rejects malformed addresses and skips IP-literal domains without any request', async () => {
@@ -190,6 +207,7 @@ describe('account discovery privacy and bounds', () => {
     expect((await discoverAccount('a@192.0.2.1', fake.transport)).candidates).toEqual([])
     expect(fake.gets).toEqual([])
     expect(fake.lookups).toEqual([])
+    expect(fake.mxLookups).toEqual([])
   })
 
   it('ignores oversized responses', async () => {
@@ -249,6 +267,104 @@ describe('account discovery privacy and bounds', () => {
     })
     expect(Date.now() - started).toBeLessThan(500)
     expect(hosts(result)).toEqual(['jmap-well-known https://example.com'])
+  })
+})
+
+describe('mail exchanger discovery', () => {
+  const google = (exchange: string, priority = 1) => ({ exchange, priority })
+
+  it('recognizes a Google Workspace domain without asking the public directory', async () => {
+    const fake = fakeTransport({}, {}, { 'example.com': [google('smtp.google.com.')] })
+    const result = await discoverAccount(email, fake.transport)
+    expect(result.candidates).toEqual([
+      {
+        protocol: 'imap',
+        source: 'mx',
+        provider: 'Google Workspace',
+        incoming: { host: 'imap.gmail.com', port: 993, security: 'tls', username: email },
+        outgoing: { host: 'smtp.gmail.com', port: 465, security: 'tls', username: email },
+      },
+    ])
+    expect(fake.urls()).not.toContain(directory)
+  })
+
+  it('uses the most preferred exchanger, including the older Google names', async () => {
+    for (const exchange of [
+      'ASPMX.L.GOOGLE.COM',
+      'alt1.aspmx.l.google.com',
+      'aspmx2.googlemail.com',
+    ])
+      expect(
+        hosts(
+          await discoverAccount(
+            email,
+            fakeTransport(
+              {},
+              {},
+              { 'example.com': [google('mx.example.net', 20), google(exchange, 5)] },
+            ).transport,
+          ),
+        ),
+      ).toEqual(['mx imap.gmail.com'])
+    const backup = fakeTransport(
+      { [directory]: { body: config('directory.example.com') } },
+      {},
+      { 'example.com': [google('aspmx.l.google.com', 20), google('mx.example.net', 5)] },
+    )
+    expect(hosts(await discoverAccount(email, backup.transport))).toEqual([
+      'directory directory.example.com',
+    ])
+  })
+
+  it('asks the directory for other exchangers, a null MX, or a failed lookup', async () => {
+    for (const reply of [
+      [google('mx.example.net')],
+      [google('notgoogle.com')],
+      [google('google.com.evil.example')],
+      [google('.', 0)],
+      new Error('SERVFAIL'),
+      'hang' as const,
+    ]) {
+      const fake = fakeTransport(
+        { [directory]: { body: config('directory.example.com') } },
+        {},
+        { 'example.com': reply },
+      )
+      const result = await discoverAccount(email, fake.transport, { requestTimeoutMs: 20 })
+      expect(hosts(result)).toEqual(['directory directory.example.com'])
+    }
+  })
+
+  it('keeps a Google answer that arrived before another source used up the deadline', async () => {
+    const fake = fakeTransport(
+      { [autoconfigUrl]: 'hang' },
+      {},
+      { 'example.com': [google('aspmx.l.google.com')] },
+    )
+    const result = await discoverAccount(email, fake.transport, {
+      deadlineMs: 30,
+      requestTimeoutMs: 1000,
+    })
+    expect(hosts(result)).toEqual(['mx imap.gmail.com'])
+  })
+
+  it('prefers settings the domain publishes itself', async () => {
+    const fake = fakeTransport(
+      { [autoconfigUrl]: { body: config('mail.example.com') } },
+      {},
+      { 'example.com': [google('aspmx.l.google.com')] },
+    )
+    expect(hosts(await discoverAccount(email, fake.transport))).toEqual([
+      'autoconfig mail.example.com',
+    ])
+  })
+
+  it('names Gmail for gmail.com addresses', async () => {
+    const fake = fakeTransport({}, {}, { 'gmail.com': [google('gmail-smtp-in.l.google.com', 5)] })
+    const result = await discoverAccount('someone@gmail.com', fake.transport)
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ source: 'mx', provider: 'Gmail' }),
+    ])
   })
 })
 

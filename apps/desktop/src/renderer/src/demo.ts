@@ -4,6 +4,10 @@ import {
   defaultSettings,
   folderRoles,
   friendlyError,
+  googleCandidate,
+  googleLoginError,
+  isGmailAddress,
+  isGoogleMailHost,
   mergePages,
   nextAccountColor,
   type Account,
@@ -567,9 +571,16 @@ function untrustedBridge(server: ServerSettings): ConnectionCheck | undefined {
   }
 }
 function demoTest(input: ConnectInput): ConnectionTest {
+  const google = input.config.protocol === 'imap' && isGoogleMailHost(input.config.incoming.host)
   const incoming =
     (input.config.protocol === 'imap' && untrustedBridge(input.config.incoming)) ||
-    (input.password === 'wrong' ? { ok: false, error: loginError } : { ok: true })
+    (input.password === 'wrong'
+      ? {
+          ok: false,
+          // Google answers a regular password like this once 2-Step Verification is on.
+          error: google ? googleLoginError('Application-specific password required') : loginError,
+        }
+      : { ok: true })
   if (input.config.protocol === 'jmap') return { incoming }
   const outgoingPassword = input.config.outgoingSameCredentials
     ? input.password
@@ -577,7 +588,12 @@ function demoTest(input: ConnectInput): ConnectionTest {
   const outgoing =
     untrustedBridge(input.config.outgoing) ||
     (outgoingPassword === 'nosmtp' || outgoingPassword === 'wrong'
-      ? { ok: false, error: 'The outgoing server rejected the username or password.' }
+      ? {
+          ok: false,
+          error: isGoogleMailHost(input.config.outgoing.host)
+            ? googleLoginError('Application-specific password required', true)
+            : 'The outgoing server rejected the username or password.',
+        }
       : { ok: true })
   return { incoming, outgoing, ...(incoming.ok ? { folders: folderReview() } : {}) }
 }
@@ -1119,20 +1135,33 @@ export const demoAPI: DesktopMailAPI = {
     await pause(700)
     const address = email.trim().toLowerCase()
     const domain = address.split('@')[1] || ''
-    // Try “@fastmail.com” for JMAP, “@nothing.test” for no result, anything else for IMAP.
-    const candidates: DiscoveryCandidate[] = /(^|\.)(fastmail\.com|jmap\.test)$/.test(domain)
+    // Try “@fastmail.com” for JMAP, “@nothing.test” for no result, “@gmail.com” for Gmail,
+    // “@workspace.test” for a Google Workspace domain, anything else for IMAP.
+    const candidates: DiscoveryCandidate[] = isGmailAddress(address)
       ? [
+          // What gmail.com publishes in its SRV records.
           {
-            protocol: 'jmap',
-            source: 'jmap-well-known',
-            serverUrl: 'https://api.' + domain + '/jmap/session',
-            username: address,
+            protocol: 'imap',
+            source: 'imap-srv',
+            incoming: { host: 'imap.gmail.com', port: 993, security: 'tls', username: '' },
+            outgoing: { host: 'smtp.gmail.com', port: 587, security: 'starttls', username: '' },
           },
-          imapCandidate(domain, 'Fastmail'),
         ]
-      : /(^|\.)nothing\.test$/.test(domain)
-        ? []
-        : [imapCandidate(domain, providerName(domain))]
+      : /(^|\.)workspace\.test$/.test(domain)
+        ? [googleCandidate(address, 'mx')]
+        : /(^|\.)(fastmail\.com|jmap\.test)$/.test(domain)
+          ? [
+              {
+                protocol: 'jmap',
+                source: 'jmap-well-known',
+                serverUrl: 'https://api.' + domain + '/jmap/session',
+                username: address,
+              },
+              imapCandidate(domain, 'Fastmail'),
+            ]
+          : /(^|\.)nothing\.test$/.test(domain)
+            ? []
+            : [imapCandidate(domain, providerName(domain))]
     return {
       email: address,
       domain,

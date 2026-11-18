@@ -5,7 +5,13 @@ import {
   type ListResponse,
   type MessageStructureObject,
 } from 'imapflow'
-import { ProviderError, type Address, type ServerSettings } from '@inlark/core'
+import {
+  ProviderError,
+  googleLoginError,
+  isGoogleMailHost,
+  type Address,
+  type ServerSettings,
+} from '@inlark/core'
 import { certificateError, certificateOptions, isCertificateFailure } from './certificate'
 import type { BodyPart, FolderListing } from './metadata-index'
 import type {
@@ -34,11 +40,15 @@ export function connectionError(
     authenticationFailed?: boolean
     tlsFailed?: boolean
     message?: string
+    /** The server's refusal, such as Gmail's "Application-specific password required". */
+    response?: string | false
   }
   if (e?.authenticationFailed)
     return new ProviderError(
       'authentication',
-      'The incoming server rejected this login. Check the username and password, or create an app password.',
+      isGoogleMailHost(host)
+        ? googleLoginError(e.response || undefined)
+        : 'The incoming server rejected this login. Check the username and password, or create an app password.',
     )
   if (isCertificateFailure(e?.code)) return certificateError('incoming', server, e.code)
   if (

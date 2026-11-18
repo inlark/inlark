@@ -2,7 +2,13 @@ import SMTPConnection from 'nodemailer/lib/smtp-connection'
 import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 import { TLSSocket } from 'node:tls'
-import { ProviderError, type ServerSettings, type SubmissionOutcome } from '@inlark/core'
+import {
+  ProviderError,
+  googleLoginError,
+  isGoogleMailHost,
+  type ServerSettings,
+  type SubmissionOutcome,
+} from '@inlark/core'
 import { certificateError, certificateOptions } from './certificate'
 
 export interface SmtpSettings extends ServerSettings {
@@ -220,7 +226,9 @@ async function login(conn: SMTPConnection, settings: SmtpSettings): Promise<void
             )
           : new ProviderError(
               'outgoingAuthentication',
-              `${host} didn't accept the username or password for sending mail. Check them in the account settings.`,
+              isGoogleMailHost(host)
+                ? googleLoginError(failure.response, true)
+                : `${host} didn't accept the username or password for sending mail. Check them in the account settings.`,
             ),
       )
     }),

@@ -1,18 +1,21 @@
-import { resolveSrv } from 'node:dns/promises'
+import { resolveMx, resolveSrv } from 'node:dns/promises'
 import { discoverAccount, type DiscoveryTransport } from '@inlark/core'
 
 const missing = new Set(['ENOTFOUND', 'ENODATA', 'NXDOMAIN', 'ENONAME'])
+/** A name without records of the requested type is an answer, not a failure. */
+async function records<T>(lookup: Promise<T[]>): Promise<T[]> {
+  try {
+    return await lookup
+  } catch (error) {
+    if (missing.has((error as NodeJS.ErrnoException).code || '')) return []
+    throw error
+  }
+}
 
 /** Anonymous, bounded requests for account discovery: no cookies, credentials, or redirects. */
 export const nodeDiscoveryTransport: DiscoveryTransport = {
-  async resolveSrv(name) {
-    try {
-      return await resolveSrv(name)
-    } catch (error) {
-      if (missing.has((error as NodeJS.ErrnoException).code || '')) return []
-      throw error
-    }
-  },
+  resolveSrv: (name) => records(resolveSrv(name)),
+  resolveMx: (name) => records(resolveMx(name)),
   async get(value, { timeoutMs, maxBytes }) {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.username || url.password)
