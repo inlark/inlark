@@ -16,6 +16,7 @@ const footer = [
   { href: links.issues, label: 'Issues' },
   { href: links.support, label: 'Donate' },
   { href: links.license, label: 'License' },
+  { href: links.privacy, label: 'Privacy' },
   { href: links.imprint, label: 'Imprint' },
 ]
 ---
@@ -36,6 +37,11 @@ const footer = [
   </div>
   <div class="wrap flex flex-col gap-2 pb-10 text-[0.8125rem] text-ink-3 sm:flex-row sm:justify-between">
     <p>© 2026 Paul Koeck · AGPL-3.0</p>
-    <p>This site sets no cookies, loads nothing from other servers and counts no visitors.</p>
+    <p>
+      This site’s own code sets no cookies and runs no analytics.{' '}
+      <a href={links.privacy} class="underline underline-offset-2 transition-colors hover:text-ink">
+        What it does send
+      </a>
+    </p>
   </div>
 </footer>

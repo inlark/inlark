@@ -11,6 +11,7 @@ export const links = {
   download: '/download',
   /** Redirects to the support page; see `worker/routes.ts`. */
   support: '/support',
+  privacy: '/privacy',
   imprint: '/imprint',
 }
 
