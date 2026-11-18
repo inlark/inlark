@@ -90,6 +90,12 @@ export class WorkerMetadataIndex implements MetadataIndex {
   updateFlags(...args: Args<'updateFlags'>) {
     return this.call('updateFlags', args)
   }
+  reconcileState(...args: Args<'reconcileState'>) {
+    return this.call('reconcileState', args)
+  }
+  unseenCount(...args: Args<'unseenCount'>) {
+    return this.call('unseenCount', args)
+  }
   removeUids(...args: Args<'removeUids'>) {
     return this.call('removeUids', args)
   }

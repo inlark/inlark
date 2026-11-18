@@ -150,6 +150,8 @@ export class FakeImapServer {
   modseq = 1
   ports: FakePort[] = []
   commands: string[] = []
+  /** What each SEARCH asked for, in order. */
+  searches: SearchCriteria[] = []
   /** Runs once before the named command; may throw to simulate a failure. */
   hooks = new Map<string, (stage: 'before' | 'after') => void>()
   private validity = 100
@@ -333,6 +335,7 @@ export class FakePort implements ImapPort {
   }
   async search(criteria: SearchCriteria) {
     this.check('SEARCH')
+    this.server.searches.push(criteria)
     const box = this.selectedBox()
     const max = Math.max(0, ...box.messages.map((m) => m.uid))
     const has = (value: string | undefined, needle?: string) =>

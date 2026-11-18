@@ -518,6 +518,123 @@ describe('IMAP indexing and reading', () => {
     await sync(p)
     expect((await p.query(account, { view: 'inbox' })).items[0].unread).toBe(false)
   })
+  describe('read and starred state on a server without CONDSTORE', () => {
+    // Every flag is compared for the newest three messages only, or six on a full comparison.
+    const timing = {
+      sentCopyGraceMs: 0,
+      initialBatch: 5,
+      historicalBatch: 5,
+      previews: 0,
+      recentFlags: 3,
+      recentFlagsFull: 6,
+    }
+    const flagsOf = async (p: ImapProvider, uid: number) => {
+      const { index, accountId } = p as any
+      const inbox = (await index.listMailboxes(accountId)).find((b: any) => b.path === 'INBOX')
+      return (await index.messagesAt(accountId, inbox.id, [uid]))[0].flags as string[]
+    }
+    /** The searches about state, leaving out the ones that list a folder to find expunges. */
+    const asked = () => server.searches.filter((criteria) => !criteria.all)
+    let uids: number[]
+    beforeEach(() => {
+      server.capabilities.delete('CONDSTORE')
+      uids = Array.from({ length: 12 }, (_, i) =>
+        server.deliver('INBOX', {
+          messageId: 'old' + i + '@x',
+          subject: 'Old ' + i,
+          date: at(i),
+          flags: i === 1 ? ['\\Answered'] : [],
+        }),
+      )
+    })
+
+    it('follows mail read elsewhere however old it is', async () => {
+      const p = await connected({ timing })
+      await sync(p)
+      await historical(p)
+      // Older than anything compared flag by flag, and read on another device.
+      server.setFlags('INBOX', uids[0], ['\\Seen'])
+      server.setFlags('INBOX', uids[1], ['\\Answered', '\\Seen'])
+      await sync(p)
+      expect(await flagsOf(p, uids[0])).toEqual(['\\Seen'])
+      // The flag inlark already knew stays; only the read state was learned.
+      expect(await flagsOf(p, uids[1])).toEqual(['\\Answered', '\\Seen'])
+      expect(
+        (await p.query(account, { view: 'inbox' })).items.filter((c) => c.unread),
+      ).toHaveLength(10)
+      // And marked unread again elsewhere.
+      server.setFlags('INBOX', uids[0], [])
+      await sync(p)
+      expect(await flagsOf(p, uids[0])).toEqual([])
+    })
+
+    it('follows a star set elsewhere on old mail at the next full comparison', async () => {
+      const p = await connected({ timing: { ...timing, fullReconcileMs: -1 } })
+      await sync(p)
+      await historical(p)
+      server.setFlags('INBOX', uids[0], ['\\Flagged'])
+      server.setFlags('INBOX', uids[11], ['\\Flagged'])
+      await sync(p)
+      expect(await flagsOf(p, uids[0])).toEqual(['\\Flagged'])
+      expect(await flagsOf(p, uids[11])).toEqual(['\\Flagged'])
+      server.setFlags('INBOX', uids[0], [])
+      await sync(p)
+      expect(await flagsOf(p, uids[0])).toEqual([])
+      expect(await flagsOf(p, uids[11])).toEqual(['\\Flagged'])
+    })
+
+    it('follows a star in the Inbox as soon as the server announces it', async () => {
+      const p = await connected({
+        background: true,
+        timing: { ...timing, reconcileMs: 60_000 },
+      })
+      await vi.waitFor(() =>
+        expect(server.ports.some((port) => port.purpose === 'idle')).toBe(true),
+      )
+      await vi.waitFor(async () => expect(await flagsOf(p, uids[0])).toEqual([]))
+      // No count changes, and the periodic full comparison is a quarter of an hour away.
+      server.setFlags('INBOX', uids[0], ['\\Flagged'])
+      await vi.waitFor(async () => expect(await flagsOf(p, uids[0])).toEqual(['\\Flagged']))
+    })
+
+    it('still acts on an announcement after the pass it arrived for failed', async () => {
+      const p = await connected({
+        background: true,
+        timing: { ...timing, reconcileMs: 60_000 },
+      })
+      await vi.waitFor(() =>
+        expect(server.ports.some((port) => port.purpose === 'idle')).toBe(true),
+      )
+      await vi.waitFor(async () => expect(await flagsOf(p, uids[0])).toEqual([]))
+      // The pass the announcement asks for loses its connection while asking for the lists.
+      server.hooks.set('SEARCH:before', () => {
+        throw new ProviderError('network', 'Connection closed.')
+      })
+      server.setFlags('INBOX', uids[0], ['\\Flagged'])
+      // Nothing about the counts says to look again, only the announcement that was kept.
+      await vi.waitFor(async () => expect(await flagsOf(p, uids[0])).toEqual(['\\Flagged']), {
+        timeout: 8000,
+        interval: 100,
+      })
+      expect(server.hooks.has('SEARCH:before')).toBe(false)
+    })
+
+    it('asks for the list of unread mail only when its own count is off', async () => {
+      const p = await connected({ timing })
+      await sync(p)
+      await historical(p)
+      // New mail changes the unread count, and comparing the newest messages already explains it.
+      server.deliver('INBOX', { messageId: 'new@x', subject: 'New', date: at(20) })
+      server.searches.length = 0
+      await sync(p)
+      expect(asked()).toEqual([{ flagged: true }])
+      // Read on another device, beyond the newest messages: the counts disagree, so it asks.
+      server.setFlags('INBOX', uids[0], ['\\Seen'])
+      server.searches.length = 0
+      await sync(p)
+      expect(asked()).toEqual([{ seen: false }, { flagged: true }])
+    })
+  })
   it('searches on the server across folders and indexes matches it had not seen yet', async () => {
     for (let i = 0; i < 8; i++)
       server.deliver('Archive', { messageId: 'a' + i + '@x', subject: 'Old ' + i, date: at(i) })

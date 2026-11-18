@@ -463,6 +463,46 @@ describe('SQLite metadata index', () => {
     expect(await index.getMeta('a', 'k')).toBeUndefined()
   })
 
+  it('makes read and starred state match the server’s lists and leaves other flags alone', async () => {
+    const { INBOX, Archive } = await mailboxes()
+    await index.upsertMessages('a', [
+      message(INBOX!, 1, { flags: ['\\Answered'] }),
+      message(INBOX!, 2, { flags: ['\\Seen', '$Forwarded'] }),
+      message(INBOX!, 3, { flags: ['\\SEEN', '\\Flagged'] }),
+      message(INBOX!, 4, { flags: ['\\Seen'] }),
+      message(Archive!, 1, { flags: [], messageId: 'elsewhere@example.com' }),
+    ])
+    const flags = async (uid: number, box = INBOX!) =>
+      (await index.messagesAt('a', box, [uid]))[0]!.flags
+    // The server: 2 and 9 are unread, 1 and 2 starred. 9 isn't stored, which is no error.
+    expect(await index.reconcileState('a', INBOX!, { unseen: [2, 9], flagged: [1, 2] })).toBe(3)
+    expect(await flags(1)).toEqual(['\\Answered', '\\Seen', '\\Flagged'])
+    expect(await flags(2)).toEqual(['$Forwarded', '\\Flagged'])
+    expect(await flags(3)).toEqual(['\\SEEN'])
+    expect(await flags(4)).toEqual(['\\Seen'])
+    // Another mailbox is untouched, and lists read the same state.
+    expect(await flags(1, Archive!)).toEqual([])
+    expect(
+      (await index.conversations('a', { unseen: true, mailboxIds: [INBOX!] }, { limit: 9 })).total,
+    ).toBe(1)
+    expect(
+      (await index.conversations('a', { flagged: true, mailboxIds: [INBOX!] }, { limit: 9 })).total,
+    ).toBe(2)
+    // Already in agreement: nothing is written.
+    expect(await index.reconcileState('a', INBOX!, { unseen: [2, 9], flagged: [1, 2] })).toBe(0)
+    expect(await index.unseenCount('a', INBOX!)).toBe(1)
+    // A list left out leaves that state alone.
+    expect(await index.reconcileState('a', INBOX!, { flagged: [] })).toBe(2)
+    expect(await index.unseenCount('a', INBOX!)).toBe(1)
+    expect(await index.reconcileState('a', INBOX!, {})).toBe(0)
+    // An empty list means none: nothing is unread.
+    expect(await index.reconcileState('a', INBOX!, { unseen: [] })).toBe(1)
+    expect(await flags(2)).toEqual(['$Forwarded', '\\Seen'])
+    expect(await flags(1)).toEqual(['\\Answered', '\\Seen'])
+    expect(await index.unseenCount('a', INBOX!)).toBe(0)
+    expect(await index.unseenCount('a', Archive!)).toBe(1)
+  })
+
   it('persists across reopening and fails closed on a newer schema', async () => {
     const { INBOX } = await mailboxes()
     const [id] = await index.upsertMessages('a', [message(INBOX!, 1)])

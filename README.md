@@ -130,7 +130,7 @@ Microsoft takes no password from email apps, so inlark sends you to Microsoft's 
 - **Work and school accounts usually need an administrator's approval first.** Microsoft's default for organizations lets only an administrator approve an app that reads mail over IMAP. Send them [inlark.com/microsoft](https://inlark.com/microsoft/), which explains what inlark asks for and lets them approve it once for everyone.
 - **Microsoft has switched off SMTP for some mailboxes**, newer Outlook.com ones among them. inlark then sends through Microsoft Graph, which takes messages up to about 3 MB. The connection check and the composer tell you when this applies.
 - **The sign-in only ever goes to Microsoft.** inlark presents it to Microsoft's own mail servers and to nothing else, and only over a publicly trusted certificate. Unlike a password login, it can't be pointed at another server or made to accept a certificate by hand.
-- **Old mail changed elsewhere can look out of date.** Microsoft's IMAP servers don't report which older messages changed, so inlark re-checks read and starred state for the newest 5,000 messages in each folder only.
+- **Read and starred state follows other devices, however old the mail.** Microsoft's IMAP servers don't report which messages changed, so inlark asks them which mail is unread and which is starred. A star set elsewhere shows in the Inbox as soon as the server announces it, and in other folders at the next periodic comparison, which normally runs every 15 minutes. Other marks, such as replied, are only re-checked for the newest 5,000 messages in each folder.
 
 inlark is registered with Microsoft as a public app with no secret. To build with your own registration, set `INLARK_MICROSOFT_CLIENT_ID` when you start it.
 
