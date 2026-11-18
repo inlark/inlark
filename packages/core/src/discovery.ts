@@ -1,11 +1,16 @@
 import type { DiscoveryCandidate, DiscoveryResult, DiscoverySource, ServerSettings } from './model'
 import { serverSettingsSchema, serverUrlSchema } from './schemas'
+import { googleCandidate, isGoogleMx } from './google'
 
 export interface SrvRecord {
   name: string
   port: number
   priority: number
   weight: number
+}
+export interface MxRecord {
+  exchange: string
+  priority: number
 }
 export interface DiscoveryResponse {
   status: number
@@ -17,6 +22,8 @@ export interface DiscoveryResponse {
 export interface DiscoveryTransport {
   /** Resolves SRV records. Resolves [] when none exist (NXDOMAIN/NODATA). */
   resolveSrv(name: string): Promise<SrvRecord[]>
+  /** Resolves MX records. Resolves [] when none exist (NXDOMAIN/NODATA). */
+  resolveMx(name: string): Promise<MxRecord[]>
   /** One unauthenticated GET. Never follows redirects, never sends credentials or cookies, and stops reading after maxBytes (reject). */
   get(url: string, options: { timeoutMs: number; maxBytes: number }): Promise<DiscoveryResponse>
 }
@@ -34,7 +41,8 @@ const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/
 /**
  * Finds likely server settings for an address. Only the domain leaves the device: requests are
  * unauthenticated, bounded, HTTPS-only, and the public directory is only consulted, with the
- * domain alone, when the domain publishes no settings itself.
+ * domain alone, when the domain publishes no settings itself and its mail exchanger isn't one
+ * whose settings are known (Google's, for Workspace domains).
  * Throws for a malformed address; an IP-literal domain has nothing to discover and yields no
  * candidates. Individual sources that fail, time out, or return malformed data are skipped.
  */
@@ -90,7 +98,16 @@ export async function discoverAccount(
     clearTimeout(timer)
     return found.flatMap((c) => c || [])
   }
+  // The MX lookup only reaches the DNS resolver, so it starts now, but the domain's own published
+  // settings take precedence over what its mail exchanger suggests. An answer that is already in
+  // counts even when another source used up the deadline.
+  let mxFound: DiscoveryCandidate[] | undefined
+  const mx = googleMx(context, domain).then(
+    (candidates) => (mxFound = candidates),
+    () => (mxFound = []),
+  )
   let found = await run(sources)
+  if (!found.length) found = mxFound ?? (Date.now() < deadline ? await run([() => mx]) : [])
   // The public directory learns which domain is being set up, so it is only asked when the
   // domain itself publishes nothing. Self-hosted domains are never disclosed to it.
   if (!found.length && Date.now() < deadline)
@@ -232,6 +249,19 @@ async function autoconfig(
       ...(config.provider ? { provider: config.provider } : {}),
     },
   ]
+}
+/**
+ * Google Workspace domains publish no client settings, but their most preferred mail exchanger
+ * is Google's, and Google's servers are the same for every domain.
+ */
+async function googleMx(context: Context, domain: string): Promise<DiscoveryCandidate[]> {
+  const records = await bounded(context.transport.resolveMx(domain), context.timeoutMs)
+  // RFC 7505: a lone "." exchange means the domain accepts no mail.
+  const preferred = records
+    .map((r) => ({ ...r, exchange: r.exchange.toLowerCase().replace(/\.$/, '') }))
+    .filter((r) => dnsName.test(r.exchange) && Number.isInteger(r.priority))
+    .sort((a, b) => a.priority - b.priority)[0]
+  return preferred && isGoogleMx(preferred.exchange) ? [googleCandidate(context.email, 'mx')] : []
 }
 const preferTls = (servers: ServerSettings[]) =>
   servers.find((s) => s.security === 'tls') || servers[0]

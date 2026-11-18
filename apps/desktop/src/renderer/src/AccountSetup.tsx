@@ -24,6 +24,9 @@ import { Button, Checkbox, Spinner } from '@inlark/ui'
 import {
   accountSchema,
   friendlyError,
+  isGmailAddress,
+  isGoogleMailHost,
+  passwordFor,
   type Account,
   type Bootstrap,
   type CertificateDetails,
@@ -47,6 +50,7 @@ import { api, isDemo } from './api'
 import { queryClient } from './cache'
 import { SegmentedControl } from './SegmentedControl'
 import { FolderMappingEditor, initialFolderChoices, needsFolderReview } from './FolderMappings'
+import { GoogleAppPasswordGuide } from './GoogleAppPasswordGuide'
 
 /** `signIn` repeats a saved connection's login; `edit` opens its server settings for changes. */
 export type SetupMode = 'add' | 'signIn' | 'edit'
@@ -88,11 +92,17 @@ const sourceLabels: Record<DiscoverySource, string> = {
   autoconfig: 'From the domain’s published configuration',
   'imap-srv': 'Found in the domain’s DNS records',
   directory: 'From a public directory of mail providers',
+  mx: 'Found from the domain’s mail servers',
 }
 const sourceLabel = (candidate: DiscoveryCandidate) =>
-  candidate.protocol === 'imap' && candidate.provider && candidate.source !== 'directory'
-    ? 'From ' + candidate.provider + '’s published configuration'
-    : sourceLabels[candidate.source]
+  candidate.protocol !== 'imap' || !candidate.provider || candidate.source === 'directory'
+    ? sourceLabels[candidate.source]
+    : candidate.source === 'mx'
+      ? candidate.provider + ' handles this domain’s mail'
+      : 'From ' + candidate.provider + '’s published configuration'
+/** Gmail and Google Workspace sign in to IMAP and SMTP only with an app password. */
+const usesGoogle = (fields: Fields) =>
+  fields.protocol === 'imap' && isGoogleMailHost(fields.incoming.host)
 
 const blankServer = (kind: ServerKind): ServerFields => ({
   host: '',
@@ -688,11 +698,16 @@ export function AccountSetup({
             },
             outgoingSameCredentials: current.sameLogin,
           }
-    const separate = current.protocol === 'imap' && !current.sameLogin
+    const imap = current.protocol === 'imap'
+    const separate = imap && !current.sameLogin
+    // Google shows an app password in groups of four; the spaces aren't part of it. Each password
+    // follows its own server, so a separate login for another provider is sent as typed.
     const parsed = accountSchema.safeParse({
       config,
-      password,
-      ...(separate && outgoingPassword ? { outgoingPassword } : {}),
+      password: imap ? passwordFor(current.incoming.host, password) : password,
+      ...(separate && outgoingPassword
+        ? { outgoingPassword: passwordFor(current.outgoing.host, outgoingPassword) }
+        : {}),
       name: name.trim(),
       ...(senderName.trim() ? { senderName: senderName.trim() } : {}),
       remember,
@@ -826,6 +841,7 @@ export function AccountSetup({
   const reviews = certificateReviews(test)
   const trustLabel =
     mode === 'add' ? 'Trust and connect' : mode === 'edit' ? 'Trust and save' : 'Trust and sign in'
+  const google = usesGoogle(fields)
 
   return (
     <form className="account-form max-w-140" ref={form} onSubmit={(e) => void submit(e)} noValidate>
@@ -1160,6 +1176,13 @@ export function AccountSetup({
               )}
             >
               <h4>Sign in</h4>
+              {google && (
+                <GoogleAppPasswordGuide
+                  account={fields.username.includes('@') ? fields.username.trim() : email.trim()}
+                  workspace={!isGmailAddress(email)}
+                  mode={mode}
+                />
+              )}
               <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
                 <TextField
                   label="Username"
@@ -1182,11 +1205,11 @@ export function AccountSetup({
                   }
                 />
                 <TextField
-                  label="Password or app password"
+                  label={google ? 'App password' : 'Password or app password'}
                   type="password"
                   autoComplete="current-password"
                   autoFocus={!editing}
-                  placeholder="Your password"
+                  placeholder={google ? '16-letter app password' : 'Your password'}
                   value={password}
                   error={errors.password}
                   onChange={(e) => {
@@ -1334,7 +1357,9 @@ export function AccountSetup({
                   <p className="connection-check-hint mt-2.5 mb-0 mx-0 text-[11px] text-muted">
                     {reviews.length
                       ? 'Nothing was saved. No password is sent to a server until its certificate is accepted.'
-                      : 'Nothing was saved. Check the password or the server settings above, then try again.'}
+                      : google
+                        ? 'Nothing was saved. Check the app password, then try again.'
+                        : 'Nothing was saved. Check the password or the server settings above, then try again.'}
                   </p>
                 )}
               </section>
