@@ -70,17 +70,27 @@ export const folderMappingsSchema = z.partialRecord(
 export const accountSchema = z
   .object({
     config: connectionConfigSchema,
-    password: z.string().min(1, 'Enter your password.').max(4096),
+    password: z.string().min(1, 'Enter your password.').max(4096).optional(),
     outgoingPassword: z.string().min(1).max(4096).optional(),
+    microsoft: z.object({ grant: z.string().uuid().optional() }).strict().optional(),
     name: z.string().max(100),
     senderName: z.string().max(100).optional(),
     remember: z.boolean(),
     connectionId: id.optional(),
     folders: folderMappingsSchema.optional(),
   })
+  .refine((input) => !!input.password || !!input.microsoft, {
+    message: 'Enter your password.',
+    path: ['password'],
+  })
+  .refine((input) => !input.microsoft || input.config.protocol === 'imap', {
+    message: 'Microsoft sign-in needs an IMAP connection.',
+    path: ['microsoft'],
+  })
   .refine(
     (input) =>
       input.config.protocol !== 'imap' ||
+      !!input.microsoft ||
       input.config.outgoingSameCredentials ||
       !!input.outgoingPassword,
     { message: 'Enter the outgoing server password.', path: ['outgoingPassword'] },
@@ -259,6 +269,9 @@ export const ipcSchemas = {
   updateStatus: z.tuple([]),
   ready: z.tuple([]),
   discover: z.tuple([z.string().trim().toLowerCase().pipe(z.email().max(320))]),
+  startMicrosoftSignIn: z.tuple([z.string().trim().max(320)]),
+  finishMicrosoftSignIn: z.tuple([z.string().uuid()]),
+  cancelMicrosoftSignIn: z.tuple([z.string().uuid()]),
   testConnection: z.tuple([accountSchema]),
   connect: z.tuple([accountSchema]),
   connectionSettings: z.tuple([id]),

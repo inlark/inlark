@@ -26,6 +26,8 @@ import {
   friendlyError,
   isGmailAddress,
   isGoogleMailHost,
+  isMicrosoftMailHost,
+  isMicrosoftPersonalHost,
   passwordFor,
   type Account,
   type Bootstrap,
@@ -51,6 +53,11 @@ import { queryClient } from './cache'
 import { SegmentedControl } from './SegmentedControl'
 import { FolderMappingEditor, initialFolderChoices, needsFolderReview } from './FolderMappings'
 import { GoogleAppPasswordGuide } from './GoogleAppPasswordGuide'
+import {
+  MicrosoftSignInCard,
+  type MicrosoftProblem,
+  type MicrosoftSignInState,
+} from './MicrosoftSignInCard'
 
 /** `signIn` repeats a saved connection's login; `edit` opens its server settings for changes. */
 export type SetupMode = 'add' | 'signIn' | 'edit'
@@ -93,16 +100,21 @@ const sourceLabels: Record<DiscoverySource, string> = {
   'imap-srv': 'Found in the domain’s DNS records',
   directory: 'From a public directory of mail providers',
   mx: 'Found from the domain’s mail servers',
+  cname: 'Found in the domain’s DNS records',
 }
 const sourceLabel = (candidate: DiscoveryCandidate) =>
   candidate.protocol !== 'imap' || !candidate.provider || candidate.source === 'directory'
     ? sourceLabels[candidate.source]
-    : candidate.source === 'mx'
+    : candidate.source === 'mx' || candidate.source === 'cname'
       ? candidate.provider + ' handles this domain’s mail'
       : 'From ' + candidate.provider + '’s published configuration'
 /** Gmail and Google Workspace sign in to IMAP and SMTP only with an app password. */
 const usesGoogle = (fields: Fields) =>
   fields.protocol === 'imap' && isGoogleMailHost(fields.incoming.host)
+/** Outlook.com and Microsoft 365 take no password at all, only Microsoft's own sign-in. */
+const usesMicrosoft = (fields: Fields) =>
+  fields.protocol === 'imap' && isMicrosoftMailHost(fields.incoming.host)
+const sameAddress = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 const blankServer = (kind: ServerKind): ServerFields => ({
   host: '',
@@ -239,11 +251,14 @@ function CheckRow({
       <span className="connection-check-result text-muted leading-[1.5]">
         {check
           ? check.ok
-            ? 'Signed in'
+            ? check.note || 'Signed in'
             : check.certificate
               ? 'Stopped before signing in: ' +
                 problemTitles[check.certificate.problem].toLowerCase()
-              : check.error || 'Sign-in failed'
+              : // The steps under Sign in say the rest.
+                check.fix === 'outlookImap' || check.fix === 'microsoftImapAdmin'
+                ? 'IMAP is switched off for this mailbox'
+                : check.error || 'Sign-in failed'
           : pending
             ? 'Checking…'
             : 'Not checked'}
@@ -505,7 +520,22 @@ export function AccountSetup({
   const [senderName, setSenderName] = useState(existing?.senderName || '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState<'testing' | 'connecting'>()
+  const [busy, setBusy] = useState<'signingIn' | 'testing' | 'connecting'>()
+  const [signIn, setSignIn] = useState<MicrosoftSignInState>({ phase: 'idle' })
+  const [signInProblem, setSignInProblem] = useState<MicrosoftProblem>()
+  /** The sign-in waiting in the browser, abandoned if this form goes away first. */
+  const waiting = useRef<string>(undefined)
+  /** Counts browser sign-ins, so one that was abandoned changes nothing when it comes back. */
+  const signInRun = useRef(0)
+  const gone = useRef(false)
+  useEffect(() => {
+    gone.current = false
+    return () => {
+      gone.current = true
+      signInRun.current++
+      if (waiting.current) void api.cancelMicrosoftSignIn(waiting.current).catch(() => undefined)
+    }
+  }, [])
   const [test, setTest] = useState<ConnectionTest>()
   const [review, setReview] = useState<FolderMappingReview>()
   const [choices, setChoices] = useState<FolderMappings>({})
@@ -608,6 +638,9 @@ export function AccountSetup({
       setEmailError('Enter a valid email address.')
       return
     }
+    // A sign-in belongs to the address it was made for.
+    setSignIn({ phase: 'idle' })
+    setSignInProblem(undefined)
     const token = ++lookup.current
     setDiscovering(true)
     setEmailError('')
@@ -665,9 +698,18 @@ export function AccountSetup({
     setPhase('server')
   }
 
-  /** Builds and validates the request, marking any field the schema rejects. */
-  const validate = (current: Fields): ConnectInput | undefined => {
-    const address = email.trim()
+  /**
+   * Builds and validates the request, marking any field the schema rejects. With `signedIn`, a
+   * Microsoft sign-in takes the place of the password, for `address` when that differs from the
+   * one in the form.
+   */
+  const validate = (
+    current: Fields,
+    signedIn?: Extract<MicrosoftSignInState, { phase: 'signedIn' }>,
+    address = email.trim(),
+  ): ConnectInput | undefined => {
+    // Microsoft signs in one account, which is also the login name on both of its servers.
+    if (signedIn) current = { ...current, username: address, sameLogin: true }
     const config =
       current.protocol === 'jmap'
         ? {
@@ -704,10 +746,14 @@ export function AccountSetup({
     // follows its own server, so a separate login for another provider is sent as typed.
     const parsed = accountSchema.safeParse({
       config,
-      password: imap ? passwordFor(current.incoming.host, password) : password,
-      ...(separate && outgoingPassword
-        ? { outgoingPassword: passwordFor(current.outgoing.host, outgoingPassword) }
-        : {}),
+      ...(signedIn
+        ? { microsoft: signedIn.grant ? { grant: signedIn.grant } : {} }
+        : {
+            password: imap ? passwordFor(current.incoming.host, password) : password,
+            ...(separate && outgoingPassword
+              ? { outgoingPassword: passwordFor(current.outgoing.host, outgoingPassword) }
+              : {}),
+          }),
       name: name.trim(),
       ...(senderName.trim() ? { senderName: senderName.trim() } : {}),
       remember,
@@ -757,10 +803,95 @@ export function AccountSetup({
       if (pending.current) await connect({ ...pending.current, folders: choices })
       return
     }
+    if (usesMicrosoft(fields)) return microsoftSubmit()
     const input = validate(fields)
     if (!input) return
     if (input.config.protocol === 'jmap') return connect(input)
     await check(input)
+  }
+  /**
+   * Sends the user to Microsoft in their browser and waits for them to come back. Resolves to
+   * nothing when the sign-in didn't finish, or when the form moved on while it was waiting.
+   */
+  const browserSignIn = async (address: string) => {
+    const run = ++signInRun.current
+    const abandoned = () => gone.current || run !== signInRun.current
+    setBusy('signingIn')
+    setError('')
+    setTest(undefined)
+    setSignInProblem(undefined)
+    try {
+      const started = await api.startMicrosoftSignIn(address)
+      if (abandoned()) {
+        void api.cancelMicrosoftSignIn(started.id).catch(() => undefined)
+        return undefined
+      }
+      waiting.current = started.id
+      setSignIn({ phase: 'waiting', ...started })
+      const result = await api.finishMicrosoftSignIn(started.id)
+      if (waiting.current === started.id) waiting.current = undefined
+      if (abandoned()) return undefined
+      if (!result.ok) {
+        setSignIn({ phase: 'idle' })
+        if (result.reason !== 'cancelled') setSignInProblem(result)
+        setBusy(undefined)
+        return undefined
+      }
+      const signedIn = {
+        phase: 'signedIn' as const,
+        grant: result.grant,
+        email: result.email,
+        personal: result.personal,
+      }
+      setSignIn(signedIn)
+      return signedIn
+    } catch (e) {
+      if (abandoned()) return undefined
+      waiting.current = undefined
+      setSignIn({ phase: 'idle' })
+      setError(friendlyError(e))
+      setBusy(undefined)
+      return undefined
+    }
+  }
+  /**
+   * Connects a Microsoft account: with the sign-in that just finished, with the one kept with
+   * the connection, or after a new one in the browser. `fresh` always asks Microsoft again.
+   * `continuing` carries on from a check that found the kept sign-in no longer works.
+   */
+  const microsoftSubmit = async (
+    options: { fresh?: boolean; address?: string; continuing?: boolean } = {},
+  ) => {
+    if (busy && !options.continuing) return
+    const address = options.address ?? email.trim()
+    let signedIn = !options.fresh && signIn.phase === 'signedIn' ? signIn : undefined
+    if (!signedIn && !options.fresh && mode !== 'add' && savedSettings?.microsoft)
+      signedIn = {
+        phase: 'signedIn',
+        personal: isMicrosoftPersonalHost(fields.outgoing.host),
+      }
+    if (!signedIn) {
+      signedIn = await browserSignIn(address)
+      if (!signedIn) return
+    }
+    // Microsoft may have signed in another address than the one entered. The user decides.
+    if (signedIn.email && !sameAddress(signedIn.email, address)) return setBusy(undefined)
+    // The browser can take minutes, and the form stays usable meanwhile: what is connected is
+    // what the form says now, such as whether to remember the login, not what it said then.
+    const now = latest.current
+    if (!usesMicrosoft(now.fields)) return setBusy(undefined)
+    const input = now.validate(now.fields, signedIn, address)
+    if (!input) return setBusy(undefined)
+    await now.check(input)
+  }
+  const cancelSignIn = () => {
+    if (signIn.phase === 'waiting') void api.cancelMicrosoftSignIn(signIn.id).catch(() => undefined)
+  }
+  /** Connects the address Microsoft signed in, in place of the one that was entered. */
+  const useSignedInAddress = (address: string) => {
+    setEmail(address)
+    setFields((current) => ({ ...current, username: address, outgoingUsername: address }))
+    void microsoftSubmit({ address })
   }
   /** IMAP checks both servers first, so a failure names the server that needs attention. */
   const check = async (input: ConnectInput) => {
@@ -769,8 +900,17 @@ export function AccountSetup({
     setTest(undefined)
     try {
       const result = await api.testConnection(input)
+      const expired =
+        result.incoming.fix === 'microsoftSignIn' || result.outgoing?.fix === 'microsoftSignIn'
+      // The sign-in kept with the connection no longer works, so Microsoft is asked again.
+      if (expired && input.microsoft && !input.microsoft.grant) {
+        setSignIn({ phase: 'idle' })
+        return void microsoftSubmit({ fresh: true, continuing: true })
+      }
       setTest(result)
       if (!result.incoming.ok || (result.outgoing && !result.outgoing.ok)) {
+        // A sign-in Microsoft's servers refuse is of no further use.
+        if (expired) setSignIn({ phase: 'idle' })
         setBusy(undefined)
         return
       }
@@ -810,9 +950,15 @@ export function AccountSetup({
         certificate: { sha256: certificate.sha256, pem: certificate.pem },
       }
     setFields(next)
+    // A Microsoft account has no password to check again with; it goes back through its sign-in.
+    if (usesMicrosoft(next)) return void microsoftSubmit()
     const input = validate(next)
     if (input) void check(input)
   }
+
+  /** What the form holds now, for work that resumes after a long wait. */
+  const latest = useRef({ fields, validate, check })
+  latest.current = { fields, validate, check }
 
   const title =
     mode === 'edit' ? 'Edit connection' : mode === 'signIn' ? 'Sign in again' : 'Connect an account'
@@ -821,6 +967,33 @@ export function AccountSetup({
     : existing && existing.status !== 'connected'
       ? existing.error
       : undefined
+  const microsoft = usesMicrosoft(fields)
+  const microsoftFix = microsoft
+    ? (test?.incoming.fix ?? (test?.incoming.ok ? test.outgoing?.fix : undefined))
+    : undefined
+  /** IMAP is switched off for the mailbox: signing in again changes nothing, checking again may. */
+  const imapOff = microsoftFix === 'outlookImap' || microsoftFix === 'microsoftImapAdmin'
+  /** The account Microsoft signed in, when it isn't the one being set up. */
+  const otherAccount =
+    signIn.phase === 'signedIn' && signIn.email && !sameAddress(signIn.email, email)
+      ? signIn.email
+      : undefined
+  const personalMicrosoft =
+    signIn.phase === 'signedIn' ? signIn.personal : isMicrosoftPersonalHost(fields.outgoing.host)
+  /** A connection being edited may still hold a sign-in, which is used before asking again. */
+  const keptSignIn = mode !== 'add' && !!savedSettings?.microsoft
+  const shownSignIn: MicrosoftSignInState =
+    signIn.phase === 'idle' && keptSignIn && !signInProblem
+      ? { phase: 'signedIn', personal: personalMicrosoft }
+      : signIn
+  const needsMicrosoft = microsoft && (!!otherAccount || shownSignIn.phase !== 'signedIn')
+  /** Something under Sign in now needs the user, who may be looking at the end of the form. */
+  const signInAttention =
+    microsoft && (imapOff || !!otherAccount || !!signInProblem || signIn.phase === 'waiting')
+  const signInCard = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (signInAttention) signInCard.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [signInAttention, microsoftFix, otherAccount, signInProblem])
   const primaryLabel =
     phase === 'email'
       ? 'Continue'
@@ -828,13 +1001,23 @@ export function AccountSetup({
         ? mode === 'add'
           ? 'Connect account'
           : 'Save and sign in'
-        : mode === 'add'
-          ? 'Connect account'
-          : mode === 'edit'
-            ? 'Save and sign in'
-            : 'Sign in'
+        : imapOff
+          ? 'Check again'
+          : needsMicrosoft
+            ? 'Sign in with Microsoft'
+            : mode === 'add'
+              ? 'Connect account'
+              : mode === 'edit'
+                ? 'Save and sign in'
+                : 'Sign in'
   const busyLabel =
-    phase === 'email' ? 'Continue' : busy === 'testing' ? 'Checking servers…' : 'Connecting…'
+    phase === 'email'
+      ? 'Continue'
+      : busy === 'signingIn'
+        ? 'Waiting for Microsoft…'
+        : busy === 'testing'
+          ? 'Checking servers…'
+          : 'Connecting…'
   const isBusy = discovering || !!busy
   const selected = origin.kind === 'candidate' ? candidates[origin.index] : undefined
   const failed = test && (!test.incoming.ok || (test.outgoing && !test.outgoing.ok))
@@ -877,6 +1060,12 @@ export function AccountSetup({
                 type="button"
                 className="border-0 bg-none bg-transparent text-primary text-[11px] p-0 text-left hover:underline"
                 onClick={() => {
+                  // A sign-in under way was for this address and has nothing to return to.
+                  signInRun.current++
+                  cancelSignIn()
+                  setSignIn({ phase: 'idle' })
+                  setSignInProblem(undefined)
+                  if (busy === 'signingIn') setBusy(undefined)
                   setPhase('email')
                   setError('')
                 }}
@@ -1183,78 +1372,104 @@ export function AccountSetup({
                   mode={mode}
                 />
               )}
-              <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
-                <TextField
-                  label="Username"
-                  autoComplete="username"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  value={fields.username}
-                  error={
-                    errors['config.username'] ||
-                    errors['config.incoming.username'] ||
-                    (fields.sameLogin ? errors['config.outgoing.username'] : undefined)
-                  }
-                  onChange={(e) =>
-                    update(
-                      { username: e.target.value },
-                      'config.username',
-                      'config.incoming.username',
-                      'config.outgoing.username',
-                    )
-                  }
-                />
-                <TextField
-                  label={google ? 'App password' : 'Password or app password'}
-                  type="password"
-                  autoComplete="current-password"
-                  autoFocus={!editing}
-                  placeholder={google ? '16-letter app password' : 'Your password'}
-                  value={password}
-                  error={errors.password}
-                  onChange={(e) => {
-                    setPassword(e.target.value)
-                    changed('password')
-                  }}
-                />
-              </div>
-              {fields.protocol === 'imap' && (
+              {microsoft ? (
+                <div ref={signInCard}>
+                  <MicrosoftSignInCard
+                    account={email.trim()}
+                    personal={personalMicrosoft}
+                    state={shownSignIn}
+                    problem={signInProblem}
+                    fix={microsoftFix}
+                    other={otherAccount}
+                    busy={!!busy}
+                    mode={mode}
+                    onOpenAgain={() => {
+                      if (signIn.phase === 'waiting') void api.openExternal(signIn.url)
+                    }}
+                    onCancel={cancelSignIn}
+                    onUseOther={mode === 'add' ? useSignedInAddress : undefined}
+                    onDifferentAccount={() => void microsoftSubmit({ fresh: true })}
+                  />
+                </div>
+              ) : (
                 <>
-                  <label className="checkbox-label flex items-center gap-2.25 text-[12px]">
-                    <Checkbox
-                      checked={fields.sameLogin}
-                      onCheckedChange={(sameLogin) =>
-                        update({ sameLogin }, 'outgoingPassword', 'config.outgoing.username')
+                  <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
+                    <TextField
+                      label="Username"
+                      autoComplete="username"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      value={fields.username}
+                      error={
+                        errors['config.username'] ||
+                        errors['config.incoming.username'] ||
+                        (fields.sameLogin ? errors['config.outgoing.username'] : undefined)
+                      }
+                      onChange={(e) =>
+                        update(
+                          { username: e.target.value },
+                          'config.username',
+                          'config.incoming.username',
+                          'config.outgoing.username',
+                        )
                       }
                     />
-                    Outgoing server uses the same login
-                  </label>
-                  {!fields.sameLogin && (
-                    <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
-                      <TextField
-                        label="Outgoing username"
-                        autoComplete="off"
-                        spellCheck={false}
-                        autoCapitalize="off"
-                        value={fields.outgoingUsername}
-                        error={errors['config.outgoing.username']}
-                        onChange={(e) =>
-                          update({ outgoingUsername: e.target.value }, 'config.outgoing.username')
-                        }
-                      />
-                      <TextField
-                        label="Outgoing password"
-                        type="password"
-                        autoComplete="off"
-                        placeholder="Outgoing server password"
-                        value={outgoingPassword}
-                        error={errors.outgoingPassword}
-                        onChange={(e) => {
-                          setOutgoingPassword(e.target.value)
-                          changed('outgoingPassword')
-                        }}
-                      />
-                    </div>
+                    <TextField
+                      label={google ? 'App password' : 'Password or app password'}
+                      type="password"
+                      autoComplete="current-password"
+                      autoFocus={!editing}
+                      placeholder={google ? '16-letter app password' : 'Your password'}
+                      value={password}
+                      error={errors.password}
+                      onChange={(e) => {
+                        setPassword(e.target.value)
+                        changed('password')
+                      }}
+                    />
+                  </div>
+                  {fields.protocol === 'imap' && (
+                    <>
+                      <label className="checkbox-label flex items-center gap-2.25 text-[12px]">
+                        <Checkbox
+                          checked={fields.sameLogin}
+                          onCheckedChange={(sameLogin) =>
+                            update({ sameLogin }, 'outgoingPassword', 'config.outgoing.username')
+                          }
+                        />
+                        Outgoing server uses the same login
+                      </label>
+                      {!fields.sameLogin && (
+                        <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
+                          <TextField
+                            label="Outgoing username"
+                            autoComplete="off"
+                            spellCheck={false}
+                            autoCapitalize="off"
+                            value={fields.outgoingUsername}
+                            error={errors['config.outgoing.username']}
+                            onChange={(e) =>
+                              update(
+                                { outgoingUsername: e.target.value },
+                                'config.outgoing.username',
+                              )
+                            }
+                          />
+                          <TextField
+                            label="Outgoing password"
+                            type="password"
+                            autoComplete="off"
+                            placeholder="Outgoing server password"
+                            value={outgoingPassword}
+                            error={errors.outgoingPassword}
+                            onChange={(e) => {
+                              setOutgoingPassword(e.target.value)
+                              changed('outgoingPassword')
+                            }}
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1274,7 +1489,7 @@ export function AccountSetup({
                   <span>
                     {isDemo
                       ? 'Demo accounts stay in this window and never connect to a server.'
-                      : 'No OS keyring is available. If you remember this login, your password will be saved unencrypted in a file accessible to your user account. Leave the box unchecked for session-only login.'}
+                      : `No OS keyring is available. If you remember this login, your ${microsoft ? 'Microsoft sign-in' : 'password'} will be saved unencrypted in a file accessible to your user account. Leave the box unchecked for session-only login.`}
                   </span>
                 </div>
               )}
@@ -1359,7 +1574,11 @@ export function AccountSetup({
                       ? 'Nothing was saved. No password is sent to a server until its certificate is accepted.'
                       : google
                         ? 'Nothing was saved. Check the app password, then try again.'
-                        : 'Nothing was saved. Check the password or the server settings above, then try again.'}
+                        : imapOff
+                          ? 'Nothing was saved yet. Follow the steps under Sign in, then check again.'
+                          : microsoft
+                            ? 'Nothing was saved. Sign in with Microsoft again, or check the server settings above.'
+                            : 'Nothing was saved. Check the password or the server settings above, then try again.'}
                   </p>
                 )}
               </section>

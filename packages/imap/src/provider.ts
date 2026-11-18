@@ -55,13 +55,40 @@ import { composeMime, parseMime } from './mime'
 import type { ImapPort, ImapServerOptions, PortFactory, SearchCriteria } from './port'
 import { submitSmtp, verifySmtp, type SmtpSettings } from './smtp'
 
+/**
+ * Another way to send, for a provider whose outgoing server refuses some mailboxes outright.
+ * Microsoft does this to newer Outlook.com mailboxes and offers its Graph service instead.
+ */
+export interface SubmissionFallback {
+  /** Sending already goes this way, as learned from an earlier refusal. */
+  active: boolean
+  /** The largest message it takes, shown to the user while it is in use. */
+  limit: { maxBytes: number; reason: string }
+  /** Proves it is available, without sending anything. */
+  verify(): Promise<void>
+  submit(message: OutgoingMessage): Promise<SubmissionOutcome>
+  /** The outgoing server started refusing this mailbox, or accepts it again. */
+  onChange?(active: boolean): void
+}
 export interface ImapProviderOptions {
   connectionId: string
   name: string
   config: ImapConnectionConfig
-  password: string
+  /** Absent when `accessToken` signs in instead. */
+  password?: string
   /** Only when the outgoing server has its own credentials. */
   outgoingPassword?: string
+  /**
+   * Signs in to both servers with an OAuth access token instead of a password. Called for every
+   * new connection, because tokens expire within the hour.
+   */
+  accessToken?: () => Promise<string>
+  fallback?: SubmissionFallback
+  /**
+   * The provider files its own copy of everything it sends, and may change the Message-ID while
+   * doing so. inlark then never files a second copy.
+   */
+  serverSentCopy?: boolean
   folders?: FolderMappings
   index: MetadataIndex
   /** Reads a staged attachment by its ID; the desktop app owns the files. */
@@ -186,21 +213,32 @@ export class ImapProvider implements MailProvider {
     return {
       ...this.options.config.incoming,
       password: this.options.password,
+      accessToken: this.options.accessToken,
       tls: this.options.tls,
     }
   }
   private smtpSettings(): SmtpSettings {
-    const { config } = this.options
+    const { config, accessToken } = this.options
+    // A browser sign-in covers both servers and always uses the account's own login.
+    const same = config.outgoingSameCredentials || !!accessToken
     return {
       ...config.outgoing,
-      username: config.outgoingSameCredentials
-        ? config.incoming.username
-        : config.outgoing.username,
-      password: config.outgoingSameCredentials
-        ? this.options.password
-        : this.options.outgoingPassword || '',
+      username: same ? config.incoming.username : config.outgoing.username,
+      password: same ? this.options.password : this.options.outgoingPassword || '',
+      accessToken,
       tls: this.options.tls,
     }
+  }
+  /** What the server can't do safely, and what this mailbox can't send while SMTP is refused. */
+  private accountLimits(): AccountLimits {
+    const { fallback } = this.options
+    return { ...this.limits, ...(fallback?.active ? { send: fallback.limit } : {}) }
+  }
+  private setFallback(active: boolean) {
+    const { fallback } = this.options
+    if (!fallback || fallback.active === active) return
+    fallback.active = active
+    fallback.onChange?.(active)
   }
 
   // Connection and command queue
@@ -305,11 +343,25 @@ export class ImapProvider implements MailProvider {
       color: accountColors[1],
       status: 'connected',
       protocol: 'imap',
-      ...(Object.keys(this.limits).length ? { limits: this.limits } : {}),
+      ...(Object.keys(this.accountLimits()).length ? { limits: this.accountLimits() } : {}),
     }
   }
-  verifyOutgoing(): Promise<void> {
-    return (this.options.smtp?.verify || verifySmtp)(this.smtpSettings())
+  /**
+   * Signs in to the outgoing server without sending. When the provider has switched SMTP off for
+   * this mailbox, its other way of sending is checked instead and used from then on.
+   */
+  async verifyOutgoing(): Promise<void> {
+    const { fallback } = this.options
+    // The server takes seconds to refuse again. `submit` asks it once more when it matters,
+    // for a message too large to go the other way.
+    if (fallback?.active) return fallback.verify()
+    try {
+      await (this.options.smtp?.verify || verifySmtp)(this.smtpSettings())
+    } catch (error) {
+      if (!fallback || !isProviderError(error, 'outgoingDisabled')) throw error
+      await fallback.verify()
+      this.setFallback(true)
+    }
   }
   inspectCertificate(server: 'incoming' | 'outgoing') {
     const { config, tls } = this.options
@@ -476,7 +528,9 @@ export class ImapProvider implements MailProvider {
         if (!this.disposed && this.pending === 'none') await this.wait(this.timing.reconcileMs)
       } catch (error) {
         if (this.disposed) break
-        if (isProviderError(error, 'authentication')) this.setState('authentication', error.message)
+        // Both wait for the user: a new sign-in, or a mailbox setting only they can change.
+        if (isProviderError(error, 'authentication', 'imapDisabled'))
+          this.setState('authentication', error.message)
         else if (isProviderError(error, 'network', 'tls', 'certificate'))
           this.setState('offline', error.message)
         failures++
@@ -1419,21 +1473,51 @@ export class ImapProvider implements MailProvider {
     const mime = precomposed ?? (await this.compose(account, draft, messageId, false))
     // Bounces go to the address the message is from, as recipients would expect.
     const from = this.sender(account, draft.identityId).email
-    return { messageId, mime, envelope: { from, to: recipients } }
+    const visible = new Set([...draft.to, ...draft.cc].map((a) => a.email.toLowerCase()))
+    const bcc = [...new Set(draft.bcc.map((a) => a.email))].filter(
+      (email) => !visible.has(email.toLowerCase()),
+    )
+    return {
+      messageId,
+      mime,
+      envelope: { from, to: recipients, ...(bcc.length ? { bcc } : {}) },
+    }
   }
   async submit(_account: Account, message: OutgoingMessage): Promise<SubmissionOutcome> {
     if (!message.mime) throw new ProviderError('submission', 'The message was not prepared.')
-    return (this.options.smtp?.submit || submitSmtp)(
-      this.smtpSettings(),
-      message.envelope,
-      message.mime,
-    )
+    const { fallback } = this.options
+    const smtp = () =>
+      (this.options.smtp?.submit || submitSmtp)(
+        this.smtpSettings(),
+        { from: message.envelope.from, to: message.envelope.to },
+        message.mime!,
+      )
+    let outcome: SubmissionOutcome
+    if (!fallback) outcome = await smtp()
+    else if (fallback.active && message.mime.byteLength <= fallback.limit.maxBytes)
+      outcome = await fallback.submit(message)
+    else
+      try {
+        // Also tried for a message too large for the other way, in case SMTP works again.
+        outcome = await smtp()
+        this.setFallback(false)
+      } catch (error) {
+        // The server refuses at sign-in, before any part of the message is transmitted.
+        if (!isProviderError(error, 'outgoingDisabled')) throw error
+        this.setFallback(true)
+        outcome = await fallback.submit(message)
+      }
+    // The provider's own Sent copy appears a moment after it accepts the message.
+    if (this.options.serverSentCopy) setTimeout(() => this.requestSync('all'), 4000).unref?.()
+    return outcome
   }
   /** SMTP gives no later proof of submission; only the recorded acceptance counts. */
   async submissionExists(): Promise<boolean> {
     return false
   }
   async fileSentCopy(_account: Account, message: OutgoingMessage): Promise<'filed' | 'server'> {
+    // Looking for the provider's copy by Message-ID would miss it and file a duplicate.
+    if (this.options.serverSentCopy) return 'server'
     const sent = await this.roleBox('sent')
     if (!sent)
       throw new ProviderError(

@@ -13,6 +13,9 @@ export const imapProviders: ProviderFactory = (input) => {
     config: input.config,
     password: input.secrets.password,
     outgoingPassword: input.secrets.outgoingPassword,
+    accessToken: input.accessToken,
+    fallback: input.fallback,
+    serverSentCopy: input.serverSentCopy,
     folders: input.folders,
     // A connection test keeps nothing: its index lives only in memory.
     index: input.temporary

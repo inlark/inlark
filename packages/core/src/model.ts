@@ -70,6 +70,8 @@ export type AliasInput = Omit<Alias, 'id'> & { id?: string }
 export interface AccountLimits {
   move?: string
   destroy?: string
+  /** The largest message this account can send, when its provider allows less than usual. */
+  send?: { maxBytes: number; reason: string }
 }
 export interface IndexingProgress {
   indexed: number
@@ -390,26 +392,64 @@ export interface FolderMappingReview {
 }
 export interface ConnectInput {
   config: ConnectionConfig
-  password: string
+  /** Absent when the account signs in with Microsoft. */
+  password?: string
   /** Only used when the outgoing server has its own credentials. */
   outgoingPassword?: string
+  /**
+   * Signs in with Microsoft instead of a password. `grant` names a browser sign-in that just
+   * finished; without it, the sign-in saved with `connectionId` is used again.
+   */
+  microsoft?: { grant?: string }
   name: string
   senderName?: string
   remember: boolean
   connectionId?: string
   folders?: FolderMappings
 }
-/** A saved connection as the renderer may see it: never includes passwords. */
+/** A saved connection as the renderer may see it: never includes passwords or tokens. */
 export interface ConnectionSettings {
   connectionId: string
   name: string
   config: ConnectionConfig
   remember: boolean
   folders?: FolderMappings
+  /** The connection signs in with Microsoft and still has that sign-in. */
+  microsoft?: boolean
 }
-/** `mx` means the domain's mail exchanger belongs to a provider whose settings inlark knows. */
+/** A Microsoft sign-in waiting in the browser. `url` lets the user open the page again. */
+export interface MicrosoftSignInStart {
+  id: string
+  url: string
+}
+/** A finished Microsoft sign-in. Its tokens stay in the main process; `grant` refers to them. */
+export interface MicrosoftSignIn {
+  grant: string
+  /** The address Microsoft signed in, which can differ from the one typed in inlark. */
+  email?: string
+  /** An Outlook.com, Hotmail, Live or MSN account, as opposed to a work or school one. */
+  personal: boolean
+}
+/**
+ * How a Microsoft sign-in ended. `adminApproval` means the user's organization has to approve
+ * inlark before anyone in it can sign in.
+ */
+export type MicrosoftSignInResult =
+  | ({ ok: true } & MicrosoftSignIn)
+  | { ok: false; reason: 'cancelled' | 'timeout' | 'adminApproval' | 'failed'; message: string }
+/**
+ * Something the user or their administrator can do about a refused connection:
+ * - `outlookImap`: the Outlook.com mailbox has IMAP switched off, which is its default.
+ * - `microsoftImapAdmin`: a work or school mailbox has IMAP switched off by its organization.
+ * - `microsoftSignIn`: the Microsoft sign-in is missing or no longer valid.
+ */
+export type ConnectionFix = 'outlookImap' | 'microsoftImapAdmin' | 'microsoftSignIn'
+/**
+ * `mx` means the domain's mail exchanger belongs to a provider whose settings inlark knows.
+ * `cname` means the domain points mail apps at such a provider, as Microsoft 365 domains do.
+ */
 export type DiscoverySource =
-  'jmap-srv' | 'jmap-well-known' | 'autoconfig' | 'imap-srv' | 'directory' | 'mx'
+  'jmap-srv' | 'jmap-well-known' | 'autoconfig' | 'imap-srv' | 'directory' | 'mx' | 'cname'
 export type DiscoveryCandidate =
   | { protocol: 'jmap'; source: DiscoverySource; serverUrl: string; username: string }
   | {
@@ -429,6 +469,10 @@ export interface DiscoveryResult {
 export interface ConnectionCheck {
   ok: boolean
   error?: string
+  /** Set when inlark can walk the user through resolving the error. */
+  fix?: ConnectionFix
+  /** Shown in place of "Signed in" when the server works, but not in the usual way. */
+  note?: string
   /** The certificate that stopped the connection, when the user may be able to trust it. */
   certificate?: CertificateDetails
 }
@@ -476,7 +520,11 @@ export interface OutgoingMessage {
   emailId?: string
   /** Complete MIME without Bcc headers, for providers that transmit it themselves (SMTP). */
   mime?: Uint8Array
-  envelope: { from: string; to: string[] }
+  /**
+   * `to` lists every recipient. `bcc` repeats the ones the message's headers leave out, for a
+   * way of sending that reads recipients from the message instead of an envelope.
+   */
+  envelope: { from: string; to: string[]; bcc?: string[] }
 }
 export interface SubmissionOutcome {
   accepted: string[]
@@ -734,6 +782,13 @@ export interface DesktopMailAPI {
   updateStatus(): Promise<UpdateStatus>
   ready(): Promise<void>
   discover(email: string): Promise<DiscoveryResult>
+  /**
+   * Opens Microsoft's sign-in page in the user's browser. `email` only prefills that page.
+   * Follow with `finishMicrosoftSignIn`, which resolves when the browser comes back.
+   */
+  startMicrosoftSignIn(email: string): Promise<MicrosoftSignInStart>
+  finishMicrosoftSignIn(id: string): Promise<MicrosoftSignInResult>
+  cancelMicrosoftSignIn(id: string): Promise<void>
   /** Checks a login without saving it. Nothing is sent to any recipient. */
   testConnection(input: ConnectInput): Promise<ConnectionTest>
   connect(input: ConnectInput): Promise<Account[]>

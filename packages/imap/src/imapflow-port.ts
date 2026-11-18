@@ -9,6 +9,8 @@ import {
   ProviderError,
   googleLoginError,
   isGoogleMailHost,
+  isMicrosoftMailHost,
+  microsoftImapError,
   type Address,
   type ServerSettings,
 } from '@inlark/core'
@@ -29,10 +31,14 @@ import type {
 
 const tlsCodes = new Set(['ERR_SSL_WRONG_VERSION_NUMBER', 'EPROTO'])
 
-/** Maps a connection-phase failure to a calm, specific error. Never includes the password. */
+/**
+ * Maps a connection-phase failure to a calm, specific error. Never includes the password or a
+ * token. `signedIn` means the login used an access token from a browser sign-in.
+ */
 export function connectionError(
   error: unknown,
   server: Pick<ServerSettings, 'host' | 'certificate'>,
+  signedIn = false,
 ): ProviderError {
   const host = server.host
   const e = error as {
@@ -43,13 +49,17 @@ export function connectionError(
     /** The server's refusal, such as Gmail's "Application-specific password required". */
     response?: string | false
   }
-  if (e?.authenticationFailed)
+  if (e?.authenticationFailed) {
+    if (isMicrosoftMailHost(host)) return microsoftImapError(e.response || undefined, signedIn)
     return new ProviderError(
       'authentication',
       isGoogleMailHost(host)
         ? googleLoginError(e.response || undefined)
-        : 'The incoming server rejected this login. Check the username and password, or create an app password.',
+        : signedIn
+          ? 'The incoming server rejected this sign-in. Sign in again.'
+          : 'The incoming server rejected this login. Check the username and password, or create an app password.',
     )
+  }
   if (isCertificateFailure(e?.code)) return certificateError('incoming', server, e.code)
   if (
     e?.tlsFailed ||
@@ -78,10 +88,14 @@ export function connectionError(
   )
 }
 
-/** The exact ImapFlow options, exported so tests can assert the TLS policy. */
+/**
+ * The exact ImapFlow options, exported so tests can assert the TLS policy. With `accessToken`
+ * the login presents that token instead of a password.
+ */
 export function imapFlowOptions(
   options: ImapServerOptions,
   purpose: 'command' | 'idle',
+  accessToken?: string,
 ): ImapFlowOptions {
   const implicit = options.security === 'tls'
   return {
@@ -91,7 +105,9 @@ export function imapFlowOptions(
     // STARTTLS is required, never opportunistic: without it the login is not sent at all.
     doSTARTTLS: implicit ? undefined : true,
     ...(isIP(options.host.replace(/^\[|\]$/g, '')) ? {} : { servername: options.host }),
-    auth: { user: options.username, pass: options.password },
+    auth: accessToken
+      ? { user: options.username, accessToken }
+      : { user: options.username, pass: options.password ?? '' },
     tls: certificateOptions(options, options.tls?.ca),
     logger: false,
     // No client identification is sent to the server.
@@ -151,42 +167,77 @@ async function bytes(
   return new Uint8Array(Buffer.concat(chunks)).subarray(0, maxBytes)
 }
 
+type PortEvent = 'close' | 'exists' | 'expunge' | 'flags'
+
+const useFlags = ['\\Sent', '\\Drafts', '\\Trash', '\\Junk', '\\Archive', '\\All', '\\Flagged']
+/**
+ * The role a server gives a folder. Microsoft's servers mark Sent, Drafts, Junk and Deleted in
+ * an ordinary LIST without announcing the SPECIAL-USE extension, so ImapFlow reports those roles
+ * as guesses from the folder names. A mark the server sent is its own word either way.
+ */
+function declaredUse(entry: ListResponse): string | null {
+  if (entry.specialUseSource === 'extension')
+    return entry.specialUse && entry.specialUse !== '\\Inbox' ? entry.specialUse : null
+  const flags = [...entry.flags].map((flag) => flag.toLowerCase())
+  return useFlags.find((use) => flags.includes(use.toLowerCase())) ?? null
+}
+
 export class ImapFlowPort implements ImapPort {
-  private client: ImapFlow
+  /** With a token sign-in, the client only exists once `connect` has fetched the token. */
+  private current?: ImapFlow
+  private listeners: [PortEvent, (path: string) => void][] = []
   constructor(
     private options: ImapServerOptions,
-    purpose: 'command' | 'idle',
+    private purpose: 'command' | 'idle',
   ) {
-    this.client = new ImapFlow(imapFlowOptions(options, purpose))
+    if (!options.accessToken) this.open()
+  }
+  private open(accessToken?: string) {
+    const client = new ImapFlow(imapFlowOptions(this.options, this.purpose, accessToken))
     // Errors also surface as rejected commands and a `close` event; never crash the process.
-    this.client.on('error', () => {})
+    client.on('error', () => {})
+    this.current = client
+    for (const [event, listener] of this.listeners) this.attach(client, event, listener)
+    return client
+  }
+  private get client(): ImapFlow {
+    if (!this.current)
+      throw new ProviderError('network', 'The connection to the incoming server is not open.')
+    return this.current
   }
   get capabilities(): ReadonlySet<string> {
-    return new Set([...this.client.capabilities.keys()].map((c) => c.toUpperCase()))
+    return new Set([...(this.current?.capabilities.keys() ?? [])].map((c) => c.toUpperCase()))
   }
   get condstore() {
-    return this.client.enabled.has('CONDSTORE')
+    return !!this.current?.enabled.has('CONDSTORE')
   }
   private can(name: string) {
     return this.client.capabilities.has(name)
   }
   async connect() {
+    // Getting a token can fail on its own, with an error that already says what to do.
+    if (this.options.accessToken) this.open(await this.options.accessToken())
     try {
       await this.client.connect()
     } catch (error) {
-      throw connectionError(error, this.options)
+      throw connectionError(error, this.options, !!this.options.accessToken)
     }
   }
   async close() {
+    if (!this.current) return
     try {
-      await this.client.logout()
+      await this.current.logout()
     } catch {
-      this.client.close()
+      this.current.close()
     }
   }
-  on(event: 'close' | 'exists' | 'expunge' | 'flags', listener: (path: string) => void) {
-    if (event === 'close') this.client.on('close', () => listener(''))
-    else this.client.on(event, (data: { path: string }) => listener(data.path))
+  on(event: PortEvent, listener: (path: string) => void) {
+    this.listeners.push([event, listener])
+    if (this.current) this.attach(this.current, event, listener)
+  }
+  private attach(client: ImapFlow, event: PortEvent, listener: (path: string) => void) {
+    if (event === 'close') client.on('close', () => listener(''))
+    else client.on(event, (data: { path: string }) => listener(data.path))
   }
   /** Commands on a closed connection become `network` errors so callers can reconnect. */
   private async wrap<T>(task: () => Promise<T>): Promise<T> {
@@ -210,10 +261,7 @@ export class ImapFlowPort implements ImapPort {
         name: entry.name,
         delimiter: entry.delimiter || '/',
         parentPath: entry.parentPath || null,
-        specialUse:
-          entry.specialUseSource === 'extension' && entry.specialUse !== '\\Inbox'
-            ? entry.specialUse || null
-            : null,
+        specialUse: declaredUse(entry),
         guessedSpecialUse:
           entry.specialUseSource === 'name' && entry.specialUse !== '\\Inbox'
             ? entry.specialUse || null

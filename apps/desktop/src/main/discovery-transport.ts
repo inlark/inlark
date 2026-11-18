@@ -1,4 +1,4 @@
-import { resolveMx, resolveSrv } from 'node:dns/promises'
+import { resolveCname, resolveMx, resolveSrv } from 'node:dns/promises'
 import { discoverAccount, type DiscoveryTransport } from '@inlark/core'
 
 const missing = new Set(['ENOTFOUND', 'ENODATA', 'NXDOMAIN', 'ENONAME'])
@@ -16,6 +16,7 @@ async function records<T>(lookup: Promise<T[]>): Promise<T[]> {
 export const nodeDiscoveryTransport: DiscoveryTransport = {
   resolveSrv: (name) => records(resolveSrv(name)),
   resolveMx: (name) => records(resolveMx(name)),
+  resolveCname: (name) => records(resolveCname(name)),
   async get(value, { timeoutMs, maxBytes }) {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.username || url.password)

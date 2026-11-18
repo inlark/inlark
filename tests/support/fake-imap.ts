@@ -136,6 +136,12 @@ export class FakeImapServer {
   capabilities = new Set(['IMAP4REV1', 'IDLE', 'MOVE', 'UIDPLUS', 'CONDSTORE'])
   boxes = new Map<string, FakeBox>()
   password = 'disposable'
+  /** The access token a sign-in must present, for accounts that use one instead of a password. */
+  accessToken = 'access-token'
+  /** Every access token presented, in order. */
+  tokens: string[] = []
+  /** The provider accepts the sign-in but has IMAP switched off for the mailbox. */
+  imapDisabled = false
   down = false
   /** Like servers whose search index lags behind APPEND: header searches find nothing. */
   laggingSearch = false
@@ -261,7 +267,14 @@ export class FakePort implements ImapPort {
   async connect() {
     if (this.server.down)
       throw new ProviderError('network', 'The incoming server could not be reached.')
-    if (this.options.password !== this.server.password)
+    if (this.options.accessToken) {
+      const token = await this.options.accessToken()
+      this.server.tokens.push(token)
+      if (token !== this.server.accessToken)
+        throw new ProviderError('authentication', 'The incoming server rejected this sign-in.')
+      if (this.server.imapDisabled)
+        throw new ProviderError('imapDisabled', 'IMAP is switched off for this mailbox.')
+    } else if (this.options.password !== this.server.password)
       throw new ProviderError('authentication', 'The incoming server rejected this login.')
     this.open = true
   }

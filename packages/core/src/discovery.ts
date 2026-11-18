@@ -1,6 +1,7 @@
 import type { DiscoveryCandidate, DiscoveryResult, DiscoverySource, ServerSettings } from './model'
 import { serverSettingsSchema, serverUrlSchema } from './schemas'
 import { googleCandidate, isGoogleMx } from './google'
+import { isMicrosoftAutodiscover, microsoftCandidate, microsoftMx } from './microsoft'
 
 export interface SrvRecord {
   name: string
@@ -24,6 +25,8 @@ export interface DiscoveryTransport {
   resolveSrv(name: string): Promise<SrvRecord[]>
   /** Resolves MX records. Resolves [] when none exist (NXDOMAIN/NODATA). */
   resolveMx(name: string): Promise<MxRecord[]>
+  /** Resolves the names a CNAME record points to. Resolves [] when none exist. */
+  resolveCname(name: string): Promise<string[]>
   /** One unauthenticated GET. Never follows redirects, never sends credentials or cookies, and stops reading after maxBytes (reject). */
   get(url: string, options: { timeoutMs: number; maxBytes: number }): Promise<DiscoveryResponse>
 }
@@ -42,7 +45,7 @@ const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/
  * Finds likely server settings for an address. Only the domain leaves the device: requests are
  * unauthenticated, bounded, HTTPS-only, and the public directory is only consulted, with the
  * domain alone, when the domain publishes no settings itself and its mail exchanger isn't one
- * whose settings are known (Google's, for Workspace domains).
+ * whose settings are known (Google's and Microsoft's).
  * Throws for a malformed address; an IP-literal domain has nothing to discover and yields no
  * candidates. Individual sources that fail, time out, or return malformed data are skipped.
  */
@@ -98,11 +101,11 @@ export async function discoverAccount(
     clearTimeout(timer)
     return found.flatMap((c) => c || [])
   }
-  // The MX lookup only reaches the DNS resolver, so it starts now, but the domain's own published
+  // These lookups only reach the DNS resolver, so they start now, but the domain's own published
   // settings take precedence over what its mail exchanger suggests. An answer that is already in
   // counts even when another source used up the deadline.
   let mxFound: DiscoveryCandidate[] | undefined
-  const mx = googleMx(context, domain).then(
+  const mx = knownProvider(context, domain).then(
     (candidates) => (mxFound = candidates),
     () => (mxFound = []),
   )
@@ -251,17 +254,31 @@ async function autoconfig(
   ]
 }
 /**
- * Google Workspace domains publish no client settings, but their most preferred mail exchanger
- * is Google's, and Google's servers are the same for every domain.
+ * Google Workspace, Microsoft 365 and Outlook.com domains publish no client settings a password
+ * login could use, but their most preferred mail exchanger is the provider's, and each
+ * provider's servers are the same for every domain.
  */
-async function googleMx(context: Context, domain: string): Promise<DiscoveryCandidate[]> {
-  const records = await bounded(context.transport.resolveMx(domain), context.timeoutMs)
+async function knownProvider(context: Context, domain: string): Promise<DiscoveryCandidate[]> {
+  const pointer = bounded(
+    context.transport.resolveCname(`autodiscover.${domain}`),
+    context.timeoutMs,
+  ).catch(() => [] as string[])
+  const records = await bounded(context.transport.resolveMx(domain), context.timeoutMs).catch(
+    () => [] as MxRecord[],
+  )
   // RFC 7505: a lone "." exchange means the domain accepts no mail.
   const preferred = records
     .map((r) => ({ ...r, exchange: r.exchange.toLowerCase().replace(/\.$/, '') }))
     .filter((r) => dnsName.test(r.exchange) && Number.isInteger(r.priority))
     .sort((a, b) => a.priority - b.priority)[0]
-  return preferred && isGoogleMx(preferred.exchange) ? [googleCandidate(context.email, 'mx')] : []
+  if (preferred && isGoogleMx(preferred.exchange)) return [googleCandidate(context.email, 'mx')]
+  const microsoft = preferred && microsoftMx(preferred.exchange)
+  if (microsoft) return [microsoftCandidate(context.email, 'mx', microsoft)]
+  // A mail filter in front of Microsoft 365 takes over the MX records, but the domain still
+  // points mail apps at Microsoft.
+  return (await pointer).some(isMicrosoftAutodiscover)
+    ? [microsoftCandidate(context.email, 'cname', 'work')]
+    : []
 }
 const preferTls = (servers: ServerSettings[]) =>
   servers.find((s) => s.security === 'tls') || servers[0]
