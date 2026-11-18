@@ -25,12 +25,28 @@ async function release(token?: string) {
  */
 export const supportPage = 'https://buymeacoffee.com/poeck'
 
+/**
+ * Where inlark.com/uninstall leads. The Windows uninstaller opens this page after someone removes
+ * inlark, so the survey can change without waiting for a new uninstaller to reach everyone.
+ */
+export const uninstallSurvey = 'https://tally.so/r/8NLEEO'
+
 // Temporary, so browsers ask again rather than remember the destination for good.
 const redirect = (location: string) =>
   new Response(null, {
     status: 302,
     headers: { Location: location, 'Cache-Control': 'public, max-age=300' },
   })
+
+/** Passes on the version the uninstaller reports, so answers show which release they're about. */
+function uninstall(url: URL) {
+  const version = url.searchParams.get('version')
+  const survey = new URL(uninstallSurvey)
+  if (version && version.length <= 64 && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
+    survey.searchParams.set('version', version)
+  }
+  return redirect(survey.href)
+}
 
 const json = (body: string, status: number, cache: string) =>
   new Response(body, {
@@ -84,5 +100,6 @@ export function handle(request: Request, token?: string): Promise<Response> | Re
   if (url.pathname === '/api/release') return release(token)
   if (url.pathname === '/api/reminder.ics') return reminder(url)
   if (url.pathname === '/support' || url.pathname === '/support/') return redirect(supportPage)
+  if (url.pathname === '/uninstall' || url.pathname === '/uninstall/') return uninstall(url)
   return null
 }
