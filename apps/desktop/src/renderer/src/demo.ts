@@ -8,7 +8,9 @@ import {
   googleLoginError,
   isGmailAddress,
   isGoogleMailHost,
+  isMicrosoftMailHost,
   mergePages,
+  microsoftCandidate,
   nextAccountColor,
   type Account,
   type AppEvent,
@@ -28,6 +30,7 @@ import {
   type FolderMappingReview,
   type FolderMappings,
   type HeldSend,
+  type MicrosoftSignInResult,
   type Mailbox,
   type Message,
   type MailQuery,
@@ -570,7 +573,84 @@ function untrustedBridge(server: ServerSettings): ConnectionCheck | undefined {
     certificate: bridgeCertificate,
   }
 }
+/*
+ * Demo only: Microsoft sign-in without Microsoft. The address decides what happens:
+ * “imapoff@…” has IMAP switched off until the second check, “nosmtp@…” sends another way,
+ * “other@…” gets signed in as a different account, “waiting@…” stays in the browser until the
+ * sign-in is cancelled, and “approval@contoso.test” needs an administrator's approval.
+ */
+const demoSignIns = new Map<
+  string,
+  { email: string; cancel: () => void; result: Promise<MicrosoftSignInResult> }
+>()
+const demoGrants = new Map<string, { email: string; checks: number }>()
+const demoMicrosoft = (config: ConnectionConfig) =>
+  config.protocol === 'imap' && isMicrosoftMailHost(config.incoming.host)
+function demoMicrosoftSignIn(address: string) {
+  const id = crypto.randomUUID()
+  const email = address.trim().toLowerCase()
+  let cancel = () => {}
+  const result = new Promise<MicrosoftSignInResult>((resolve) => {
+    const timer = setTimeout(() => {
+      if (/^waiting@/.test(email)) return
+      // What Microsoft's “Need admin approval” page really sends: no reason at all.
+      if (/^approval@/.test(email))
+        return resolve({
+          ok: false,
+          reason: 'sentBack',
+          message: 'Microsoft sent you back without signing in.',
+        })
+      const grant = crypto.randomUUID()
+      const signedInAs = /^other@/.test(email) ? email.replace(/^other@/, 'someone.else@') : email
+      demoGrants.set(grant, { email: signedInAs, checks: 0 })
+      resolve({ ok: true, grant, email: signedInAs, personal: !/contoso\.test$/.test(email) })
+    }, 2200)
+    cancel = () => {
+      clearTimeout(timer)
+      resolve({ ok: false, reason: 'cancelled', message: 'Microsoft sign-in was cancelled.' })
+    }
+  })
+  demoSignIns.set(id, { email, cancel, result })
+  return { id, url: 'https://login.microsoftonline.com/' }
+}
+function demoMicrosoftTest(input: ConnectInput): ConnectionTest {
+  const grant = input.microsoft?.grant ? demoGrants.get(input.microsoft.grant) : undefined
+  const email = input.config.protocol === 'imap' ? input.config.email : ''
+  const personal = !/contoso\.test$/.test(email)
+  if (grant) grant.checks++
+  if (/^imapoff@/.test(email) && (!grant || grant.checks < 2))
+    return {
+      incoming: {
+        ok: false,
+        error:
+          'Microsoft accepted the sign-in, but IMAP is switched off for this mailbox. Turn on “Let devices and apps use IMAP” in Outlook’s settings. For a work or school account, ask your administrator.',
+        fix: personal ? 'outlookImap' : 'microsoftImapAdmin',
+      },
+      outgoing: { ok: true },
+    }
+  return {
+    incoming: { ok: true },
+    outgoing: /^nosmtp@/.test(email)
+      ? { ok: true, note: 'Sends another way: Microsoft has switched off SMTP here' }
+      : { ok: true },
+    // Outlook marks its special folders itself, so nothing is left to confirm.
+    folders: {
+      folders: ['Inbox', 'Sent', 'Drafts', 'Archive', 'Junk', 'Deleted'].map((name) => ({
+        path: name,
+        name,
+      })),
+      mappings: {
+        sent: { path: 'Sent', source: 'server' },
+        drafts: { path: 'Drafts', source: 'server' },
+        archive: { path: 'Archive', source: 'server' },
+        junk: { path: 'Junk', source: 'server' },
+        trash: { path: 'Deleted', source: 'server' },
+      },
+    },
+  }
+}
 function demoTest(input: ConnectInput): ConnectionTest {
+  if (input.microsoft) return demoMicrosoftTest(input)
   const google = input.config.protocol === 'imap' && isGoogleMailHost(input.config.incoming.host)
   const incoming =
     (input.config.protocol === 'imap' && untrustedBridge(input.config.incoming)) ||
@@ -1136,32 +1216,40 @@ export const demoAPI: DesktopMailAPI = {
     const address = email.trim().toLowerCase()
     const domain = address.split('@')[1] || ''
     // Try “@fastmail.com” for JMAP, “@nothing.test” for no result, “@gmail.com” for Gmail,
-    // “@workspace.test” for a Google Workspace domain, anything else for IMAP.
-    const candidates: DiscoveryCandidate[] = isGmailAddress(address)
-      ? [
-          // What gmail.com publishes in its SRV records.
-          {
-            protocol: 'imap',
-            source: 'imap-srv',
-            incoming: { host: 'imap.gmail.com', port: 993, security: 'tls', username: '' },
-            outgoing: { host: 'smtp.gmail.com', port: 587, security: 'starttls', username: '' },
-          },
-        ]
-      : /(^|\.)workspace\.test$/.test(domain)
-        ? [googleCandidate(address, 'mx')]
-        : /(^|\.)(fastmail\.com|jmap\.test)$/.test(domain)
-          ? [
-              {
-                protocol: 'jmap',
-                source: 'jmap-well-known',
-                serverUrl: 'https://api.' + domain + '/jmap/session',
-                username: address,
-              },
-              imapCandidate(domain, 'Fastmail'),
-            ]
-          : /(^|\.)nothing\.test$/.test(domain)
-            ? []
-            : [imapCandidate(domain, providerName(domain))]
+    // “@workspace.test” for a Google Workspace domain, “@outlook.com” or “@hotmail.com” for
+    // Microsoft sign-in, “@contoso.test” for Microsoft 365, anything else for IMAP.
+    const microsoft = /(^|\.)(outlook|hotmail|live|msn)\.[a-z.]+$/.test(domain)
+      ? ('personal' as const)
+      : /(^|\.)contoso\.test$/.test(domain)
+        ? ('work' as const)
+        : undefined
+    const candidates: DiscoveryCandidate[] = microsoft
+      ? [microsoftCandidate(address, 'mx', microsoft)]
+      : isGmailAddress(address)
+        ? [
+            // What gmail.com publishes in its SRV records.
+            {
+              protocol: 'imap',
+              source: 'imap-srv',
+              incoming: { host: 'imap.gmail.com', port: 993, security: 'tls', username: '' },
+              outgoing: { host: 'smtp.gmail.com', port: 587, security: 'starttls', username: '' },
+            },
+          ]
+        : /(^|\.)workspace\.test$/.test(domain)
+          ? [googleCandidate(address, 'mx')]
+          : /(^|\.)(fastmail\.com|jmap\.test)$/.test(domain)
+            ? [
+                {
+                  protocol: 'jmap',
+                  source: 'jmap-well-known',
+                  serverUrl: 'https://api.' + domain + '/jmap/session',
+                  username: address,
+                },
+                imapCandidate(domain, 'Fastmail'),
+              ]
+            : /(^|\.)nothing\.test$/.test(domain)
+              ? []
+              : [imapCandidate(domain, providerName(domain))]
     return {
       email: address,
       domain,
@@ -1176,6 +1264,17 @@ export const demoAPI: DesktopMailAPI = {
       ),
     }
   },
+  startMicrosoftSignIn: async (email) => {
+    await pause(300)
+    return demoMicrosoftSignIn(email)
+  },
+  finishMicrosoftSignIn: async (id) =>
+    demoSignIns.get(id)?.result ?? {
+      ok: false,
+      reason: 'failed',
+      message: 'This sign-in is no longer waiting. Start it again.',
+    },
+  cancelMicrosoftSignIn: async (id) => demoSignIns.get(id)?.cancel(),
   testConnection: async (input) => {
     await pause(900)
     return demoTest(input)
@@ -1220,6 +1319,8 @@ export const demoAPI: DesktopMailAPI = {
       config: configFor(account),
       remember: demoConnections.get(connectionId)?.remember ?? !account.sessionOnly,
       folders: demoFolderChoices.get(account.id),
+      // A demo Microsoft account keeps its sign-in, as a remembered one does.
+      ...(demoMicrosoft(configFor(account)) ? { microsoft: true } : {}),
     }
   },
   folderMappings: async (accountId) => {

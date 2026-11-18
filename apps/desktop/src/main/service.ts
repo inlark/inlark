@@ -15,9 +15,12 @@ import {
   connectionErrorCodes,
   isProviderError,
   isDraft,
+  isMicrosoftMailHost,
+  microsoftSendLimit,
   ProviderError,
   scopeKey,
   type Account,
+  type AccountLimits,
   type AccountAppearance,
   type Address,
   type Alias,
@@ -26,6 +29,7 @@ import {
   type ConnectInput,
   type ConnectionCheck,
   type ConnectionConfig,
+  type ConnectionFix,
   type ConnectionSettings,
   type ConnectionTest,
   type AccountDetails,
@@ -53,6 +57,8 @@ import {
   type Conversation,
 } from '@inlark/core'
 import { JmapProvider } from '@inlark/jmap'
+import { submitGraph, verifyGraph, type SubmissionFallback } from '@inlark/imap'
+import type { MicrosoftAuth, MicrosoftSession } from './microsoft-auth'
 import { currentPriority, withPriority } from './request-priority'
 import { publicFetch } from './public-fetch'
 import { remoteImageData } from './remote-image'
@@ -69,6 +75,18 @@ export type Connection = {
   /** Only present when the outgoing server has its own password. */
   outgoingSecret?: string
   outgoingLocalSecret?: string
+  /**
+   * Present when the account signs in with Microsoft. Its long-lived token is kept apart from
+   * `secret`, so a build without Microsoft sign-in never presents it to a server as a password.
+   */
+  microsoft?: {
+    secret?: string
+    localSecret?: string
+    /** An Outlook.com, Hotmail, Live or MSN account, as opposed to a work or school one. */
+    personal: boolean
+    /** Microsoft refuses SMTP for this mailbox, so its mail goes out through Graph. */
+    graph?: boolean
+  }
   folders?: FolderMappings
   accounts: Account[]
 }
@@ -102,7 +120,17 @@ export function migrateConnections(data: unknown, version: number): Connection[]
 }
 export const CONNECTIONS_VERSION = 2
 
-type Secrets = { password: string; outgoingPassword?: string }
+type Secrets = { password?: string; outgoingPassword?: string; microsoft?: MicrosoftSession }
+const remembered = (c: Connection) =>
+  !!(c.secret || c.localSecret || c.microsoft?.secret || c.microsoft?.localSecret)
+/** Problems only the user can resolve, as opposed to a server that is unreachable for now. */
+const needsUser = (error: unknown) => isProviderError(error, 'authentication', 'imapDisabled')
+/** Adds or removes the size limit that applies while a mailbox sends through Graph. */
+function withSendLimit(limits: AccountLimits | undefined, limited: boolean) {
+  const { send: _send, ...rest } = limits || {}
+  const next: AccountLimits = limited ? { ...rest, send: microsoftSendLimit } : rest
+  return Object.keys(next).length ? next : undefined
+}
 type Journal = {
   draftId: string
   accountId: string
@@ -144,6 +172,8 @@ const sameAuth = (a: AuthValue | null, b: AuthValue | null) =>
 const definiteSubmissionCodes = [
   'submissionRejected',
   'authentication',
+  'imapDisabled',
+  'outgoingDisabled',
   'outgoingAuthentication',
   'outgoingNetwork',
   'outgoingCertificate',
@@ -159,7 +189,13 @@ const definiteSubmissionCodes = [
 export type ProviderFactory = (input: {
   connectionId: string
   config: ConnectionConfig
-  secrets: Secrets
+  secrets: Pick<Secrets, 'password' | 'outgoingPassword'>
+  /** Signs in with an access token instead of a password, fetched for every connection. */
+  accessToken?: () => Promise<string>
+  /** Another way to send when the outgoing server refuses the mailbox. */
+  fallback?: SubmissionFallback
+  /** The provider files its own Sent copies, so inlark files none. */
+  serverSentCopy?: boolean
   name: string
   folders?: FolderMappings
   /** A test connection must leave nothing behind on disk. */
@@ -174,6 +210,10 @@ export interface ServiceOptions {
   providers?: ProviderFactory
   discover?: (email: string) => Promise<DiscoveryResult>
   crypto?: () => CryptoTransport
+  /** Signs accounts in with Microsoft. Without it, Outlook accounts can't be connected. */
+  microsoft?: MicrosoftAuth
+  /** For requests to Microsoft Graph. Defaults to the global `fetch`. */
+  fetch?: typeof fetch
 }
 /** Fingerprints shown to the user are computed here from the certificate itself, never taken on trust. */
 function verifiedCertificates(config: ConnectionConfig): ConnectionConfig {
@@ -193,7 +233,7 @@ function verifiedCertificates(config: ConnectionConfig): ConnectionConfig {
 }
 const errorKind = (error: unknown): DraftErrorKind | undefined =>
   error instanceof ProviderError
-    ? error.code === 'outgoingAuthentication'
+    ? error.code === 'outgoingAuthentication' || error.code === 'outgoingDisabled'
       ? 'outgoingAuthentication'
       : error.code === 'certificate' || error.code === 'outgoingCertificate'
         ? 'certificate'
@@ -214,6 +254,8 @@ export class MailService {
   private connections: Connection[] = []
   private providers = new Map<string, MailProvider>()
   private sessionSecrets = new Map<string, Secrets>()
+  /** Whether Microsoft refuses SMTP for the mailbox behind each sign-in, once that is known. */
+  private graphKnown = new WeakMap<MicrosoftSession, boolean>()
   private localDrafts = new Map<string, Draft>()
   private journals = new Map<string, Journal>()
   private staging = new Map<string, StagedAttachment>()
@@ -552,7 +594,7 @@ export class MailService {
       if (error instanceof ProviderError && connectionErrorCodes.includes(error.code))
         this.status(
           account.connectionId,
-          error.code === 'authentication' ? 'authentication' : 'offline',
+          needsUser(error) ? 'authentication' : 'offline',
           friendlyError(error),
         )
       // Neither resolves by retrying, so sending stays marked unavailable until the user acts.
@@ -562,29 +604,132 @@ export class MailService {
       throw error
     }
   }
+  private microsoftAuth(): MicrosoftAuth {
+    if (!this.options.microsoft)
+      throw new Error('Microsoft sign-in is not available in this build.')
+    return this.options.microsoft
+  }
+  startMicrosoftSignIn = (email: string) => this.microsoftAuth().start(email)
+  finishMicrosoftSignIn = (id: string) => this.microsoftAuth().finish(id)
+  cancelMicrosoftSignIn = async (id: string): Promise<void> => this.microsoftAuth().cancel(id)
+  /** The Microsoft sign-in to use: the one just finished, or the one kept with the connection. */
+  private microsoftSession(input: ConnectInput): MicrosoftSession | undefined {
+    if (!input.microsoft) return undefined
+    const connection = this.connections.find((c) => c.id === input.connectionId)
+    const session = input.microsoft.grant
+      ? this.microsoftAuth().grant(input.microsoft.grant)
+      : connection && this.secrets(connection)?.microsoft
+    if (!session) throw new ProviderError('authentication', 'Sign in with Microsoft to continue.')
+    return session
+  }
+  /**
+   * A Microsoft token is only ever presented to Microsoft's own servers, whatever the window or
+   * a domain's published settings ask for, and only over a connection the public certificate
+   * authorities vouch for: a certificate trusted by hand has no place on Microsoft's servers.
+   * One sign-in covers both servers, under the account's own login name.
+   */
+  private microsoftConfig(config: ConnectionConfig, session?: MicrosoftSession): ConnectionConfig {
+    if (!session) return config
+    if (
+      config.protocol !== 'imap' ||
+      !isMicrosoftMailHost(config.incoming.host) ||
+      !isMicrosoftMailHost(config.outgoing.host)
+    )
+      throw new Error(
+        'Microsoft sign-in only works with Microsoft’s own mail servers. Check the incoming and outgoing server names.',
+      )
+    const { certificate: _incoming, ...incoming } = config.incoming
+    const { certificate: _outgoing, ...outgoing } = config.outgoing
+    return {
+      ...config,
+      incoming,
+      outgoing: { ...outgoing, username: incoming.username },
+      outgoingSameCredentials: true,
+    }
+  }
+  /**
+   * Sends through Microsoft Graph once Microsoft refuses SMTP for the mailbox. What a connection
+   * check learns about that is remembered with the sign-in, so connecting doesn't ask again.
+   */
+  private graphFallback(session: MicrosoftSession, saved = false): SubmissionFallback {
+    const token = () => session.accessToken('graph')
+    const options = { fetch: this.options.fetch }
+    return {
+      active: this.graphKnown.get(session) ?? saved,
+      limit: microsoftSendLimit,
+      verify: () => verifyGraph(token, options),
+      submit: (message) => submitGraph(token, message, options),
+      onChange: (active) => void this.graphKnown.set(session, active),
+    }
+  }
+  /** Keeps the token Microsoft just issued in place of the one it replaces. */
+  private async saveMicrosoftToken(connectionId: string, token: string) {
+    const connection = this.connections.find((c) => c.id === connectionId)
+    const saved = connection?.microsoft
+    // A session-only login keeps nothing on disk.
+    if (!connection || !saved || (!saved.secret && !saved.localSecret)) return
+    try {
+      connection.microsoft = saved.secret
+        ? { ...saved, secret: encryptSecret(token) }
+        : { ...saved, localSecret: token }
+      await this.saveConnections()
+    } catch {
+      // The previous token stays saved and usually still works.
+      this.log('microsoft-token-save-failed')
+    }
+  }
+  private async setGraphSending(connectionId: string, active: boolean) {
+    const connection = this.connections.find((c) => c.id === connectionId)
+    if (!connection?.microsoft || !!connection.microsoft.graph === active) return
+    const { graph: _graph, ...rest } = connection.microsoft
+    connection.microsoft = active ? { ...rest, graph: true } : rest
+    this.accounts = this.accounts.map((a) =>
+      a.connectionId === connectionId ? { ...a, limits: withSendLimit(a.limits, active) } : a,
+    )
+    connection.accounts = connection.accounts.map((a) => ({
+      ...a,
+      limits: withSendLimit(a.limits, active),
+    }))
+    this.emit({ type: 'accounts', accounts: this.accounts })
+    await this.saveConnections().catch(() => this.log('connections-save-failed'))
+  }
   private createProvider(
     id: string,
     input: Pick<ConnectInput, 'config' | 'name' | 'password' | 'outgoingPassword' | 'folders'>,
     temporary = false,
+    microsoft?: { session: MicrosoftSession; fallback: SubmissionFallback },
   ): MailProvider {
     const config = input.config
     if (config.protocol === 'jmap')
       return new JmapProvider({
         serverUrl: config.serverUrl,
         authorization:
-          'Basic ' + Buffer.from(config.username + ':' + input.password).toString('base64'),
+          'Basic ' + Buffer.from(config.username + ':' + (input.password ?? '')).toString('base64'),
         connectionId: id,
         name: input.name,
         detectAuth,
         priority: currentPriority,
       })
     if (!this.options.providers) throw new Error('IMAP accounts are not available in this build.')
+    // Checked where the token is handed over, whatever led here.
+    if (
+      microsoft &&
+      !(isMicrosoftMailHost(config.incoming.host) && isMicrosoftMailHost(config.outgoing.host))
+    )
+      throw new Error('Microsoft sign-in only works with Microsoft’s own mail servers.')
     return this.options.providers({
       connectionId: id,
       config,
       name: input.name,
       folders: input.folders,
       secrets: { password: input.password, outgoingPassword: input.outgoingPassword },
+      ...(microsoft
+        ? {
+            accessToken: () => microsoft.session.accessToken('mail'),
+            fallback: microsoft.fallback,
+            serverSentCopy: true,
+          }
+        : {}),
       temporary,
       directory: join(this.store.directory, 'index', id),
       readAttachment: this.readStagedAttachment,
@@ -597,15 +742,61 @@ export class MailService {
   }
   /** Signs in to each server separately and reports each result. Nothing is saved or sent. */
   testConnection = async (input: ConnectInput): Promise<ConnectionTest> => {
-    input = { ...input, config: verifiedCertificates(input.config) }
-    const provider = this.createProvider('test-' + randomUUID(), input, true)
+    let session: MicrosoftSession | undefined
+    try {
+      session = this.microsoftSession(input)
+    } catch (error) {
+      // No sign-in to check with is a result like any other: the window asks Microsoft again.
+      if (!isProviderError(error, 'authentication')) throw error
+      return { incoming: { ok: false, error: friendlyError(error), fix: 'microsoftSignIn' } }
+    }
+    input = { ...input, config: this.microsoftConfig(verifiedCertificates(input.config), session) }
+    const saved = this.connections.find((c) => c.id === input.connectionId)
+    const provider = this.createProvider(
+      'test-' + randomUUID(),
+      input,
+      true,
+      session && { session, fallback: this.graphFallback(session, !!saved?.microsoft?.graph) },
+    )
     const result: ConnectionTest = { incoming: { ok: false } }
+    /** What the user can do about a refusal that signing in again would not resolve. */
+    const fixFor = (error: unknown): ConnectionFix | undefined =>
+      !session
+        ? undefined
+        : isProviderError(error, 'imapDisabled')
+          ? session.personal
+            ? 'outlookImap'
+            : 'microsoftImapAdmin'
+          : isProviderError(error, 'authentication', 'outgoingAuthentication')
+            ? 'microsoftSignIn'
+            : undefined
     /** A refused certificate is read again without signing in, so the user can review it. */
     const failed = async (server: 'incoming' | 'outgoing', error: unknown) => {
-      const check: ConnectionCheck = { ok: false, error: friendlyError(error) }
+      const fix = fixFor(error)
+      const login = input.config.protocol === 'imap' ? input.config.incoming.username : ''
+      // The browser may be signed in to another Microsoft account than the one being set up.
+      const other =
+        fix === 'microsoftSignIn' &&
+        session?.email &&
+        session.email.toLowerCase() !== login.toLowerCase()
+          ? `Microsoft signed you in as ${session.email}, which isn’t ${login}.`
+          : undefined
+      const untrusted = isProviderError(error, 'certificate', 'outgoingCertificate')
+      // Microsoft's servers always present a publicly trusted certificate, so another one is
+      // never offered for review: trusting it would hand the sign-in to whoever presented it.
+      if (session && untrusted)
+        return {
+          ok: false,
+          error:
+            'The certificate this connection presented isn’t publicly trusted, so inlark didn’t sign in. Microsoft’s own servers always present one that is. A network that inspects encrypted connections can cause this.',
+        }
+      const check: ConnectionCheck = {
+        ok: false,
+        error: other || friendlyError(error),
+        ...(fix ? { fix } : {}),
+      }
       const certificate =
-        isProviderError(error, 'certificate', 'outgoingCertificate') &&
-        (await provider.inspectCertificate?.(server).catch(() => undefined))
+        untrusted && (await provider.inspectCertificate?.(server).catch(() => undefined))
       return certificate ? { ...check, certificate } : check
     }
     try {
@@ -619,7 +810,10 @@ export class MailService {
       } else result.incoming = await failed('incoming', accounts.reason)
       if (provider.verifyOutgoing)
         result.outgoing = await provider.verifyOutgoing().then(
-          () => ({ ok: true }),
+          (): ConnectionCheck =>
+            session && this.graphKnown.get(session)
+              ? { ok: true, note: 'Sends another way: Microsoft has switched off SMTP here' }
+              : { ok: true },
           (error) => failed('outgoing', error),
         )
       return result
@@ -630,7 +824,8 @@ export class MailService {
   }
   /** `reconnecting` restores a saved login, so labels and names edited since then are kept. */
   connect = async (input: ConnectInput, reconnecting = false): Promise<Account[]> => {
-    input = { ...input, config: verifiedCertificates(input.config) }
+    const session = this.microsoftSession(input)
+    input = { ...input, config: this.microsoftConfig(verifiedCertificates(input.config), session) }
     const id = input.connectionId || randomUUID()
     const previous = this.connections.find((c) => c.id === id)
     if (previous && previous.config.protocol !== input.config.protocol)
@@ -639,7 +834,16 @@ export class MailService {
       input.config.protocol === 'imap' && !input.config.outgoingSameCredentials
         ? input.outgoingPassword
         : undefined
-    const provider = this.createProvider(id, { ...input, outgoingPassword })
+    const fallback = session && this.graphFallback(session, !!previous?.microsoft?.graph)
+    // Microsoft replaces the long-lived token as it is used. Nothing is kept until the
+    // connection is saved below; from then on every replacement is.
+    if (session) session.onRotate = (next) => void this.saveMicrosoftToken(id, next)
+    const provider = this.createProvider(
+      id,
+      { ...input, outgoingPassword },
+      false,
+      session && fallback && { session, fallback },
+    )
     let accounts: Account[]
     let folders = input.folders ?? previous?.folders
     try {
@@ -666,6 +870,8 @@ export class MailService {
           (input.config.protocol === 'imap' ? input.config.email : input.config.username)
         account.sessionOnly = !input.remember
         account.protocol = input.config.protocol
+        // Checking the outgoing server may have just found that Microsoft refuses SMTP here.
+        if (fallback) account.limits = withSendLimit(account.limits, fallback.active)
         // Reconnecting must never reset what the user picked for this account.
         const known = this.accounts.find((a) => a.id === account.id)
         account.color = known?.color || nextAccountColor(used)
@@ -688,6 +894,8 @@ export class MailService {
         input.remember && !encrypted ? value : undefined
       const secret = keep(input.password)
       const outgoingSecret = keep(outgoingPassword)
+      const token = session?.refreshToken()
+      const tokenSecret = keep(token)
       const connection: Connection = {
         id,
         name: input.name,
@@ -696,6 +904,16 @@ export class MailService {
         localSecret: local(input.password, secret),
         outgoingSecret,
         outgoingLocalSecret: outgoingPassword ? local(outgoingPassword, outgoingSecret) : undefined,
+        ...(session
+          ? {
+              microsoft: {
+                personal: session.personal,
+                ...(fallback?.active ? { graph: true } : {}),
+                secret: tokenSecret,
+                localSecret: local(token, tokenSecret),
+              },
+            }
+          : {}),
         folders,
         accounts,
       }
@@ -713,7 +931,15 @@ export class MailService {
       await old.close?.()
     }
     this.providers.set(id, provider)
-    this.sessionSecrets.set(id, { password: input.password, outgoingPassword })
+    this.sessionSecrets.set(id, { password: input.password, outgoingPassword, microsoft: session })
+    if (session && fallback) {
+      // From here on the connection owns the sign-in and keeps what changes about it.
+      fallback.onChange = (active) => {
+        this.graphKnown.set(session, active)
+        void this.setGraphSending(id, active)
+      }
+      if (input.microsoft?.grant) this.microsoftAuth().release(input.microsoft.grant)
+    }
     this.accounts = [...this.accounts.filter((a) => a.connectionId !== id), ...accounts]
     provider.subscribe((event) => {
       if (event.type === 'indexing' && event.accountId && event.indexing) {
@@ -759,6 +985,21 @@ export class MailService {
   private secrets(connection: Connection): Secrets | undefined {
     const session = this.sessionSecrets.get(connection.id)
     if (session) return session
+    if (connection.microsoft) {
+      const { secret, localSecret, personal } = connection.microsoft
+      const token = secret ? decryptSecret(secret) : localSecret
+      if (!token || !this.options.microsoft) return undefined
+      const { config } = connection
+      const microsoft = this.options.microsoft.resume(
+        token,
+        personal,
+        config.protocol === 'imap' ? config.email : undefined,
+      )
+      // Kept from now on, so a renewal that replaces the token is saved even if connecting fails.
+      microsoft.onRotate = (next) => void this.saveMicrosoftToken(connection.id, next)
+      this.sessionSecrets.set(connection.id, { microsoft })
+      return { microsoft }
+    }
     const password = connection.secret ? decryptSecret(connection.secret) : connection.localSecret
     if (!password) return undefined
     const outgoingPassword = connection.outgoingSecret
@@ -777,9 +1018,10 @@ export class MailService {
         {
           config: connection.config,
           name: connection.name,
-          password: secrets.password,
-          outgoingPassword: secrets.outgoingPassword,
-          remember: !!(connection.secret || connection.localSecret),
+          ...(secrets.microsoft
+            ? { microsoft: {} }
+            : { password: secrets.password, outgoingPassword: secrets.outgoingPassword }),
+          remember: remembered(connection),
           connectionId: id,
         },
         true,
@@ -787,9 +1029,7 @@ export class MailService {
     } catch (error) {
       this.status(
         id,
-        error instanceof ProviderError && error.code !== 'authentication'
-          ? 'offline'
-          : 'authentication',
+        error instanceof ProviderError && !needsUser(error) ? 'offline' : 'authentication',
         friendlyError(error),
       )
       this.log('reconnect-failed')
@@ -799,12 +1039,19 @@ export class MailService {
   connectionSettings = async (connectionId: string): Promise<ConnectionSettings> => {
     const connection = this.connections.find((c) => c.id === connectionId)
     if (!connection) throw new Error('Connection not found.')
+    let signedIn = false
+    try {
+      signedIn = !!connection.microsoft && !!this.secrets(connection)?.microsoft
+    } catch {
+      // A locked keyring only means the saved sign-in can't be used right now.
+    }
     return {
       connectionId,
       name: connection.name,
       config: connection.config,
-      remember: !!(connection.secret || connection.localSecret),
+      remember: remembered(connection),
       folders: connection.folders,
+      ...(signedIn ? { microsoft: true } : {}),
     }
   }
   folderMappings = async (accountId: string) =>
@@ -2504,13 +2751,7 @@ export class MailService {
           this.log('refresh-paused')
           break
         }
-        this.status(
-          id,
-          error instanceof ProviderError && error.code === 'authentication'
-            ? 'authentication'
-            : 'offline',
-          friendlyError(error),
-        )
+        this.status(id, needsUser(error) ? 'authentication' : 'offline', friendlyError(error))
       }
     }
   }
@@ -2557,6 +2798,8 @@ export class MailService {
     for (const timer of this.holds.values()) clearTimeout(timer)
     this.holds.clear()
     void this.encryption.lock()
+    // A sign-in still waiting in the browser has nothing to come back to.
+    this.options.microsoft?.dispose()
     if (this.timer) clearInterval(this.timer)
     if (this.indexingEmit) clearTimeout(this.indexingEmit)
     for (const provider of this.providers.values()) {

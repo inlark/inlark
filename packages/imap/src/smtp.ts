@@ -6,13 +6,18 @@ import {
   ProviderError,
   googleLoginError,
   isGoogleMailHost,
+  isMicrosoftMailHost,
+  isMicrosoftSmtpDisabled,
   type ServerSettings,
   type SubmissionOutcome,
 } from '@inlark/core'
 import { certificateError, certificateOptions } from './certificate'
 
 export interface SmtpSettings extends ServerSettings {
-  password: string
+  /** Absent when `accessToken` signs in instead. */
+  password?: string
+  /** Signs in with an OAuth access token instead of a password, fetched for each session. */
+  accessToken?: () => Promise<string>
   timeoutMs?: number
   /** Tests only: trust this CA instead of the system roots. */
   tls?: { ca?: string | Uint8Array }
@@ -200,6 +205,7 @@ function requireOfferedStartTls(conn: SMTPConnection, state: State) {
 
 async function login(conn: SMTPConnection, settings: SmtpSettings): Promise<void> {
   const host = settings.host
+  if (settings.accessToken) return tokenLogin(conn, settings, settings.accessToken)
   if (!conn.allowsAuth)
     throw new ProviderError(
       'outgoingNetwork',
@@ -228,7 +234,69 @@ async function login(conn: SMTPConnection, settings: SmtpSettings): Promise<void
               'outgoingAuthentication',
               isGoogleMailHost(host)
                 ? googleLoginError(failure.response, true)
-                : `${host} didn't accept the username or password for sending mail. Check them in the account settings.`,
+                : isMicrosoftMailHost(host)
+                  ? 'Microsoft doesn’t accept a password from email apps. Sign in with Microsoft instead.'
+                  : `${host} didn't accept the username or password for sending mail. Check them in the account settings.`,
+            ),
+      )
+    }),
+  )
+}
+
+/** Signs in with an access token (SASL XOAUTH2), as Microsoft and Google expect from apps. */
+async function tokenLogin(
+  conn: SMTPConnection,
+  settings: SmtpSettings,
+  accessToken: () => Promise<string>,
+): Promise<void> {
+  const host = settings.host
+  const offered = (conn as unknown as Internals)._supportedAuth ?? []
+  if (!conn.allowsAuth || !offered.includes('XOAUTH2'))
+    throw new ProviderError(
+      'outgoingNetwork',
+      `${host} doesn't offer the sign-in this account uses on this connection, so nothing can be sent. Check the port and security settings.`,
+    )
+  let token: string
+  try {
+    token = await accessToken()
+  } catch (error) {
+    // Nothing was sent. An expired sign-in already explains itself; an unreachable sign-in
+    // service is a sending problem here, not a reason to mark incoming mail offline.
+    if (error instanceof ProviderError && error.code === 'network')
+      throw new ProviderError('outgoingNetwork', error.message)
+    throw error
+  }
+  const oauth2 = {
+    getToken: (_renew: boolean, callback: (error: Error | null, token?: string) => void) =>
+      callback(null, token),
+    buildXOAuth2Token: (value: string) =>
+      Buffer.from(`user=${settings.username}\x01auth=Bearer ${value}\x01\x01`).toString('base64'),
+  }
+  await new Promise<void>((resolve, reject) =>
+    conn.login({ user: settings.username, method: 'XOAUTH2', oauth2 } as never, (error) => {
+      if (!error) return resolve()
+      const failure = error as SmtpFailure
+      if (failure.code !== 'EAUTH') return reject(failure)
+      if (failure.responseCode && failure.responseCode < 500)
+        return reject(
+          new ProviderError(
+            'outgoingNetwork',
+            `${host} couldn't check the sign-in right now. Try again in a moment.`,
+          ),
+        )
+      const microsoft = isMicrosoftMailHost(host)
+      reject(
+        // Only Microsoft answers in these words, on whichever of its hosts.
+        isMicrosoftSmtpDisabled(failure.response)
+          ? new ProviderError(
+              'outgoingDisabled',
+              'Microsoft has switched off sending over SMTP for this mailbox.',
+            )
+          : new ProviderError(
+              'outgoingAuthentication',
+              microsoft
+                ? 'Microsoft didn’t accept this sign-in for sending mail. Sign in with Microsoft again.'
+                : `${host} didn't accept this sign-in for sending mail. Sign in again.`,
             ),
       )
     }),

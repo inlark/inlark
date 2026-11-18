@@ -53,7 +53,13 @@ export interface ImapPort {
 }
 
 export interface ImapServerOptions extends ServerSettings {
-  password: string
+  /** Absent when `accessToken` signs in instead. */
+  password?: string
+  /**
+   * Signs in with an OAuth access token instead of a password. Called for every new connection,
+   * because tokens expire within the hour.
+   */
+  accessToken?: () => Promise<string>
   timeoutMs?: number
   /** Tests only: trust an extra certificate authority. */
   tls?: { ca?: string | Uint8Array }

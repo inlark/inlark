@@ -11,6 +11,7 @@ import {
   nativeImage,
   nativeTheme,
   powerMonitor,
+  shell,
 } from 'electron'
 import { homedir } from 'node:os'
 import { StartupManager, startInTray, startupArgument } from './startup'
@@ -21,6 +22,7 @@ import { ipcSchemas, type AppEvent, type Settings } from '@inlark/core'
 import { JsonStore } from './storage'
 import { MailService } from './service'
 import { imapProviders } from './imap-accounts'
+import { MicrosoftAuth } from './microsoft-auth'
 import { openWorkerIndex } from './imap-index/open'
 import { discover } from './discovery-transport'
 import { SenderAvatarResolver } from './sender-avatar'
@@ -261,10 +263,23 @@ else {
         if (!path.startsWith(rendererRoot + sep)) return new Response('Not found', { status: 404 })
         return net.fetch(pathToFileURL(path).toString())
       })
+      // Chromium's network stack, so requests to Microsoft follow the system's proxy and
+      // certificate settings. They carry no cookies.
+      const microsoftFetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+        net.fetch(String(input), { ...init, credentials: 'omit' })) as typeof fetch
       service = new MailService(new JsonStore(join(app.getPath('userData'), 'mail')), send, {
         providers: imapProviders,
         crypto: openCryptoWorker,
         discover,
+        fetch: microsoftFetch,
+        microsoft: new MicrosoftAuth({
+          open: (url) => shell.openExternal(url),
+          fetch: microsoftFetch,
+          // Lets a fork or a test build use its own registration with Microsoft.
+          clientId: process.env.INLARK_MICROSOFT_CLIENT_ID,
+          // The sign-in finished in the browser, so bring inlark back to the front.
+          onReturn: show,
+        }),
       })
       await service.init()
       startup = new StartupManager({
@@ -324,6 +339,9 @@ else {
         bootstrap: service.bootstrap,
         updateStatus: updates.getStatus,
         discover: service.discover,
+        startMicrosoftSignIn: service.startMicrosoftSignIn,
+        finishMicrosoftSignIn: service.finishMicrosoftSignIn,
+        cancelMicrosoftSignIn: service.cancelMicrosoftSignIn,
         testConnection: service.testConnection,
         connect: service.connect,
         connectionSettings: service.connectionSettings,

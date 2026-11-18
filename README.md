@@ -118,11 +118,25 @@ Open **Settings → Accounts → Add account** and type your email address. inla
 - **IMAP/SMTP** settings come from your domain's autoconfig file or DNS SRV records. Only if your domain publishes nothing does inlark ask Thunderbird's public settings directory, and then it sends just the domain.
 - **Encryption is required.** inlark uses implicit TLS or required STARTTLS, always with certificate verification and never a plaintext fallback. Your password is never tried against a server you didn't choose.
 - **Self-signed certificates are trusted one at a time.** When a certificate can't be verified, such as Proton Mail Bridge's on `127.0.0.1`, the connection check shows who it's issued to, how long it's valid and its SHA-256 fingerprint before any password is sent. You can trust exactly that certificate for that server. If it ever changes, inlark stops before signing in and asks again. Expired certificates are never accepted.
-- **Passwords go into your OS keyring** when one is available. Without a keyring, you decide whether to remember a login on this device. If you do, the password is stored unencrypted in an owner-only file.
+- **Passwords go into your OS keyring** when one is available. Without a keyring, you decide whether to remember a login on this device. If you do, the password is stored unencrypted in an owner-only file. A Microsoft sign-in is kept the same way.
 
 IMAP accounts build a local index in the background, newest Inbox mail first. Until it catches up, lists tell you that older mail may be missing, and search still runs on the server. If your server can't do an action safely, such as a move without `MOVE` or `UIDPLUS`, inlark turns it off and tells you why rather than guessing.
 
-Gmail and Microsoft sign-in (OAuth) aren't supported yet.
+### Outlook.com, Hotmail and Microsoft 365
+
+Microsoft takes no password from email apps, so inlark sends you to Microsoft's own sign-in page in your browser and never sees your password. Type your address as usual. inlark recognizes Outlook.com, Hotmail, Live and MSN addresses and Microsoft 365 domains, fills in Microsoft's servers and offers **Sign in with Microsoft**.
+
+- **Outlook.com keeps IMAP off until you turn it on.** If Microsoft signs you in but won't open the mailbox, setup shows the steps: Outlook's **Settings → Mail → Forwarding and IMAP**, then **Let devices and apps use IMAP**.
+- **Work and school accounts usually need an administrator's approval first.** Microsoft's default for organizations lets only an administrator approve an app that reads mail over IMAP. Send them [inlark.com/microsoft](https://inlark.com/microsoft/), which explains what inlark asks for and lets them approve it once for everyone.
+- **Microsoft has switched off SMTP for some mailboxes**, newer Outlook.com ones among them. inlark then sends through Microsoft Graph, which takes messages up to about 3 MB. The connection check and the composer tell you when this applies.
+- **The sign-in only ever goes to Microsoft.** inlark presents it to Microsoft's own mail servers and to nothing else, and only over a publicly trusted certificate. Unlike a password login, it can't be pointed at another server or made to accept a certificate by hand.
+- **Old mail changed elsewhere can look out of date.** Microsoft's IMAP servers don't report which older messages changed, so inlark re-checks read and starred state for the newest 5,000 messages in each folder only.
+
+inlark is registered with Microsoft as a public app with no secret. To build with your own registration, set `INLARK_MICROSOFT_CLIENT_ID` when you start it.
+
+### Gmail
+
+Gmail and Google Workspace work with an app password, and setup walks you through creating one. Signing in with Google (OAuth) isn't supported yet.
 
 Optional OpenPGP email encryption is available for each sending address under **Settings → Encryption**. Read the [encryption guide](docs/encryption.md) for setup, backups, protected drafts, key discovery and device transfer. Cross-platform and Thunderbird release checks remain required before publishing this feature.
 

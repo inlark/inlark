@@ -33,6 +33,7 @@ import {
   type Identity,
 } from '@inlark/core'
 import { api, isDemo } from './api'
+import { sendLimitWarning } from './send-limit'
 import { localSaveDraft, localDeleteDraft } from './cache'
 import { sentMessage, undoSendDelay } from './held-sends'
 import { RecipientField, type ChipSecurity } from './RecipientField'
@@ -217,6 +218,8 @@ export function Composer({
   const [sendError, setSendError] = useState<Pick<Draft, 'error' | 'errorKind'>>()
   const shown = sendError ? { ...draft, ...sendError } : draft
   const problem = draftProblem(shown)
+  /** Said while writing, so a message that can't go out isn't finished first. */
+  const tooLarge = sendLimitWarning(account, draft)
   const update = (patch: Partial<Draft>) => {
     setSendError(undefined)
     change(patch)
@@ -927,6 +930,15 @@ export function Composer({
             <div className="compose-warning [&_span]:flex-1 [&_.button]:shrink-0 flex items-center gap-2 py-2.5 px-5.5 text-[11px] text-danger bg-danger/8">
               <AlertCircle size={15} />
               The server may have accepted this message. Check delivery to avoid sending it twice.
+            </div>
+          )}
+          {tooLarge && !problem && draft.status !== 'uncertain' && (
+            <div
+              className="compose-warning [&_span]:flex-1 flex items-start gap-2 py-2.5 px-5.5 text-[11px] leading-[1.6] text-danger bg-danger/8 [&_svg]:shrink-0 [&_svg]:mt-[1px]"
+              role="status"
+            >
+              <AlertCircle size={15} />
+              <span>{tooLarge}</span>
             </div>
           )}
           <fieldset

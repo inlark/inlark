@@ -1,59 +1,11 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState } from 'react'
 import { Button, cn } from '@inlark/ui'
-import { ArrowUpRight, ChevronDown, Info, Key } from '@inlark/ui/icons'
-import { friendlyError, googleAccountLinks, googleAppPasswordHelp } from '@inlark/core'
-import { api } from './api'
-import { toasts } from './Toasts'
+import { ChevronDown, Info, Key } from '@inlark/ui/icons'
+import { googleAccountLinks, googleAppPasswordHelp } from '@inlark/core'
 import type { SetupMode } from './AccountSetup'
+import { GuideStep, openPage } from './SetupGuide'
 
-const open = (url: string) =>
-  void api
-    .openExternal(url)
-    .catch((error) => toasts.show({ text: friendlyError(error), tone: 'error' }))
-
-function Step({
-  number,
-  title,
-  children,
-  url,
-}: {
-  number: number
-  title: string
-  children?: ReactNode
-  url?: string
-}) {
-  const id = useId()
-  return (
-    <li className="grid grid-cols-[18px_minmax(0,_1fr)_auto] gap-x-2.5 items-start py-2 [&+li]:border-t [&+li]:border-solid [&+li]:border-t-border">
-      <span
-        className="flex items-center justify-center w-4.5 h-4.5 mt-px rounded-full border border-solid border-border-strong text-[10px] font-medium text-muted tabular-nums"
-        aria-hidden="true"
-      >
-        {number}
-      </span>
-      <div className="min-w-0">
-        <div id={id} className="text-[12px] font-medium text-strong leading-[1.5]">
-          {title}
-        </div>
-        {children && (
-          <p className="mt-0.5 mb-0 mx-0 text-[11px] text-muted leading-[1.6]">{children}</p>
-        )}
-      </div>
-      {url && (
-        <Button
-          size="small"
-          className="shrink-0 self-center"
-          title="Opens myaccount.google.com in your browser"
-          aria-describedby={id}
-          onClick={() => open(url)}
-        >
-          Open
-          <ArrowUpRight size={12} />
-        </Button>
-      )}
-    </li>
-  )
-}
+const google = 'myaccount.google.com'
 
 /**
  * Gmail and Google Workspace only accept an app password from email apps, and Google hides it
@@ -116,13 +68,23 @@ export function GoogleAppPasswordGuide({
       {expanded && (
         <div id={stepsId}>
           <ol className="list-none mt-2 mb-0 mx-0 p-0">
-            <Step number={1} title="Turn on 2-Step Verification" url={links.twoStepVerification}>
+            <GuideStep
+              number={1}
+              title="Turn on 2-Step Verification"
+              url={links.twoStepVerification}
+              opens={google}
+            >
               Skip this if it’s already on.
-            </Step>
-            <Step number={2} title="Create an app password" url={links.appPasswords}>
+            </GuideStep>
+            <GuideStep
+              number={2}
+              title="Create an app password"
+              url={links.appPasswords}
+              opens={google}
+            >
               Name it “inlark” and copy the 16 letters Google shows.
-            </Step>
-            <Step number={3} title="Paste it under App password below" />
+            </GuideStep>
+            <GuideStep number={3} title="Paste it under App password below" />
           </ol>
           <div className="flex gap-2 mt-0.5 mb-2.5 pt-2.5 border-t border-solid border-t-border text-[11px] text-muted leading-[1.6] [&_svg]:shrink-0 [&_svg]:mt-[3px]">
             <Info size={13} />
@@ -135,7 +97,7 @@ export function GoogleAppPasswordGuide({
               <button
                 type="button"
                 className="inline border-0 bg-none bg-transparent p-0 text-primary text-[11px] hover:underline"
-                onClick={() => open(googleAppPasswordHelp)}
+                onClick={() => openPage(googleAppPasswordHelp)}
               >
                 Google’s help
               </button>

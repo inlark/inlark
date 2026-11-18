@@ -21,7 +21,7 @@
       <li>Keep drafts safe and undo everyday mailbox actions</li>
       <li>Enjoy carefully designed dark and light appearances</li>
     </ul>
-    <p>inlark is an early preview. Gmail and Microsoft OAuth sign-in are not yet supported.</p>
+    <p>inlark is an early preview. Outlook.com and Microsoft 365 accounts sign in with Microsoft; Gmail needs an app password, because signing in with Google is not yet supported.</p>
   </description>
   <launchable type="desktop-id">com.inlark.Inlark.desktop</launchable>
   <url type="homepage">https://inlark.com</url>

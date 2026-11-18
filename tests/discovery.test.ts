@@ -22,10 +22,12 @@ function fakeTransport(
   http: Record<string, Reply> = {},
   srv: Record<string, Reply> = {},
   mx: Record<string, Reply> = {},
+  cname: Record<string, string[] | Error | 'hang'> = {},
 ) {
   const gets: { url: string; options: unknown }[] = []
   const lookups: string[] = []
   const mxLookups: string[] = []
+  const cnameLookups: string[] = []
   const settle = async <T>(reply: unknown, map: (r: never) => T): Promise<T> => {
     if (reply === 'hang') return hang
     if (reply instanceof Error) throw reply
@@ -45,6 +47,10 @@ function fakeTransport(
       mxLookups.push(name)
       return settle(mx[name] ?? [], (r: MxRecord[]) => r)
     },
+    resolveCname(name) {
+      cnameLookups.push(name)
+      return settle(cname[name] ?? [], (r: string[]) => r)
+    },
     get(url, ...rest) {
       expect(rest).toHaveLength(1)
       gets.push({ url, options: rest[0] })
@@ -56,7 +62,7 @@ function fakeTransport(
       }))
     },
   }
-  return { transport, gets, lookups, mxLookups, urls: () => gets.map((g) => g.url) }
+  return { transport, gets, lookups, mxLookups, cnameLookups, urls: () => gets.map((g) => g.url) }
 }
 
 const email = 'paul.private@example.com'
@@ -193,7 +199,8 @@ describe('account discovery privacy and bounds', () => {
       expect(options).toEqual({ timeoutMs: 6000, maxBytes: 256 * 1024 })
     }
     expect(fake.mxLookups).toEqual(['example.com'])
-    for (const name of [...fake.lookups, ...fake.mxLookups])
+    expect(fake.cnameLookups).toEqual(['autodiscover.example.com'])
+    for (const name of [...fake.lookups, ...fake.mxLookups, ...fake.cnameLookups])
       expect(name).not.toMatch(/paul|private|@/)
   })
 
@@ -364,6 +371,113 @@ describe('mail exchanger discovery', () => {
     const result = await discoverAccount('someone@gmail.com', fake.transport)
     expect(result.candidates).toEqual([
       expect.objectContaining({ source: 'mx', provider: 'Gmail' }),
+    ])
+  })
+})
+
+describe('Microsoft discovery', () => {
+  const mx = (exchange: string, priority = 1) => ({ exchange, priority })
+  const outlook = 'someone@outlook.com'
+
+  it('recognizes an Outlook.com address from its mail exchanger', async () => {
+    const fake = fakeTransport(
+      {},
+      {},
+      { 'outlook.com': [mx('outlook-com.olc.protection.outlook.com.', 5)] },
+    )
+    const result = await discoverAccount(outlook, fake.transport)
+    expect(result.candidates).toEqual([
+      {
+        protocol: 'imap',
+        source: 'mx',
+        provider: 'Outlook.com',
+        incoming: { host: 'outlook.office365.com', port: 993, security: 'tls', username: outlook },
+        outgoing: {
+          host: 'smtp-mail.outlook.com',
+          port: 587,
+          security: 'starttls',
+          username: outlook,
+        },
+      },
+    ])
+    // Microsoft's own entry in the public directory only lists a sign-in inlark handles itself.
+    expect(fake.urls()).not.toContain('https://autoconfig.thunderbird.net/v1.1/outlook.com')
+  })
+
+  it('recognizes a Microsoft 365 domain by either kind of exchanger', async () => {
+    for (const exchange of [
+      'example-com.mail.protection.outlook.com',
+      'EXAMPLE-COM.MAIL.PROTECTION.OUTLOOK.COM.',
+      'example-com.o-v1.mx.microsoft',
+    ]) {
+      const fake = fakeTransport({}, {}, { 'example.com': [mx(exchange)] })
+      const result = await discoverAccount(email, fake.transport)
+      expect(result.candidates).toEqual([
+        expect.objectContaining({
+          source: 'mx',
+          provider: 'Microsoft 365',
+          incoming: expect.objectContaining({ host: 'outlook.office365.com', username: email }),
+          outgoing: expect.objectContaining({ host: 'smtp.office365.com', port: 587 }),
+        }),
+      ])
+      expect(fake.urls()).not.toContain(directory)
+    }
+  })
+
+  it('finds Microsoft 365 behind a mail filter through the domain’s autodiscover record', async () => {
+    const fake = fakeTransport(
+      {},
+      {},
+      { 'example.com': [mx('eu-smtp-inbound-1.mimecast.com')] },
+      { 'autodiscover.example.com': ['autodiscover.outlook.com.'] },
+    )
+    const result = await discoverAccount(email, fake.transport)
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        source: 'cname',
+        provider: 'Microsoft 365',
+        outgoing: expect.objectContaining({ host: 'smtp.office365.com' }),
+      }),
+    ])
+    expect(fake.urls()).not.toContain(directory)
+  })
+
+  it('lets the mail exchanger decide before the autodiscover record', async () => {
+    const fake = fakeTransport(
+      {},
+      {},
+      { 'example.com': [mx('aspmx.l.google.com')] },
+      { 'autodiscover.example.com': ['autodiscover.outlook.com'] },
+    )
+    expect(hosts(await discoverAccount(email, fake.transport))).toEqual(['mx imap.gmail.com'])
+  })
+
+  it('ignores look-alike names and a record that fails or never answers', async () => {
+    for (const [exchange, pointer] of [
+      ['protection.outlook.com.evil.example', ['autodiscover.outlook.com.evil.example']],
+      ['mx.example.net', ['outlook.com']],
+      ['mx.example.net', new Error('SERVFAIL')],
+      ['mx.example.net', 'hang' as const],
+    ] as const) {
+      const fake = fakeTransport(
+        { [directory]: { body: config('directory.example.com') } },
+        {},
+        { 'example.com': [mx(exchange)] },
+        { 'autodiscover.example.com': pointer as string[] | Error | 'hang' },
+      )
+      const result = await discoverAccount(email, fake.transport, { requestTimeoutMs: 20 })
+      expect(hosts(result)).toEqual(['directory directory.example.com'])
+    }
+  })
+
+  it('prefers settings a Microsoft 365 domain publishes itself', async () => {
+    const fake = fakeTransport(
+      { [autoconfigUrl]: { body: config('mail.example.com') } },
+      {},
+      { 'example.com': [mx('example-com.mail.protection.outlook.com')] },
+    )
+    expect(hosts(await discoverAccount(email, fake.transport))).toEqual([
+      'autoconfig mail.example.com',
     ])
   })
 })

@@ -875,9 +875,11 @@ describe('IMAP drafts and sending', () => {
       { ...draft, accountId: account.id },
       'attempt@example.com',
     )
+    // `bcc` only tells a way of sending without an envelope who to add; SMTP never reads it.
     expect(outgoing.envelope).toEqual({
       from: 'me@example.com',
       to: ['alex@example.org', 'secret@example.net'],
+      bcc: ['secret@example.net'],
     })
     const raw = new TextDecoder().decode(outgoing.mime)
     expect(raw).not.toMatch(/^Bcc:/im)
