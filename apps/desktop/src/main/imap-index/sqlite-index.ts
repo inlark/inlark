@@ -33,6 +33,8 @@ const methodTable: Record<keyof MetadataIndex, true> = {
   resetMailbox: true,
   upsertMessages: true,
   updateFlags: true,
+  reconcileState: true,
+  unseenCount: true,
   removeUids: true,
   removeMessages: true,
   knownUids: true,
@@ -203,6 +205,12 @@ function messageIds(values: (string | null | undefined)[]) {
 
 function hasFlag(flags: string[], flag: string) {
   return flags.some((value) => value.toLowerCase() === flag) ? 1 : 0
+}
+/** The flags with one system flag present or absent. A list already right is returned as is. */
+function withFlag(flags: string[], flag: string, present: boolean) {
+  const same = (value: string) => value.toLowerCase() === flag.toLowerCase()
+  if (flags.some(same) === present) return flags
+  return present ? [...flags, flag] : flags.filter((value) => !same(value))
 }
 
 function time(value: string) {
@@ -714,6 +722,57 @@ export class SqliteMetadataIndex implements SyncMetadataIndex {
           update.uid,
         )
     })
+  }
+
+  reconcileState(
+    accountId: string,
+    mailboxId: string,
+    state: { unseen?: number[]; flagged?: number[] },
+  ) {
+    const unseen = state.unseen && new Set(state.unseen)
+    const flagged = state.flagged && new Set(state.flagged)
+    if (!unseen && !flagged) return 0
+    return this.tx(() => {
+      // Only the rows that disagree with the server, which is few even in a large folder.
+      const rows = this.all<{ uid: number; flags: string }>(
+        `SELECT uid, flags FROM messages WHERE account_id = ? AND mailbox_id = ? AND (` +
+          [
+            unseen && 'seen <> (uid NOT IN (SELECT value FROM json_each(?)))',
+            flagged && 'flagged <> (uid IN (SELECT value FROM json_each(?)))',
+          ]
+            .filter(Boolean)
+            .join(' OR ') +
+          ')',
+        accountId,
+        mailboxId,
+        ...(unseen ? [list(state.unseen!)] : []),
+        ...(flagged ? [list(state.flagged!)] : []),
+      )
+      for (const row of rows) {
+        let flags = JSON.parse(row.flags) as string[]
+        if (unseen) flags = withFlag(flags, '\\Seen', !unseen.has(row.uid))
+        if (flagged) flags = withFlag(flags, '\\Flagged', flagged.has(row.uid))
+        this.run(
+          `UPDATE messages SET flags = ?, seen = ?, flagged = ?
+            WHERE account_id = ? AND mailbox_id = ? AND uid = ?`,
+          list(flags),
+          hasFlag(flags, '\\seen'),
+          hasFlag(flags, '\\flagged'),
+          accountId,
+          mailboxId,
+          row.uid,
+        )
+      }
+      return rows.length
+    })
+  }
+
+  unseenCount(accountId: string, mailboxId: string) {
+    return this.all<{ count: number }>(
+      'SELECT count(*) AS count FROM messages WHERE account_id = ? AND mailbox_id = ? AND seen = 0',
+      accountId,
+      mailboxId,
+    )[0]!.count
   }
 
   removeUids(accountId: string, mailboxId: string, uids: number[]) {

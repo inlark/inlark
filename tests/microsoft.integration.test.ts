@@ -47,6 +47,10 @@ import {
  * signed in elsewhere does easily. A mailbox whose sign-in name differs from its address needs
  * INLARK_MICROSOFT_SIGNIN=<sign-in name>.
  *
+ * INLARK_MICROSOFT_FLAGS=1 stars and unstars, and marks read and unread, the oldest message in
+ * the Inbox from a second connection, as another device would, and checks that inlark follows
+ * each change. The message ends as it started.
+ *
  * INLARK_MICROSOFT_SMTP=<minutes> is for a mailbox whose administrator allows SMTP: the run waits
  * that long for Microsoft to accept the sign-in over SMTP, which can lag behind the setting, and
  * fails if the message then goes out any other way.
@@ -56,6 +60,7 @@ const sending = process.env.INLARK_MICROSOFT_SEND === '1'
 const hidden = process.env.INLARK_MICROSOFT_BCC
 const expected = process.env.INLARK_MICROSOFT_FIND
 const smtpWithin = Number(process.env.INLARK_MICROSOFT_SMTP || 0)
+const flagsElsewhere = process.env.INLARK_MICROSOFT_FLAGS === '1'
 const signInName = process.env.INLARK_MICROSOFT_SIGNIN || address || ''
 const minutes = (n: number) => n * 60_000
 const report = (line: string) => console.log('[microsoft] ' + line)
@@ -103,15 +108,23 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
   }
   const provider = () => (service as any).providers.get(connectionId) as ImapProvider
   const sync = () => (provider() as any).syncPass('all') as Promise<void>
-  /** The headers of every message with this subject, read straight from the server. */
-  const headers = async (subject: string, folders: string[]) => {
+  /** A second connection of its own, standing in for another device. */
+  const elsewhere = async <T>(work: (port: ImapFlowPort) => Promise<T>) => {
     const session = (service as any).sessionSecrets.get(connectionId)?.microsoft
     const port = new ImapFlowPort(
       { ...config.incoming, accessToken: () => session.accessToken('mail') },
       'command',
     )
-    await port.connect()
     try {
+      await port.connect()
+      return await work(port)
+    } finally {
+      await port.close().catch(() => undefined)
+    }
+  }
+  /** The headers of every message with this subject, read straight from the server. */
+  const headers = (subject: string, folders: string[]) =>
+    elsewhere(async (port) => {
       const found: { folder: string; text: string }[] = []
       for (const folder of folders) {
         await port.select(folder)
@@ -127,10 +140,7 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
         }
       }
       return found
-    } finally {
-      await port.close().catch(() => undefined)
-    }
-  }
+    })
   /**
    * What the outgoing server answers to this sign-in, word for word. inlark itself only keeps
    * what the answer means; the wording says whether a mailbox or its whole organization has SMTP
@@ -270,6 +280,111 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
       expect(boxes.some((b) => b.role === 'sent')).toBe(true)
       const inbox = await service.query({ view: 'inbox', accountId })
       report(`inbox: ${inbox.items.length} conversations on the first page`)
+
+      if (flagsElsewhere) {
+        const p = provider() as any
+        const inbox = (await p.index.listMailboxes(p.accountId)).find(
+          (box: { path: string }) => box.path.toUpperCase() === 'INBOX',
+        )
+        const known: number[] = await p.index.knownUids(p.accountId, inbox.id)
+        expect(known.length, 'messages in the Inbox to try this on').toBeGreaterThan(1)
+        const uid = known[0]
+        const tested = ['\\Flagged', '\\Seen']
+        const has = (flags: string[], flag: string) =>
+          flags.some((value) => value.toLowerCase() === flag.toLowerCase())
+        const stored = async (): Promise<string[]> =>
+          (await p.index.messagesAt(p.accountId, inbox.id, [uid]))[0].flags
+        /** As another device would: its own connection, straight to the server. */
+        const onServer = <T>(work: (port: ImapFlowPort, uidValidity: string) => Promise<T>) =>
+          elsewhere(async (port) => work(port, (await port.select(inbox.path)).uidValidity))
+        // What the server says now, which is what the message is put back to whatever happens.
+        const original = await onServer(async (port, uidValidity) => ({
+          uidValidity,
+          condstore: port.condstore,
+          flags: (await port.fetch(String(uid), { flags: true }))[0]?.flags || [],
+        }))
+        report(`the server ${original.condstore ? 'offers' : 'does not offer'} CONDSTORE`)
+        /** Changes one flag on that message, and nothing if the folder was rebuilt meanwhile. */
+        const change = (flag: string, on: boolean) =>
+          onServer(async (port, uidValidity) => {
+            if (uidValidity !== original.uidValidity)
+              throw new Error('the Inbox was rebuilt meanwhile, so nothing was touched')
+            if (!(await port.store([uid], on ? 'add' : 'remove', [flag])))
+              throw new Error(`the server refused to ${on ? 'set' : 'clear'} ${flag}`)
+          })
+        const timing = { ...p.timing }
+        try {
+          // Only the newest message has every flag compared, so the oldest one can only be
+          // followed by asking the server which mail is unread and which is starred.
+          p.timing.recentFlags = 1
+          p.timing.recentFlagsFull = 1
+          const set = async (flag: string, on: boolean) => {
+            await change(flag, on)
+            // A star changes no count, so without an announcement it is found at the next
+            // full comparison, which this brings forward.
+            p.lastFull.clear()
+            await sync()
+            expect(has(await stored(), flag), `${flag} ${on ? 'set' : 'cleared'} elsewhere`).toBe(
+              on,
+            )
+            report(`followed ${flag} being ${on ? 'set' : 'cleared'} on the oldest Inbox message`)
+          }
+          for (const flag of tested) {
+            await set(flag, !has(original.flags, flag))
+            await set(flag, has(original.flags, flag))
+          }
+          // Whether the server tells an idling connection about such a change, which is what
+          // lets a star show in the Inbox at once. Reported, since only the server decides.
+          const idle = new ImapFlowPort(
+            {
+              ...config.incoming,
+              accessToken: () =>
+                (service as any).sessionSecrets.get(connectionId).microsoft.accessToken('mail'),
+            },
+            'idle',
+          )
+          let giveUp: ReturnType<typeof setTimeout> | undefined
+          try {
+            await idle.connect()
+            await idle.select(inbox.path)
+            // Time for the connection to settle into idling.
+            await new Promise((resolve) => setTimeout(resolve, 3000))
+            let heard!: (told: boolean) => void
+            const told = new Promise<boolean>((resolve) => (heard = resolve))
+            idle.on('flags', () => heard(true))
+            await change(tested[0], !has(original.flags, tested[0]))
+            giveUp = setTimeout(() => heard(false), 30_000)
+            report(
+              (await told)
+                ? 'an idling connection was told of a flag change after one was made'
+                : 'an idling connection heard of no flag change within 30 seconds of one',
+            )
+          } finally {
+            clearTimeout(giveUp)
+            await idle.close().catch(() => undefined)
+          }
+        } finally {
+          Object.assign(p.timing, timing)
+          // Put back on the server itself, whatever inlark made of it and wherever this
+          // stopped. Each flag on its own, so one failure doesn't leave the other behind.
+          const failed: string[] = []
+          for (const flag of tested)
+            await change(flag, has(original.flags, flag)).catch((error: Error) =>
+              failed.push(error.message),
+            )
+          report(
+            failed.length
+              ? `COULD NOT RESTORE the oldest Inbox message (UID ${uid}): ${failed.join('; ')}. ` +
+                  `It had: ${original.flags.join(' ') || 'no flags'}`
+              : 'the oldest Inbox message is back as it was',
+          )
+        }
+        // inlark's own copy follows the restoring too.
+        p.lastFull.clear()
+        await sync()
+        for (const flag of tested)
+          expect(has(await stored(), flag), flag + ' as it was').toBe(has(original.flags, flag))
+      }
 
       if (sending) {
         const subject = 'inlark integration ' + randomUUID().slice(0, 8)

@@ -41,6 +41,19 @@ export interface MetadataIndex {
     mailboxId: string,
     updates: { uid: number; flags: string[]; modseq?: string }[],
   ): Promise<void>
+  /**
+   * Makes read and starred state match the server's own lists for a mailbox: a stored message
+   * is unread exactly when its UID is in `unseen`, and starred exactly when it is in `flagged`.
+   * A list left out leaves that state alone, and other flags always stay as they are. Resolves
+   * to how many messages changed.
+   */
+  reconcileState(
+    accountId: string,
+    mailboxId: string,
+    state: { unseen?: number[]; flagged?: number[] },
+  ): Promise<number>
+  /** How many stored messages of a mailbox are unread, to compare with the server's count. */
+  unseenCount(accountId: string, mailboxId: string): Promise<number>
   /** Removes messages that no longer exist at these UIDs (expunged or vanished). */
   removeUids(accountId: string, mailboxId: string, uids: number[]): Promise<void>
   /** Removes messages by ID, e.g. after a confirmed deletion. */

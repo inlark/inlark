@@ -116,6 +116,12 @@ interface Timing {
   reconcileMs: number
   /** How often expunges and flags are fully compared even without a visible change. */
   fullReconcileMs: number
+  /**
+   * Without CONDSTORE, how many of a folder's newest messages have every flag compared: when
+   * something visibly changed, and on a full comparison.
+   */
+  recentFlags: number
+  recentFlagsFull: number
   initialBatch: number
   historicalBatch: number
   previews: number
@@ -125,6 +131,8 @@ interface Timing {
 const defaultTiming: Timing = {
   reconcileMs: 120_000,
   fullReconcileMs: 15 * 60_000,
+  recentFlags: 500,
+  recentFlagsFull: 5000,
   initialBatch: 200,
   historicalBatch: 500,
   previews: 30,
@@ -190,6 +198,8 @@ export class ImapProvider implements MailProvider {
   private pending: 'none' | 'inbox' | 'all' = 'none'
   private lastSync = 0
   private lastFull = new Map<string, number>()
+  /** The server announced a flag change in the Inbox that a count alone may not show. */
+  private inboxFlagsChanged = false
   private uidLists = new Map<string, number[]>()
   private searches = new Map<string, { ids: string[]; incomplete: boolean; at: number }>()
   private cursors = new Map<string, ConversationCursor>()
@@ -546,7 +556,10 @@ export class ImapProvider implements MailProvider {
       try {
         const closed = new Promise<void>((resolve) => port.on('close', resolve))
         for (const event of ['exists', 'expunge', 'flags'] as const)
-          port.on(event, () => this.requestSync('inbox'))
+          port.on(event, () => {
+            if (event === 'flags') this.inboxFlagsChanged = true
+            this.requestSync('inbox')
+          })
         await port.connect()
         await port.select('INBOX')
         if (this.disposed) break
@@ -599,6 +612,24 @@ export class ImapProvider implements MailProvider {
   }
   /** Brings one folder up to date. Returns whether anything visible changed. */
   private async syncMailbox(port: ImapPort, stored: IndexedMailbox): Promise<boolean> {
+    // A star set elsewhere changes no count, so without CONDSTORE only the announcement shows
+    // it. It is taken before the pass, so one arriving meanwhile asks for another pass.
+    const announced = isInbox(stored.path) && this.inboxFlagsChanged
+    if (announced) this.inboxFlagsChanged = false
+    try {
+      return await this.syncMailboxNow(port, stored, announced)
+    } catch (error) {
+      // The pass failed, perhaps before acting on the announcement, so it stands. At worst
+      // that costs one more comparison.
+      if (announced) this.inboxFlagsChanged = true
+      throw error
+    }
+  }
+  private async syncMailboxNow(
+    port: ImapPort,
+    stored: IndexedMailbox,
+    announced: boolean,
+  ): Promise<boolean> {
     let box = stored
     const status = await port.status(box.path)
     let changed = false
@@ -623,7 +654,7 @@ export class ImapProvider implements MailProvider {
       status.messages === box.total &&
       status.unseen === box.unread &&
       (!status.highestModseq || status.highestModseq === box.highestModseq)
-    if (same && !full) return changed
+    if (same && !full && !announced) return changed
     const selected = await port.select(box.path)
     if (box.uidValidity && selected.uidValidity !== box.uidValidity) return changed
     const location = { mailboxId: box.id, uidValidity: selected.uidValidity }
@@ -668,9 +699,12 @@ export class ImapProvider implements MailProvider {
         flags.map((m) => ({ uid: m.uid, flags: m.flags || [], modseq: m.modseq })),
       )
       changed ||= flags.length > 0
-    } else if (!port.condstore && (status.unseen !== box.unread || full)) {
-      // Without CONDSTORE, compare flags for the most recent part of the folder.
-      const known = (await this.index.knownUids(this.accountId, box.id)).slice(full ? -5000 : -500)
+    } else if (!port.condstore && (status.unseen !== box.unread || full || announced)) {
+      // Without CONDSTORE the server can't say what changed. Every flag is compared for the most
+      // recent part of the folder only.
+      const known = (await this.index.knownUids(this.accountId, box.id)).slice(
+        -(full ? this.timing.recentFlagsFull : this.timing.recentFlags),
+      )
       if (known.length) {
         const flags = await port.fetch(uidSet(known), { flags: true })
         await this.index.updateFlags(
@@ -680,6 +714,16 @@ export class ImapProvider implements MailProvider {
         )
         changed = true
       }
+      // Read and starred are what lists show, and the server can name every unread and every
+      // starred message in one answer each, however old the mail and however large the folder.
+      // The unread list is only asked for when the counts disagree, since it can be long; a star
+      // changes no count, so that list, usually a short one, is asked for every time.
+      const stale = (await this.index.unseenCount(this.accountId, box.id)) !== status.unseen
+      const corrected = await this.index.reconcileState(this.accountId, box.id, {
+        ...(full || stale ? { unseen: await port.search({ seen: false }) } : {}),
+        flagged: await port.search({ flagged: true }),
+      })
+      changed ||= corrected > 0
     }
     // Arrivals alone explain a count change; anything else means messages were expunged.
     if (full || status.messages !== box.total + added.length) {
