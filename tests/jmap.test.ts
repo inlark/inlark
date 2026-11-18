@@ -5,6 +5,7 @@ import {
   jmapFilter,
   jmapPatch,
   parseUnsubscribe,
+  stateChanges,
   type JmapOptions,
 } from '../packages/jmap/src'
 import { detectAuth } from '../apps/desktop/src/main/auth-detection'
@@ -35,6 +36,33 @@ const raw = (id: string) => ({
   mailboxIds: { inbox: true },
   keywords: { $seen: true },
 })
+/** Applies a JSON pointer as RFC 8620 §3.7 does, flattening arrays reached through `*`. */
+function pointer(value: any, path: string): any {
+  const tokens = path.split('/').slice(1)
+  const walk = (current: any, index: number): any => {
+    if (index === tokens.length) return current
+    if (tokens[index] === '*' && Array.isArray(current))
+      return current.flatMap((item) => {
+        const found = walk(item, index + 1)
+        return Array.isArray(found) ? found : [found]
+      })
+    return walk(current?.[tokens[index]], index + 1)
+  }
+  return walk(value, 0)
+}
+/** Replaces `#name` result references with the values they point to, like a JMAP server. */
+function resolveReferences(args: any, responses: any[]): any {
+  const resolved: any = {}
+  for (const [key, value] of Object.entries<any>(args || {})) {
+    if (!key.startsWith('#')) {
+      resolved[key] = value
+      continue
+    }
+    const source = responses.find(([name, , tag]) => tag === value.resultOf && name === value.name)
+    resolved[key.slice(1)] = source ? pointer(source[1], value.path) : undefined
+  }
+  return resolved
+}
 function fixture(
   overrides: Record<string, (args: any) => any> = {},
   downloadBody?: string,
@@ -46,48 +74,53 @@ function fixture(
       return new Response(downloadBody)
     if (!init?.body) return Response.json(session)
     const request = JSON.parse(String(init.body))
-    return Response.json({
-      methodResponses: request.methodCalls.map(([name, args, tag]: any) => {
-        calls.push({ name, args })
-        // RFC 8621 §4.1.2.2 forbids Text form for RFC 2369 list headers.
-        // Stalwart validates this even when the message has no such header.
-        if (name === 'Email/get' && args.properties?.includes('header:List-Unsubscribe:asText'))
-          return ['error', { type: 'invalidArguments' }, tag]
-        const response =
-          overrides[name]?.(args) ??
-          (
-            {
-              'Mailbox/get': {
-                list: [
-                  {
-                    id: 'inbox',
-                    name: 'Inbox',
-                    role: 'inbox',
-                    myRights: { mayReadItems: true },
-                    totalEmails: 50_000,
-                    unreadEmails: 1,
-                  },
-                ],
-              },
-              'Email/query': {
-                ids: Array.from({ length: args.limit || 0 }, (_, i) =>
-                  String((args.position || 0) + i),
-                ),
-                total: 50_000,
-              },
-              'Email/get': { list: (args.ids || []).map(raw) },
-              'Thread/get': {
-                list: (args.ids || []).map((id: string) => ({
-                  id,
-                  emailIds: [id.replace('thread-', '')],
-                })),
-              },
-              'Email/set': { updated: {}, notUpdated: { bad: { type: 'forbidden' } } },
-            } as any
-          )[name]
-        return [name, response, tag]
-      }),
-    })
+    const methodResponses: any[] = []
+    for (const [name, rawArgs, tag] of request.methodCalls) {
+      const args = resolveReferences(rawArgs, methodResponses)
+      methodResponses.push(respond(name, args, tag))
+    }
+    return Response.json({ methodResponses })
+    function respond(name: string, args: any, tag: string) {
+      calls.push({ name, args })
+      // RFC 8621 §4.1.2.2 forbids Text form for RFC 2369 list headers.
+      // Stalwart validates this even when the message has no such header.
+      if (name === 'Email/get' && args.properties?.includes('header:List-Unsubscribe:asText'))
+        return ['error', { type: 'invalidArguments' }, tag]
+      const response =
+        overrides[name]?.(args) ??
+        (
+          {
+            'Mailbox/get': {
+              list: [
+                {
+                  id: 'inbox',
+                  name: 'Inbox',
+                  role: 'inbox',
+                  myRights: { mayReadItems: true },
+                  totalEmails: 50_000,
+                  unreadEmails: 1,
+                },
+              ],
+            },
+            'Email/query': {
+              ids: Array.from({ length: args.limit || 0 }, (_, i) =>
+                String((args.position || 0) + i),
+              ),
+              total: 50_000,
+            },
+            'Email/get': { list: (args.ids || []).map(raw) },
+            'Thread/get': {
+              list: (args.ids || []).map((id: string) => ({
+                id,
+                emailIds: [id.replace('thread-', '')],
+              })),
+            },
+            'Email/set': { updated: {}, notUpdated: { bad: { type: 'forbidden' } } },
+          } as any
+        )[name]
+      if (response?.methodError) return ['error', { type: response.methodError }, tag]
+      return [name, response, tag]
+    }
   }) as unknown as typeof globalThis.fetch
   const provider = new JmapProvider({
     serverUrl: 'https://mail.example',
@@ -100,15 +133,19 @@ function fixture(
   return { provider, fetch, calls }
 }
 describe('JMAP provider', () => {
-  it('loads only one conversation page from a 50k inbox and no bodies', async () => {
-    const { provider, calls } = fixture()
+  it('loads only one conversation page from a 50k inbox, in one request and without bodies', async () => {
+    const { provider, calls, fetch } = fixture()
     const [account] = await provider.connect()
+    await provider.mailboxes(account)
+    fetch.mockClear()
     const page = await provider.query(account, { view: 'inbox' })
+    expect(fetch).toHaveBeenCalledTimes(1)
     expect(page.items).toHaveLength(50)
     expect(page.total).toBe(50_000)
     expect(page.next).toBe(50)
     const emailGets = calls.filter((c) => c.name === 'Email/get')
-    expect(emailGets.flatMap((c) => c.args.ids)).toHaveLength(50)
+    // The rows, then every message of their threads.
+    expect(emailGets.map((c) => new Set(c.args.ids).size)).toEqual([50, 50])
     expect(emailGets.every((c) => !c.args.fetchAllBodyValues)).toBe(true)
     expect(calls.find((c) => c.name === 'Email/query')?.args.collapseThreads).toBe(true)
   })
@@ -572,13 +609,16 @@ describe('JMAP list codes and links', () => {
     const [account] = await provider.connect()
     const page = await provider.query(account, { view: 'inbox' })
     const gets = calls.filter((c) => c.name === 'Email/get')
-    expect(gets).toHaveLength(1)
+    expect(gets).toHaveLength(2)
     expect(gets[0].args).toMatchObject({
       ids,
       fetchTextBodyValues: true,
       maxBodyValueBytes: 4096,
     })
     expect(gets[0].args.fetchAllBodyValues).toBeUndefined()
+    // The rest of each thread is fetched without any body text.
+    expect(gets[1].args.fetchTextBodyValues).toBeUndefined()
+    expect(gets[1].args.properties).not.toContain('bodyValues')
     expect(Object.fromEntries(page.items.map((c) => [c.messages[0].id, c.auth]))).toEqual({
       code: { messageId: 'code', candidate: { type: 'code', value: '482913' } },
       link: {
@@ -601,5 +641,356 @@ describe('JMAP list codes and links', () => {
     const page = await provider.query(account, { view: 'inbox' })
     expect(calls.find((c) => c.name === 'Email/get')?.args.fetchTextBodyValues).toBeUndefined()
     expect(page.items[0].auth).toBeUndefined()
+  })
+})
+
+describe('JMAP request budget', () => {
+  const thread = (emailIds: string[]) => ({
+    'Thread/get': (args: any) => ({ list: args.ids.map((id: string) => ({ id, emailIds })) }),
+  })
+  const body = (id: string, overrides: Record<string, unknown> = {}) => ({
+    ...raw(id),
+    bodyStructure: { partId: '1', type: 'text/plain' },
+    textBody: [{ partId: '1', type: 'text/plain' }],
+    htmlBody: [{ partId: '1', type: 'text/plain' }],
+    bodyValues: { '1': { value: 'Hello ' + id, isTruncated: false } },
+    'header:Autocrypt:all': [' addr=sender@example.com; keydata=\r\n AAAA'],
+    ...overrides,
+  })
+  it('opens a conversation in one request and needs no source for plain messages', async () => {
+    const { provider, fetch, calls } = fixture({
+      ...thread(['a', 'b']),
+      'Email/get': (args) => ({ list: args.ids.map((id: string) => body(id)) }),
+    })
+    const [account] = await provider.connect()
+    fetch.mockClear()
+    const messages = await provider.conversation(account, 'thread-a')
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(calls.find((c) => c.name === 'Email/get')!.args.ids).toEqual(['a', 'b'])
+    expect(messages.map((m) => m.text)).toEqual(['Hello a', 'Hello b'])
+    expect(new TextDecoder().decode(messages[0].plainSource)).toBe(
+      'Content-Type: text/plain\r\nAutocrypt: addr=sender@example.com; keydata= AAAA\r\n\r\n',
+    )
+  })
+  it('keeps the full source for messages that are or may be signed or encrypted', async () => {
+    const cases: Record<string, Record<string, unknown>> = {
+      signed: {
+        bodyStructure: {
+          type: 'multipart/signed',
+          subParts: [
+            { partId: '1', type: 'text/plain' },
+            { partId: '2', type: 'application/pgp-signature' },
+          ],
+        },
+      },
+      encrypted: { bodyStructure: { type: 'multipart/encrypted', subParts: [] } },
+      armored: {
+        bodyValues: { '1': { value: '-----BEGIN PGP MESSAGE-----\nabc', isTruncated: false } },
+      },
+      truncated: { bodyValues: { '1': { value: 'Long', isTruncated: true } } },
+      textAttachment: {
+        bodyStructure: {
+          type: 'multipart/mixed',
+          subParts: [
+            { partId: '1', type: 'text/plain' },
+            { partId: '2', type: 'text/plain', name: 'notes.txt', disposition: 'attachment' },
+          ],
+        },
+      },
+      keyFile: {
+        bodyStructure: {
+          type: 'multipart/mixed',
+          subParts: [
+            { partId: '1', type: 'text/plain' },
+            {
+              partId: '2',
+              type: 'application/octet-stream',
+              name: 'message.asc',
+              'header:Content-Transfer-Encoding:asText': 'base64',
+            },
+          ],
+        },
+      },
+      // Any part not sent as base64 could carry armor as plain text, whatever its type.
+      binaryBody: {
+        bodyStructure: { partId: '2', type: 'application/octet-stream' },
+        bodyValues: {},
+      },
+      quotedAttachment: {
+        bodyStructure: {
+          type: 'multipart/mixed',
+          subParts: [
+            { partId: '1', type: 'text/plain' },
+            {
+              partId: '2',
+              type: 'application/pdf',
+              name: 'a.pdf',
+              'header:Content-Transfer-Encoding:asText': 'quoted-printable',
+            },
+          ],
+        },
+      },
+    }
+    const { provider } = fixture({
+      ...thread(Object.keys(cases)),
+      'Email/get': (args) => ({ list: args.ids.map((id: string) => body(id, cases[id])) }),
+    })
+    const [account] = await provider.connect()
+    const messages = await provider.conversation(account, 'thread')
+    expect(messages.filter((m) => m.plainSource).map((m) => m.id)).toEqual([])
+  })
+  it('needs no source for attachments sent as base64', async () => {
+    const { provider } = fixture({
+      ...thread(['a']),
+      'Email/get': (args) => ({
+        list: args.ids.map((id: string) =>
+          body(id, {
+            bodyStructure: {
+              type: 'multipart/mixed',
+              subParts: [
+                { partId: '1', type: 'text/plain' },
+                {
+                  partId: '2',
+                  type: 'image/png',
+                  name: 'dot.png',
+                  'header:Content-Transfer-Encoding:asText': ' Base64 ',
+                },
+              ],
+            },
+          }),
+        ),
+      }),
+    })
+    const [account] = await provider.connect()
+    const [message] = await provider.conversation(account, 'thread-a')
+    expect(new TextDecoder().decode(message.plainSource)).toMatch(/^Content-Type: multipart\/mixed/)
+  })
+  it('splits a combined request the server finds too large into separate ones', async () => {
+    const { provider, calls } = fixture({
+      'Email/query': () => ({ ids: ['1'], total: 1 }),
+      ...thread(['1', '2', '3']),
+      'Email/get': (args) =>
+        args.ids.length > 2
+          ? { methodError: 'requestTooLarge' }
+          : { list: args.ids.map((id: string) => ({ ...raw(id), threadId: 'thread-1' })) },
+    })
+    const [account] = await provider.connect()
+    const session = { ...account }
+    // A server allowing two objects per get must still get every message of the thread.
+    ;(provider as any).capabilities.maxObjectsInGet = 2
+    const page = await provider.query(session, { view: 'inbox' })
+    expect(page.items[0].messages.map((m) => m.id).sort()).toEqual(['1', '2', '3'])
+    expect(page.items[0].count).toBe(3)
+    expect(calls.filter((c) => c.name === 'Email/get').every((c) => c.args.ids.length <= 3)).toBe(
+      true,
+    )
+  })
+  it('splits combined requests for a server that accepts fewer calls per request', async () => {
+    const perRequest: number[] = []
+    const limited = (status: 'advertised' | 'refused') => {
+      const fetch = vi.fn(async (_url: any, init?: RequestInit) => {
+        if (!init?.body)
+          return Response.json({
+            ...session,
+            capabilities: {
+              ...session.capabilities,
+              [core]: {
+                maxObjectsInGet: 100,
+                ...(status === 'advertised' ? { maxCallsInRequest: 1 } : {}),
+              },
+            },
+          })
+        const request = JSON.parse(String(init.body))
+        perRequest.push(request.methodCalls.length)
+        if (request.methodCalls.length > 1)
+          return Response.json(
+            { type: 'urn:ietf:params:jmap:error:limit', limit: 'maxCallsInRequest', status: 400 },
+            { status: 400 },
+          )
+        const [name, args, tag] = request.methodCalls[0]
+        const response =
+          name === 'Mailbox/get'
+            ? { list: [{ id: 'inbox', name: 'Inbox', role: 'inbox', myRights: {} }] }
+            : name === 'Email/query'
+              ? { ids: ['1'], total: 1 }
+              : name === 'Thread/get'
+                ? { list: args.ids.map((id: string) => ({ id, emailIds: ['1', '2'] })) }
+                : {
+                    list: args.ids.map((id: string) => ({ ...raw(id), threadId: 'thread-1' })),
+                  }
+        return Response.json({ methodResponses: [[name, response, tag]] })
+      })
+      return new JmapProvider({
+        serverUrl: 'https://mail.example',
+        connectionId: 'c',
+        name: '',
+        authorization: 'test',
+        fetch: fetch as unknown as typeof globalThis.fetch,
+      })
+    }
+    for (const status of ['advertised', 'refused'] as const) {
+      perRequest.length = 0
+      const provider = limited(status)
+      const [account] = await provider.connect()
+      const page = await provider.query(account, { view: 'inbox' })
+      expect(page.items[0].messages.map((m) => m.id).sort()).toEqual(['1', '2'])
+      expect(await provider.conversationMetadata(account, ['thread-1'])).toHaveLength(2)
+      // An advertised limit is honored before sending; a refused request is split after.
+      expect(perRequest.filter((n) => n > 1)).toHaveLength(status === 'advertised' ? 0 : 2)
+    }
+  })
+  it('loads the threads of a mutation in one request', async () => {
+    const { provider, fetch } = fixture(thread(['a', 'b']))
+    const [account] = await provider.connect()
+    fetch.mockClear()
+    const messages = await provider.conversationMetadata(account, ['thread-a'])
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(messages.map((m) => m.id)).toEqual(['a', 'b'])
+    expect(messages.every((m) => m.plainSource === undefined)).toBe(true)
+  })
+  it('reads the account and state of each change the server announces', () => {
+    expect(
+      stateChanges(
+        'event: state\ndata: {"@type":"StateChange","changed":{"a":{"Email":"s2","Mailbox":"m"},"b":{"Mailbox":"m"}}}',
+        'c',
+      ),
+    ).toEqual([
+      { type: 'changed', accountId: JSON.stringify(['c', 'a']), emailState: 's2' },
+      { type: 'changed', accountId: JSON.stringify(['c', 'b']) },
+    ])
+    expect(stateChanges('event: state\ndata: {not json', 'c')).toEqual([{ type: 'changed' }])
+    expect(stateChanges('event: ping\ndata: {"interval":30}', 'c')).toEqual([])
+  })
+})
+describe('JMAP request pacing', () => {
+  const connected = async (
+    respond: (body: any, count: number) => Response | Promise<Response>,
+    options: Partial<JmapOptions> = {},
+    limits: Record<string, unknown> = {},
+  ) => {
+    let count = 0
+    const fetch = vi.fn(async (_url: any, init?: RequestInit) => {
+      if (!init?.body)
+        return Response.json({
+          ...session,
+          capabilities: { ...session.capabilities, [core]: { ...limits, maxObjectsInGet: 100 } },
+        })
+      return respond(JSON.parse(String(init.body)), ++count)
+    })
+    const provider = new JmapProvider({
+      serverUrl: 'https://mail.example',
+      connectionId: 'c',
+      name: '',
+      authorization: 'test',
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      ...options,
+    })
+    const [account] = await provider.connect()
+    fetch.mockClear()
+    return { provider, account, fetch }
+  }
+  const ok = (body: any) =>
+    Response.json({
+      methodResponses: body.methodCalls.map(([name, , tag]: any) => [name, { list: [] }, tag]),
+    })
+  it('never has more requests in flight than the server allows, and runs urgent ones first', async () => {
+    let inFlight = 0,
+      most = 0
+    const started: string[] = []
+    const gates: (() => void)[] = []
+    let lane: 'interactive' | 'normal' | 'background' = 'normal'
+    const { provider, account } = await connected(
+      async (body) => {
+        started.push(body.methodCalls[0][1].accountId + ':' + body.methodCalls[0][2])
+        inFlight++
+        most = Math.max(most, inFlight)
+        await new Promise<void>((resolve) => gates.push(resolve))
+        inFlight--
+        return ok(body)
+      },
+      { priority: () => lane },
+      { maxConcurrentRequests: 2 },
+    )
+    const get = (tag: string) =>
+      provider.call([['Mailbox/get', { accountId: account.remoteId }, tag]])
+    const running = [get('first'), get('second')]
+    lane = 'background'
+    const background = get('background')
+    lane = 'normal'
+    const normal = get('normal')
+    lane = 'interactive'
+    const interactive = get('interactive')
+    await vi.waitFor(() => expect(gates).toHaveLength(2))
+    while (gates.length) {
+      gates.shift()!()
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    await Promise.all([...running, background, normal, interactive])
+    expect(most).toBe(2)
+    expect(started.map((s) => s.split(':')[1])).toEqual([
+      'first',
+      'second',
+      'interactive',
+      'normal',
+      'background',
+    ])
+  })
+  it('quietly waits out a short pause before repeating a read', async () => {
+    const { provider, account, fetch } = await connected((body, count) =>
+      count === 1 ? new Response(null, { status: 429, headers: { 'retry-after': '1' } }) : ok(body),
+    )
+    const started = Date.now()
+    await provider.mailboxes(account)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900)
+  })
+  it('reports a longer pause with its length, from Retry-After or the RateLimit reset', async () => {
+    const { provider, account, fetch } = await connected(
+      () => new Response(null, { status: 429, headers: { ratelimit: '"requests";r=0;t=42' } }),
+    )
+    await expect(provider.mailboxes(account)).rejects.toMatchObject({
+      code: 'rateLimit',
+      retryAfter: 42,
+      message: 'The mail server asked inlark to pause. Try again in 42 seconds.',
+    })
+    // Nothing is sent while the pause lasts.
+    await expect(provider.mailboxes(account)).rejects.toMatchObject({ code: 'rateLimit' })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+  it('repeats a read turned away for too many at once, and never calls it an outage', async () => {
+    const limit = () =>
+      Response.json(
+        {
+          type: 'urn:ietf:params:jmap:error:limit',
+          limit: 'maxConcurrentRequests',
+          status: 400,
+        },
+        { status: 400 },
+      )
+    const busyOnce = await connected((body, count) => (count === 1 ? limit() : ok(body)))
+    await busyOnce.provider.mailboxes(busyOnce.account)
+    expect(busyOnce.fetch).toHaveBeenCalledTimes(2)
+    const busy = await connected(limit)
+    await expect(busy.provider.mailboxes(busy.account)).rejects.toMatchObject({
+      code: 'rateLimit',
+    })
+    expect(busy.fetch).toHaveBeenCalledTimes(3)
+    const write = await connected(limit)
+    await expect(
+      write.provider.update(write.account, { m: { keywords: { $seen: true } } }),
+    ).rejects.toMatchObject({ code: 'rateLimit' })
+    expect(write.fetch).toHaveBeenCalledTimes(1)
+  })
+  it('never sends a message again after the server turned it away', async () => {
+    const { provider, fetch } = await connected(
+      () => new Response(null, { status: 429, headers: { 'retry-after': '1' } }),
+    )
+    await expect(
+      provider.call(
+        [['EmailSubmission/set', { accountId: 'a', create: { send: { emailId: 'm' } } }, 's']],
+        true,
+      ),
+    ).rejects.toMatchObject({ code: 'rateLimit' })
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

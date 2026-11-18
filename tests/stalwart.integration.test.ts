@@ -18,18 +18,24 @@ const serverUrl = process.env.STALWART_TEST_URL,
 // Explicit opt-in. Only ever point this at a disposable server: creates and deletes test mail.
 describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integration', () => {
   it('discovers, paginates, searches, renders, uploads, organizes, submits, and cleans up', async () => {
+    let requests = 0
     const provider = new JmapProvider({
       serverUrl: serverUrl!,
       authorization: 'Basic ' + Buffer.from(username + ':' + password).toString('base64'),
       connectionId: 'integration',
       name: 'Integration',
+      fetch: (...args) => {
+        requests++
+        return fetch(...args)
+      },
     })
     const [account] = await provider.connect()
     expect(account).toBeTruthy()
     const identities = await provider.identities(account)
     expect(identities.length).toBeGreaterThan(0)
     const tag = 'inlark-test-' + randomUUID()
-    let folderId = ''
+    let folderId = '',
+      threadFolderId = ''
     const created: string[] = []
     try {
       await provider.folder(account, 'create', undefined, tag)
@@ -99,6 +105,91 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
         subject: tag + ' 60',
       })
       expect(searched.items).toHaveLength(1)
+      // A thread of two messages: pages, conversations and changes each load in one request.
+      await provider.folder(account, 'create', undefined, tag + ' thread')
+      threadFolderId = (await provider.mailboxes(account)).find(
+        (b) => b.name === tag + ' thread',
+      )!.id
+      const opener = '<' + tag + '-opener@inlark.test>'
+      const message = (subject: string, minute: number, reply = false) => ({
+        mailboxIds: { [threadFolderId]: true },
+        keywords: { $seen: true },
+        from: [{ name: 'Fixture', email: identities[0].email }],
+        to: [{ name: 'Test', email: identities[0].email }],
+        subject,
+        messageId: [reply ? tag + '-reply@inlark.test' : opener.slice(1, -1)],
+        ...(reply ? { inReplyTo: [opener.slice(1, -1)], references: [opener.slice(1, -1)] } : {}),
+        receivedAt: new Date(Date.UTC(2026, 8, 21, 0, minute)).toISOString(),
+        textBody: [{ partId: 'text', type: 'text/plain' }],
+        bodyValues: { text: { value: 'Thread message ' + minute } },
+      })
+      const [thread] = await provider.call([
+        [
+          'Email/set',
+          {
+            accountId: account.remoteId,
+            create: {
+              opener: message(tag + ' thread', 0),
+              reply: message('Re: ' + tag + ' thread', 1, true),
+            },
+          },
+          'thread',
+        ],
+      ])
+      expect(thread.notCreated).toBeUndefined()
+      created.push(...Object.values<{ id: string }>(thread.created).map((v) => v.id))
+      await expect
+        .poll(
+          async () =>
+            (await provider.query(account, { view: 'all', mailboxId: threadFolderId })).items.map(
+              (c) => c.count,
+            ),
+          { timeout: 10000, interval: 100 },
+        )
+        .toEqual([2])
+      requests = 0
+      const [conversation] = (
+        await provider.query(account, { view: 'all', mailboxId: threadFolderId })
+      ).items
+      expect(requests).toBe(1)
+      expect(conversation.messages).toHaveLength(2)
+      requests = 0
+      const opened = await provider.conversation(account, conversation.id)
+      expect(requests).toBe(1)
+      expect(opened.map((m) => m.text)).toEqual(['Thread message 0', 'Thread message 1'])
+      expect(opened.every((m) => m.plainSource)).toBe(true)
+      requests = 0
+      expect(await provider.conversationMetadata(account, [conversation.id])).toHaveLength(2)
+      expect(requests).toBe(1)
+      // An attachment sent as base64 can't hide armor, so reading still needs no full source.
+      const png = Uint8Array.from(
+        atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+        ),
+        (c) => c.charCodeAt(0),
+      )
+      const image = await provider.upload(account, png, 'image/png')
+      const [attached] = await provider.call([
+        [
+          'Email/set',
+          {
+            accountId: account.remoteId,
+            create: {
+              attached: {
+                ...message(tag + ' attachment', 2),
+                messageId: [tag + '-attachment@inlark.test'],
+                attachments: [{ blobId: image, type: 'image/png', name: 'dot.png' }],
+              },
+            },
+          },
+          'attached',
+        ],
+      ])
+      expect(attached.notCreated).toBeUndefined()
+      created.push(attached.created.attached.id)
+      const [withImage] = await provider.messages(account, [attached.created.attached.id], true)
+      expect(withImage.attachments).toHaveLength(1)
+      expect(withImage.plainSource).toBeDefined()
       const blobId = await provider.upload(
         account,
         new TextEncoder().encode('Attachment fixture'),
@@ -172,6 +263,7 @@ describe.skipIf(!serverUrl || !username || !password)('disposable Stalwart integ
         }
       }
       if (folderId) await provider.folder(account, 'delete', folderId)
+      if (threadFolderId) await provider.folder(account, 'delete', threadFolderId)
       provider.dispose()
     }
   }, 60000)

@@ -272,7 +272,7 @@ export const ipcSchemas = {
   mailboxes: z.tuple([id]),
   identities: z.tuple([id]),
   query: z.tuple([querySchema, z.record(z.string(), z.number().int().nonnegative()).optional()]),
-  conversation: z.tuple([id, id]),
+  conversation: z.tuple([id, id, z.boolean().optional()]),
   mutate: z.tuple([mutationSchema]),
   mutateAll: z.tuple([querySchema, actionSchema]),
   undo: z.tuple([id]),
