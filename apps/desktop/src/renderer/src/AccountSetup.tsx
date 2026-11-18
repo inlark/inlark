@@ -833,7 +833,13 @@ export function AccountSetup({
       if (abandoned()) return undefined
       if (!result.ok) {
         setSignIn({ phase: 'idle' })
-        if (result.reason !== 'cancelled') setSignInProblem(result)
+        // An Outlook.com account has no administrator to ask, so being sent back is treated as
+        // the person having changed their mind.
+        const quiet =
+          result.reason === 'cancelled' ||
+          (result.reason === 'sentBack' &&
+            isMicrosoftPersonalHost(latest.current.fields.outgoing.host))
+        if (!quiet) setSignInProblem(result)
         setBusy(undefined)
         return undefined
       }

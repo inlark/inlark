@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { connect, type Socket } from 'node:net'
+import { connect as secure } from 'node:tls'
 vi.mock('electron', () => ({
   app: { getVersion: () => 'test' },
   safeStorage: {
@@ -18,7 +20,7 @@ import { JsonStore } from '../apps/desktop/src/main/storage'
 import { MicrosoftAuth } from '../apps/desktop/src/main/microsoft-auth'
 import { discover } from '../apps/desktop/src/main/discovery-transport'
 import { openInProcessIndex } from '../apps/desktop/src/main/imap-index/sqlite-index'
-import { ImapProvider } from '../packages/imap/src'
+import { ImapFlowPort, ImapProvider } from '../packages/imap/src'
 import {
   isMicrosoftMailHost,
   type ConnectInput,
@@ -35,9 +37,21 @@ import {
  * the browser to come back. It reads message headers into a throwaway index and prints counts
  * and folder names only. With INLARK_MICROSOFT_SEND=1 it also sends one message from the
  * mailbox to itself, which stays there. The sign-in it saved is deleted at the end.
+ *
+ * Hidden recipients take two runs. INLARK_MICROSOFT_BCC=<other mailbox> adds one to the message
+ * and checks that the copy delivered to the visible recipient doesn't name it. Then, signed in to
+ * that other mailbox, INLARK_MICROSOFT_FIND=<the subject the first run printed> checks that the
+ * message arrived there.
+ *
+ * INLARK_MICROSOFT_SMTP=<minutes> is for a mailbox whose administrator allows SMTP: the run waits
+ * that long for Microsoft to accept the sign-in over SMTP, which can lag behind the setting, and
+ * fails if the message then goes out any other way.
  */
 const address = process.env.INLARK_MICROSOFT_TEST
 const sending = process.env.INLARK_MICROSOFT_SEND === '1'
+const hidden = process.env.INLARK_MICROSOFT_BCC
+const expected = process.env.INLARK_MICROSOFT_FIND
+const smtpWithin = Number(process.env.INLARK_MICROSOFT_SMTP || 0)
 const minutes = (n: number) => n * 60_000
 const report = (line: string) => console.log('[microsoft] ' + line)
 
@@ -46,6 +60,7 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
   const accountId = JSON.stringify([connectionId, 'imap'])
   let directory: string
   let service: MailService
+  let auth: MicrosoftAuth
   let config: ImapConnectionConfig
   const factory: ProviderFactory = (options) =>
     new ImapProvider({
@@ -68,7 +83,7 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
     service = new MailService(new JsonStore(directory), () => {}, {
       providers: factory,
       discover,
-      microsoft: new MicrosoftAuth({
+      microsoft: (auth = new MicrosoftAuth({
         // Longer than the app waits, since the link has to be copied to a browser by hand.
         waitMs: minutes(18),
         open: async (url) => {
@@ -77,12 +92,86 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
           if (process.env.INLARK_MICROSOFT_URL_FILE)
             await writeFile(process.env.INLARK_MICROSOFT_URL_FILE, url + '\n', { mode: 0o600 })
         },
-      }),
+      })),
     })
     await service.init()
   }
   const provider = () => (service as any).providers.get(connectionId) as ImapProvider
   const sync = () => (provider() as any).syncPass('all') as Promise<void>
+  /** The headers of every message with this subject, read straight from the server. */
+  const headers = async (subject: string, folders: string[]) => {
+    const session = (service as any).sessionSecrets.get(connectionId)?.microsoft
+    const port = new ImapFlowPort(
+      { ...config.incoming, accessToken: () => session.accessToken('mail') },
+      'command',
+    )
+    await port.connect()
+    try {
+      const found: { folder: string; text: string }[] = []
+      for (const folder of folders) {
+        await port.select(folder)
+        for (const uid of await port.search({ subject })) {
+          const raw = await port.source(uid, 5_000_000)
+          if (raw)
+            found.push({
+              folder,
+              text: Buffer.from(raw)
+                .toString('utf8')
+                .split(/\r?\n\r?\n/)[0],
+            })
+        }
+      }
+      return found
+    } finally {
+      await port.close().catch(() => undefined)
+    }
+  }
+  /**
+   * What the outgoing server answers to this sign-in, word for word. inlark itself only keeps
+   * what the answer means; the wording says whether a mailbox or its whole organization has SMTP
+   * switched off.
+   */
+  const smtpSays = (token: string) =>
+    new Promise<string>((resolve) => {
+      const { host, port } = config.outgoing
+      let socket: Socket = connect(port, host)
+      let step = 0
+      let buffer = ''
+      const done = (text: string) => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(text.trim().replace(/\s+/g, ' ').slice(0, 300))
+      }
+      const timer = setTimeout(() => done('no answer in time'), 30_000)
+      const failed = (error: Error) => done('connection failed: ' + error.message)
+      const read = (chunk: Buffer) => {
+        buffer += chunk.toString('utf8')
+        // A reply ends with a line whose code is followed by a space.
+        if (!/(^|\r\n)\d{3} [^\r\n]*\r\n$/.test(buffer)) return
+        const reply = buffer
+        buffer = ''
+        step++
+        // Greeting, EHLO, STARTTLS, EHLO again inside TLS, then the sign-in.
+        if (step === 1) socket.write('EHLO inlark.test\r\n')
+        else if (step === 2) socket.write('STARTTLS\r\n')
+        else if (step === 3) {
+          if (!/^220 /.test(reply)) return done(reply)
+          socket.removeListener('data', read)
+          socket = secure({ socket, servername: host }, () => socket.write('EHLO inlark.test\r\n'))
+          socket.on('data', read).on('error', failed)
+        } else if (step === 4)
+          socket.write(
+            'AUTH XOAUTH2 ' +
+              Buffer.from(`user=${address}\x01auth=Bearer ${token}\x01\x01`).toString('base64') +
+              '\r\n',
+          )
+        // A refusal can come as a challenge first, answered with an empty line.
+        else if (/^334 /.test(reply)) socket.write('\r\n')
+        else done(reply)
+      }
+      socket.on('data', read).on('error', failed)
+    })
+  const names = (text: string, who: string) => text.toLowerCase().includes(who.toLowerCase())
   const input = (grant?: string): ConnectInput => ({
     config,
     name: 'Integration',
@@ -130,6 +219,19 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
         `signed in as ${signedIn.email} (${signedIn.personal ? 'personal' : 'work or school'})`,
       )
 
+      if (smtpWithin) {
+        const deadline = Date.now() + minutes(smtpWithin)
+        for (;;) {
+          // Asking for the sign-in also keeps it from being forgotten while this waits.
+          const said = await smtpSays(await auth.grant(signedIn.grant)!.accessToken('mail'))
+          report('the outgoing server answers the sign-in: ' + said)
+          if (/^235 /.test(said)) break
+          if (Date.now() > deadline)
+            throw new Error('Microsoft did not accept the sign-in over SMTP in time')
+          await new Promise((resolve) => setTimeout(resolve, minutes(3)))
+        }
+      }
+
       const check = await service.testConnection({
         ...input(signedIn.grant),
         connectionId: undefined,
@@ -145,6 +247,7 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
       expect(account.status).toBe('connected')
       const viaGraph = !!account.limits?.send
       report(`sending goes through ${viaGraph ? 'Microsoft Graph (SMTP is switched off)' : 'SMTP'}`)
+      if (smtpWithin) expect(viaGraph, 'sends over SMTP once Microsoft allows it').toBe(false)
       await sync()
       const boxes = await service.mailboxes(accountId)
       report(
@@ -164,7 +267,7 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
           identityId: 'default',
           to: [{ name: '', email: address! }],
           cc: [],
-          bcc: [],
+          bcc: hidden ? [{ name: '', email: hidden }] : [],
           subject,
           html: '<p>Sent by inlark’s Microsoft integration test.</p>',
           text: 'Sent by inlark’s Microsoft integration test.',
@@ -212,6 +315,35 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
         report(`Message-ID as delivered: ${delivered.map(ids).join(' ')}`)
         expect(sent, 'exactly one copy in Sent').toHaveLength(1)
         expect(delivered, 'delivered once').toHaveLength(1)
+        if (hidden) {
+          report(`subject, for the run in the hidden recipient's mailbox: ${subject}`)
+          const copies = await headers(subject, ['INBOX', check.folders!.mappings.sent!.path])
+          expect(copies, 'the Inbox and Sent copies').toHaveLength(2)
+          for (const copy of copies)
+            report(
+              `${copy.folder} copy: ${/^bcc:/im.test(copy.text) ? 'has' : 'no'} Bcc header, ` +
+                `${names(copy.text, hidden) ? 'names' : 'does not name'} the hidden recipient`,
+            )
+          const inbox = copies.find((copy) => copy.folder === 'INBOX')!
+          expect(names(inbox.text, hidden), 'the delivered copy names the hidden recipient').toBe(
+            false,
+          )
+        }
+      }
+      if (expected) {
+        await vi.waitFor(
+          async () => {
+            await sync()
+            const page = await service.query({ view: 'inbox', accountId, subject: expected })
+            expect(page.items.length, 'the message for the hidden recipient').toBeGreaterThan(0)
+          },
+          { timeout: minutes(3), interval: 5000 },
+        )
+        const [copy] = await headers(expected, ['INBOX'])
+        report(
+          `arrived for the hidden recipient: ${/^bcc:/im.test(copy.text) ? 'has' : 'no'} Bcc header, ` +
+            `${names(copy.text, address!) ? 'names' : 'does not name'} this mailbox in its headers`,
+        )
       }
 
       // A restart has only what was saved to disk: the long-lived token.
@@ -224,6 +356,6 @@ describe.skipIf(!address)('a real Microsoft mailbox', () => {
       report('connected again after a restart, from the saved sign-in')
       expect(await service.connectionSettings(connectionId)).toMatchObject({ microsoft: true })
     },
-    minutes(30),
+    minutes(30 + smtpWithin),
   )
 })

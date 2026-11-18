@@ -269,10 +269,39 @@ describe('signing in with Microsoft', () => {
       expect(await page.text()).toContain('Sign-in didn’t finish')
       return finished
     }
+    // Microsoft's “Need admin approval” page, as its “Return to the application” link answered
+    // for a real organization: no reason at all.
+    expect(await outcome({ error: 'access_denied', error_subcode: 'cancel' })).toMatchObject({
+      ok: false,
+      reason: 'sentBack',
+    })
     expect(await outcome({ error: 'access_denied' })).toMatchObject({
       ok: false,
-      reason: 'cancelled',
+      reason: 'sentBack',
     })
+    // Cancel on the page that lists what inlark may do, as Microsoft really answered. It
+    // documents the same answer for “Back to app” after asking an administrator for approval,
+    // so this is no proof that the person changed their mind.
+    expect(
+      await outcome({
+        error: 'consent_required',
+        error_description:
+          'AADSTS65004: User declined to consent to access the app. Trace ID: ff284db2-9853-4833-97a3-ed997f1b0500 Correlation ID: 3c9ec174-5261-48f0-a11c-b1b7a1ea0208 Timestamp: 2026-11-18 21:35:05Z',
+        error_uri: 'https://login.microsoftonline.com/error?code=65004',
+      }),
+    ).toMatchObject({ ok: false, reason: 'sentBack' })
+    expect(
+      await outcome({
+        error: 'access_denied',
+        error_description: 'AADSTS65004: User declined to consent to access the app.',
+      }),
+    ).toMatchObject({ ok: false, reason: 'sentBack' })
+    expect(
+      await outcome({
+        error: 'access_denied',
+        error_description: 'The user has denied access to the scope requested by the client.',
+      }),
+    ).toMatchObject({ ok: false, reason: 'cancelled' })
     expect(
       await outcome({
         error: 'access_denied',

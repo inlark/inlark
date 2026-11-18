@@ -432,11 +432,17 @@ export interface MicrosoftSignIn {
 }
 /**
  * How a Microsoft sign-in ended. `adminApproval` means the user's organization has to approve
- * inlark before anyone in it can sign in.
+ * inlark before anyone in it can sign in. `sentBack` means Microsoft's page returned the person
+ * without signing them in, and what it said doesn't tell whether they changed their mind or an
+ * administrator's approval is needed or was just asked for.
  */
 export type MicrosoftSignInResult =
   | ({ ok: true } & MicrosoftSignIn)
-  | { ok: false; reason: 'cancelled' | 'timeout' | 'adminApproval' | 'failed'; message: string }
+  | {
+      ok: false
+      reason: 'cancelled' | 'timeout' | 'adminApproval' | 'sentBack' | 'failed'
+      message: string
+    }
 /**
  * Something the user or their administrator can do about a refused connection:
  * - `outlookImap`: the Outlook.com mailbox has IMAP switched off, which is its default.

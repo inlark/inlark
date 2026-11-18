@@ -236,13 +236,24 @@ export function MicrosoftSignInCard({
         </div>
       </GuideCard>
     )
-  if (problem?.reason === 'adminApproval')
+  // Microsoft's own pages send a work or school account back without saying whether an
+  // administrator has to approve inlark, so that case is offered rather than asserted.
+  if (problem?.reason === 'adminApproval' || (problem?.reason === 'sentBack' && !personal)) {
+    const certain = problem.reason === 'adminApproval'
     return (
       <GuideCard className="pb-3">
-        <Heading title="Your organization has to approve inlark first">
-          Microsoft only lets people in your organization use apps an administrator has approved.
-          Send your administrator the page below. It explains what inlark is and what it can access,
-          and lets them approve it once for everyone.
+        <Heading
+          title={
+            certain
+              ? 'Your organization has to approve inlark first'
+              : 'Your organization may need to approve inlark'
+          }
+        >
+          {certain
+            ? 'Microsoft only lets people in your organization use apps an administrator has approved. Send your administrator the page below.'
+            : 'Microsoft sent you back without signing in. If it asked for an administrator’s approval, send your administrator the page below.'}{' '}
+          It explains what inlark is and what it can access, and lets them approve it once for
+          everyone.
         </Heading>
         <Actions>
           <CopyAdminLink />
@@ -251,9 +262,14 @@ export function MicrosoftSignInCard({
             <ArrowUpRight size={12} />
           </Button>
         </Actions>
-        <Note>Once it’s approved, sign in with Microsoft again below.</Note>
+        <Note>
+          {certain
+            ? 'Once it’s approved, sign in with Microsoft again below.'
+            : 'Once it’s approved, or if you only went back, sign in with Microsoft again below.'}
+        </Note>
       </GuideCard>
     )
+  }
   return (
     <GuideCard className="pb-3">
       <Heading title={personal ? 'Outlook signs you in with Microsoft' : 'Sign in with Microsoft'}>

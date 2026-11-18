@@ -209,7 +209,12 @@ const promises = [
       title.textContent = 'inlark is approved for your organization'
       text.textContent =
         'People there can now choose Sign in with Microsoft in inlark. Nothing else is needed from you.'
-    } else if (error === 'access_denied') {
+    } else if (
+      // Microsoft's words for an administrator choosing Cancel on its page.
+      error === 'access_denied' ||
+      error === 'consent_required' ||
+      /AADSTS65004\b/.test(answer.get('error_description') || '')
+    ) {
       title.textContent = 'Nothing was approved'
       text.textContent =
         'Microsoft reports that the request was declined or closed. You can review it again with the button below.'

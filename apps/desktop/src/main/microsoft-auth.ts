@@ -87,6 +87,11 @@ function identity(idToken?: string): { tid?: string; email?: string } {
 /** Microsoft's words for "an administrator has to approve this app first". */
 const needsAdmin =
   /AADSTS(65001|90094|900941|650052|650057|50105|700016)\b|admin(istrator)? (consent|approval)/i
+/**
+ * “User declined to consent”. Microsoft sends it for Cancel on the page that lists what inlark
+ * may do, and also for “Back to app” after someone asked their administrator for approval.
+ */
+const declined = /AADSTS65004\b/
 
 /** Takes the one-time code out of the address bar and the browser's history. */
 const tidy = "history.replaceState(null,'','/')"
@@ -101,10 +106,7 @@ main{max-width:26rem;padding:2rem}h1{margin:0 0 .5rem;font-size:20px;font-weight
 @media(prefers-color-scheme:dark){body{background:#101014;color:#ededf0}p{color:#9a9aa6}}</style></head><body><main><h1>${title}</h1><p>${text}</p></main><script>${tidy}</script></body></html>`
 const pages = {
   done: page('You’re signed in', 'You can close this tab and go back to inlark.'),
-  failed: page(
-    'Sign-in didn’t finish',
-    'You can close this tab. inlark shows what happened and lets you try again.',
-  ),
+  failed: page('Sign-in didn’t finish', 'You can close this tab and go back to inlark.'),
 }
 function send(response: ServerResponse, status: number, html: string) {
   response.writeHead(status, {
@@ -352,7 +354,17 @@ export class MicrosoftAuth {
           message:
             'Your organization hasn’t approved inlark yet. An administrator has to approve it once for everyone.',
         }
-      if (answer.get('error') === 'access_denied')
+      const denied = answer.get('error') === 'access_denied'
+      // Microsoft's “Need admin approval” page sends people back with no reason at all. Either
+      // way inlark can't tell someone who changed their mind from someone who needs, or has
+      // just asked for, an administrator's approval.
+      if (declined.test(description) || (denied && !description))
+        return {
+          ok: false,
+          reason: 'sentBack',
+          message: 'Microsoft sent you back without signing in.',
+        }
+      if (denied)
         return { ok: false, reason: 'cancelled', message: 'Microsoft sign-in was cancelled.' }
       return {
         ok: false,

@@ -593,12 +593,12 @@ function demoMicrosoftSignIn(address: string) {
   const result = new Promise<MicrosoftSignInResult>((resolve) => {
     const timer = setTimeout(() => {
       if (/^waiting@/.test(email)) return
+      // What Microsoft's “Need admin approval” page really sends: no reason at all.
       if (/^approval@/.test(email))
         return resolve({
           ok: false,
-          reason: 'adminApproval',
-          message:
-            'Your organization hasn’t approved inlark yet. An administrator has to approve it once for everyone.',
+          reason: 'sentBack',
+          message: 'Microsoft sent you back without signing in.',
         })
       const grant = crypto.randomUUID()
       const signedInAs = /^other@/.test(email) ? email.replace(/^other@/, 'someone.else@') : email
