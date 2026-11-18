@@ -140,6 +140,7 @@ import {
   type MailLocation,
 } from './search-scope'
 import { version as packagedVersion } from '../../../package.json'
+import { reloader } from './reload'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
@@ -147,6 +148,8 @@ const discardKeys = (item: DraftItem) =>
   item.kind === 'local' && item.draft.serverId
     ? [item.key, 'server:' + scopeKey(item.draft.accountId, item.draft.serverId)]
     : [item.key]
+/** Reloads what the window shows; a burst of requests shares one reload. */
+const refresh = reloader(queryClient)
 const escapeHtml = (s: string) =>
   s.replace(
     /[&<>"']/g,
@@ -188,6 +191,8 @@ export function App() {
   const undoTarget = useSyncExternalStore(toasts.subscribe, toasts.undoTarget)
   const [busy, setBusy] = useState(false),
     [progress, setProgress] = useState('')
+  /** Whether a held next or previous key is skimming past conversations. */
+  const [skimming, setSkimming] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ phase: 'idle' })
   const [folderDialog, setFolderDialog] = useState<FolderDialogState>()
   const [moveTargets, setMoveTargets] = useState<MutationTarget[]>(),
@@ -364,7 +369,8 @@ export function App() {
   const thread = useQuery({
     queryKey: ['thread', route.threadAccount, route.thread],
     queryFn: () => api.conversation(route.threadAccount!, route.thread!),
-    enabled: !!route.thread && !!readerAccount,
+    // While a held key skims past conversations, only the one it stops at is loaded.
+    enabled: !!route.thread && !!readerAccount && !skimming,
     // Open instantly from the list summary; bodies arrive a moment later.
     placeholderData: listed
       ? [...listed.messages].sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
@@ -406,13 +412,6 @@ export function App() {
       : conversations
           .filter((c) => selected.has(c.key) || (!selected.size && c.key === focused))
           .map((c) => ({ accountId: c.accountId, threadId: c.id }))
-  const refresh = async () => {
-    await Promise.all(
-      ['mail', 'thread', 'mailboxes', 'drafts', 'submissions'].map((key) =>
-        queryClient.invalidateQueries({ queryKey: [key] }),
-      ),
-    )
-  }
   const act = async (
     action: MailAction,
     explicit?: MutationTarget[],
@@ -671,7 +670,9 @@ export function App() {
       fail(e)
     }
   }
-  const step = (delta: number) => {
+  /** `repeat` is set for the repeats of a held key, which skim without loading each conversation. */
+  const step = (delta: number, repeat = false) => {
+    if (repeat && route.thread) setSkimming(true)
     if (
       route.thread &&
       delta > 0 &&
@@ -851,20 +852,21 @@ export function App() {
     if (
       route.thread &&
       thread.data &&
+      !skimming &&
       readerAccount?.status === 'connected' &&
       lastRead.current !== key
     ) {
       lastRead.current = key
       if (thread.data.some((m) => !m.keywords.$seen))
         void api
+          // The service reports the change, which reloads the list.
           .mutate({
             targets: [{ accountId: readerAccount.id, threadId: route.thread }],
             action: 'read',
           })
-          .then(refresh)
           .catch((e) => fail(e))
     }
-  }, [route.thread, route.threadAccount, thread.data, readerAccount?.status])
+  }, [route.thread, route.threadAccount, thread.data, readerAccount?.status, skimming])
   useEffect(() => {
     const unsubscribe = api.onEvent((event) => {
       if (event.type === 'encryption') {
@@ -913,19 +915,35 @@ export function App() {
     }
   }, [accounts.length])
   useEffect(() => {
-    if (!route.thread) return
+    // A held key stops skimming when any key is released or the window loses focus.
+    if (!skimming) return
+    const stop = () => setSkimming(false)
+    window.addEventListener('keyup', stop)
+    window.addEventListener('blur', stop)
+    return () => {
+      window.removeEventListener('keyup', stop)
+      window.removeEventListener('blur', stop)
+    }
+  }, [skimming])
+  const nearby = useMemo(() => {
+    if (!route.thread || skimming) return []
     const index = conversations.findIndex(
       (c) => c.id === route.thread && c.accountId === route.threadAccount,
     )
-    for (const nearby of [conversations[index - 1], conversations[index + 1]]) {
-      if (nearby && accounts.some((a) => a.id === nearby.accountId && a.status === 'connected'))
-        void queryClient.prefetchQuery({
-          queryKey: ['thread', nearby.accountId, nearby.id],
-          queryFn: () => api.conversation(nearby.accountId, nearby.id),
-          staleTime: 60_000,
-        })
-    }
-  }, [route.thread, route.threadAccount, conversations])
+    return [conversations[index - 1], conversations[index + 1]].filter(
+      (c) => !!c && accounts.some((a) => a.id === c.accountId && a.status === 'connected'),
+    )
+  }, [route.thread, route.threadAccount, conversations, skimming, accounts])
+  // Neighbors load ahead when they change, not again each time the list reloads.
+  const nearbyKey = nearby.map((c) => c.key).join(' ')
+  useEffect(() => {
+    for (const c of nearby)
+      void queryClient.prefetchQuery({
+        queryKey: ['thread', c.accountId, c.id],
+        queryFn: () => api.conversation(c.accountId, c.id, true),
+        staleTime: 60_000,
+      })
+  }, [nearbyKey])
   /** Undoes one toast's action, reporting the outcome in that same toast. */
   const undo = async (target: LiveToast) => {
     if (target.onUndo) {
@@ -1070,8 +1088,8 @@ export function App() {
       toggleUnread: { run: toggleUnread, enabled: inMailList },
       toggleDensity: { run: toggleDensity, enabled: inMailList },
       createFolder: { run: createFolder, enabled: !blocked && !!accounts.length },
-      next: { run: () => step(1) },
-      previous: { run: () => step(-1) },
+      next: { run: (event) => step(1, event?.repeat) },
+      previous: { run: (event) => step(-1, event?.repeat) },
       open: { run: openFocused },
       authAction: {
         run: () => authTarget && void applyAuth(authTarget.candidate, authTarget.key),
@@ -1794,7 +1812,14 @@ export function App() {
               title={thread.isError ? 'This conversation is unavailable' : 'Opening conversation'}
               description={thread.isError ? friendlyError(thread.error) : undefined}
             >
-              <Button onClick={back}>Back to {title.toLowerCase()}</Button>
+              <div className="empty-actions flex flex-wrap justify-center gap-2">
+                {thread.isError && (
+                  <Button disabled={thread.isFetching} onClick={() => void thread.refetch()}>
+                    Try again
+                  </Button>
+                )}
+                <Button onClick={back}>Back to {title.toLowerCase()}</Button>
+              </div>
             </EmptyState>
           )
         ) : (

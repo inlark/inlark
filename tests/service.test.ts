@@ -668,3 +668,97 @@ describe('untrusted message resource boundaries', () => {
     await expect(publicFetch('http://127.0.0.1/image')).rejects.toThrow('Private network')
   })
 })
+describe('server request budget', () => {
+  /** Waits for the check that connecting started in the background. */
+  const settle = () => vi.waitFor(() => expect((service as any).refreshing.size).toBe(0))
+  const changes = () => events.filter((e) => e.type === 'changed')
+  it('opens plain messages without their source and keeps headers out of the window', async () => {
+    const source = vi
+      .spyOn(JmapProvider.prototype, 'rawMessage')
+      .mockResolvedValue(new TextEncoder().encode('Content-Type: text/plain\r\n\r\nHi'))
+    vi.spyOn(JmapProvider.prototype, 'conversation').mockResolvedValue([
+      {
+        ...mail,
+        id: 'plain',
+        text: 'Hi',
+        plainSource: new TextEncoder().encode('Content-Type: text/plain\r\n\r\n'),
+      },
+      { ...mail, id: 'unknown', text: 'Hi' },
+    ])
+    const messages = await service.conversation(account.id, 'thread')
+    expect(source.mock.calls.map((call) => call[1])).toEqual(['unknown'])
+    expect(messages.map((m) => m.id)).toEqual(['plain', 'unknown'])
+    expect(messages.some((m) => 'plainSource' in m)).toBe(false)
+  })
+  it('reloads the window only for changes it doesn’t show yet', async () => {
+    const state = vi.spyOn(JmapProvider.prototype, 'getStateToken').mockReturnValue('s1')
+    await settle()
+    await service.refreshConnection('connection')
+    events = []
+    await service.refreshConnection('connection')
+    expect(changes()).toEqual([])
+    // An unchanged status sends nothing either; each reload of the window costs requests.
+    expect(events.filter((e) => e.type === 'accounts')).toEqual([])
+    state.mockReturnValue('s2')
+    await service.refreshConnection('connection')
+    expect(changes()).toEqual([{ type: 'changed', accountId: account.id }])
+  })
+  it('reloads the window when folder rights change without any mail changing', async () => {
+    vi.spyOn(JmapProvider.prototype, 'getStateToken').mockReturnValue('s1')
+    await settle()
+    await service.refreshConnection('connection')
+    events = []
+    vi.mocked(JmapProvider.prototype.mailboxes).mockResolvedValue(
+      boxes.map((b) =>
+        b.id === 'custom' ? { ...b, rights: { ...b.rights, mayDelete: false } } : b,
+      ),
+    )
+    await service.refreshConnection('connection')
+    expect(changes()).toEqual([{ type: 'changed', accountId: account.id }])
+  })
+  it('skips the echo of the user’s own change but still checks for new mail', async () => {
+    vi.spyOn(JmapProvider.prototype, 'getStateToken').mockReturnValue('s1')
+    const listener = vi.mocked(JmapProvider.prototype.subscribe).mock.calls[0][0]
+    await settle()
+    await service.mutate({
+      targets: [{ accountId: account.id, threadId: 'thread' }],
+      action: 'read',
+    })
+    events = []
+    const checks = vi.mocked(JmapProvider.prototype.mailboxes).mock.calls.length
+    listener({ type: 'changed', accountId: account.id, emailState: 's1' })
+    await settle()
+    expect(changes()).toEqual([])
+    expect(vi.mocked(JmapProvider.prototype.mailboxes).mock.calls.length).toBeGreaterThan(checks)
+    listener({ type: 'changed', accountId: account.id, emailState: 's2' })
+    expect(changes()).toEqual([{ type: 'changed', accountId: account.id }])
+  })
+  it('checks again once when mail changes during a check', async () => {
+    await settle()
+    let release!: () => void
+    vi.mocked(JmapProvider.prototype.mailboxes).mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve(boxes))),
+    )
+    const first = service.refreshConnection('connection')
+    await vi.waitFor(() => expect(release).toBeDefined())
+    const checks = vi.mocked(JmapProvider.prototype.query).mock.calls.length
+    void service.refreshConnection('connection')
+    void service.refreshConnection('connection')
+    release()
+    await first
+    expect(vi.mocked(JmapProvider.prototype.query).mock.calls.length - checks).toBe(2)
+  })
+  it('treats a pause the server asked for as a pause, not an outage', async () => {
+    await settle()
+    vi.mocked(JmapProvider.prototype.mailboxes).mockRejectedValue(
+      new JmapError('rateLimit', 'The mail server asked inlark to pause.', 30),
+    )
+    await service.refreshConnection('connection')
+    expect((service as any).accounts[0].status).toBe('connected')
+    vi.mocked(JmapProvider.prototype.query).mockRejectedValue(
+      new JmapError('rateLimit', 'The mail server asked inlark to pause.', 30),
+    )
+    await expect(service.query({ view: 'inbox' })).rejects.toThrow()
+    expect((service as any).accounts[0].status).toBe('connected')
+  })
+})

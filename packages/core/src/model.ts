@@ -164,6 +164,12 @@ export interface Message {
   encryptionIntent?: boolean
   /** Derived from this message after decryption; never persisted separately. */
   authCandidate?: AuthValue
+  /**
+   * Set by a provider that can tell from a message's structure that it is neither signed nor
+   * encrypted: its Content-Type and Autocrypt headers, which is all that reading it needs from
+   * the full source. Main process only; removed before a message reaches the window.
+   */
+  plainSource?: Uint8Array
 }
 export interface Conversation {
   id: string
@@ -483,7 +489,14 @@ export interface ProviderEvent {
   indexing?: IndexingProgress
   /** Set for changes found by historical indexing, which must never notify. */
   historical?: boolean
+  /** The account's new Email state, when the server announced it with the change. */
+  emailState?: string
 }
+/**
+ * How soon a server request should run when a provider has to queue them: what the user is
+ * waiting for first, then lists and prefetches, then background checks.
+ */
+export type RequestPriority = 'interactive' | 'normal' | 'background'
 export interface MailProvider {
   readonly capabilities: ProviderCapabilities
   connect(): Promise<Account[]>
@@ -735,7 +748,8 @@ export interface DesktopMailAPI {
   mailboxes(accountId: string): Promise<Mailbox[]>
   identities(accountId: string): Promise<Identity[]>
   query(query: MailQuery, cursor?: Record<string, number>): Promise<QueryPage>
-  conversation(accountId: string, threadId: string): Promise<Message[]>
+  /** `prefetch` loads a conversation the user may open next, after what they are waiting for. */
+  conversation(accountId: string, threadId: string, prefetch?: boolean): Promise<Message[]>
   mutate(input: MutationInput): Promise<MutationResult>
   mutateAll(query: MailQuery, action: MailAction): Promise<MutationResult>
   undo(id: string): Promise<MutationResult>

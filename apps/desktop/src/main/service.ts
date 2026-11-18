@@ -53,6 +53,7 @@ import {
   type Conversation,
 } from '@inlark/core'
 import { JmapProvider } from '@inlark/jmap'
+import { currentPriority, withPriority } from './request-priority'
 import { publicFetch } from './public-fetch'
 import { remoteImageData } from './remote-image'
 import { SenderAvatarResolver, rasterType } from './sender-avatar'
@@ -224,6 +225,15 @@ export class MailService {
   /** The status each held draft had, restored if its send is undone. */
   private heldStatus = new Map<string, Draft['status']>()
   private refreshing = new Set<string>()
+  /** Connections that changed again while being refreshed, so they are refreshed once more. */
+  private refreshAgain = new Set<string>()
+  /**
+   * The server's Email state each account was at when the window was last told to reload it, so a
+   * check that finds nothing newer, or the echo of the user's own change, costs no reload.
+   */
+  private reported = new Map<string, string>()
+  /** Each account's folders and rights as last checked, so folder changes reload the window. */
+  private folderShapes = new Map<string, string>()
   private filing = new Set<string>()
   private unreadCounts = new Map<string, number>()
   private notificationBaseline = new Map<string, string>()
@@ -504,7 +514,24 @@ export class MailService {
     this.emit({ type: 'accounts', accounts: this.accounts })
   }
   private status(connectionId: string, state: Account['status'], error?: string) {
+    // Every reload of the window costs server requests, so an unchanged status sends nothing.
+    const accounts = this.accounts.filter((a) => a.connectionId === connectionId)
+    if (accounts.length && accounts.every((a) => a.status === state && a.error === error)) return
     this.patchAccounts(connectionId, { status: state, error })
+  }
+  /**
+   * Tells the window that mail changed so it reloads, and remembers which server state that reload
+   * shows at least: `emailState` when the server announced it, else the newest the provider saw.
+   */
+  private changed(accountId?: string, emailState?: string) {
+    if (accountId) {
+      const account = this.accounts.find((a) => a.id === accountId)
+      const state =
+        emailState ?? (account && this.providers.get(account.connectionId)?.getStateToken(account))
+      if (state) this.reported.set(accountId, state)
+      else this.reported.delete(accountId)
+    }
+    this.emit({ type: 'changed', accountId })
   }
   /** Outgoing problems are tracked apart from incoming ones: reading can still work. */
   private outgoing(connectionId: string, error?: string) {
@@ -549,6 +576,7 @@ export class MailService {
         connectionId: id,
         name: input.name,
         detectAuth,
+        priority: currentPriority,
       })
     if (!this.options.providers) throw new Error('IMAP accounts are not available in this build.')
     return this.options.providers({
@@ -701,7 +729,14 @@ export class MailService {
         this.status(id, event.state, event.message)
         return
       }
-      this.emit({ type: 'changed', accountId: event.accountId })
+      // An announced state the window already shows, such as the echo of the user's own change,
+      // needs no reload. The check below still runs, for notifications and copied codes.
+      if (
+        !event.emailState ||
+        !event.accountId ||
+        this.reported.get(event.accountId) !== event.emailState
+      )
+        this.changed(event.accountId, event.emailState)
       // Historical indexing adds older mail; only live changes may produce notifications.
       if (!event.historical) void this.refreshConnection(id)
     })
@@ -709,8 +744,9 @@ export class MailService {
     if (!reconnecting) this.outgoing(id, undefined)
     void this.refreshConnection(id)
     this.log('connected', input.config.protocol)
-    void this.syncPendingDrafts()
-    void this.retrySentCopies(id)
+    void withPriority('background', () =>
+      Promise.allSettled([this.syncPendingDrafts(), this.retrySentCopies(id)]),
+    )
     return accounts
   }
   private emitAccountsSoon() {
@@ -796,7 +832,7 @@ export class MailService {
         : c,
     )
     await this.saveConnections()
-    this.emit({ type: 'changed', accountId })
+    this.changed(accountId)
     return review
   }
   /** Saves a change to one account's own settings, which never needs signing in again. */
@@ -858,6 +894,8 @@ export class MailService {
         await this.removeMime(key)
       }
     for (const key of accountIds) {
+      this.reported.delete(key)
+      this.folderShapes.delete(key)
       this.notificationBaseline.delete(key)
       this.authArrivals.delete(key)
       this.unreadCounts.delete(key)
@@ -876,7 +914,7 @@ export class MailService {
     await this.persistDrafts()
     await this.persistJournal()
     this.emit({ type: 'accounts', accounts: this.accounts })
-    this.emit({ type: 'changed' })
+    this.changed()
   }
   mailboxes = (id: string) => this.guard(id, (p, a) => p.mailboxes(a))
   identities = (id: string) => this.guard(id, (p, a) => p.identities(a))
@@ -887,7 +925,9 @@ export class MailService {
     bodies = true,
     protectedMessage = false,
   ) {
-    const messages = await provider.messages(account, ids, bodies)
+    const messages = (await provider.messages(account, ids, bodies)).map(
+      ({ plainSource: _, ...message }) => message,
+    )
     if (!provider.rawMessage) return messages
     return Promise.all(
       messages.map(async (message) => {
@@ -910,17 +950,27 @@ export class MailService {
       }),
     )
   }
-  conversation = (id: string, threadId: string) =>
+  /**
+   * A message as the user should see it: decrypted and verified where it needs to be. Its full
+   * source is fetched only when the provider can't tell that it is plain.
+   */
+  private async readMessage(provider: MailProvider, account: Account, message: Message) {
+    const { plainSource, ...plain } = message
+    if (!provider.rawMessage) return plain
+    return this.encryption.read(
+      plain,
+      plainSource ?? (await provider.rawMessage(account, message.id, maxMessageBytes)),
+    )
+  }
+  /** A prefetch, for a conversation the user may open next, waits behind what they are opening. */
+  conversation = (id: string, threadId: string, prefetch = false) =>
+    withPriority(prefetch ? 'normal' : 'interactive', () => this.openConversation(id, threadId))
+  private openConversation = (id: string, threadId: string) =>
     this.guard(id, async (p, a) => {
       const messages = await p.conversation(a, threadId)
       const read = await Promise.all(
         messages.map(async (message) => {
-          const read = p.rawMessage
-            ? await this.encryption.read(
-                message,
-                await p.rawMessage(a, message.id, maxMessageBytes),
-              )
-            : message
+          const read = await this.readMessage(p, a, message)
           const candidate = this.messageAuthCandidate(read)
           return {
             ...read,
@@ -954,7 +1004,7 @@ export class MailService {
     // Never evicted: a row must keep what the reader found. Only rows the opening text got
     // wrong are kept, and a disconnected account's rows are removed with it.
     await this.persistAuthCorrections()
-    this.emit({ type: 'changed', accountId })
+    this.changed(accountId)
   }
   private async persistAuthCorrections() {
     try {
@@ -1020,7 +1070,9 @@ export class MailService {
     })
     return run
   }
-  mutate = async (input: MutationInput): Promise<MutationResult> => {
+  mutate = (input: MutationInput): Promise<MutationResult> =>
+    withPriority('interactive', () => this.applyMutation(input))
+  private applyMutation = async (input: MutationInput): Promise<MutationResult> => {
     const result: MutationResult = { changed: 0, failures: [] },
       undo: UndoEntry[] = []
     for (const accountId of [...new Set(input.targets.map((t) => t.accountId))]) {
@@ -1047,7 +1099,7 @@ export class MailService {
           if (input.action !== 'destroy')
             undo.push(undoForUpdated(accountId, plan, changed.updated))
         })
-        this.emit({ type: 'changed', accountId })
+        this.changed(accountId)
       } catch (error) {
         result.failures.push(friendlyError(error))
       }
@@ -1126,7 +1178,7 @@ export class MailService {
           result.changed += changed.updated.length
           result.failures.push(...changed.failures)
         })
-        this.emit({ type: 'changed', accountId: entry.accountId })
+        this.changed(entry.accountId)
       } catch (error) {
         result.failures.push(friendlyError(error))
       }
@@ -1144,7 +1196,7 @@ export class MailService {
     await this.guard(input.accountId, (p, a) =>
       p.folder(a, input.operation, input.id, input.name, input.parentId),
     )
-    this.emit({ type: 'changed', accountId: input.accountId })
+    this.changed(input.accountId)
   }
   // Sent records also serve as tombstones for a stale renderer draft after a crash.
   drafts = async () => [...this.localDrafts.values()]
@@ -1217,9 +1269,7 @@ export class MailService {
     if (existing) return existing
     const [message] = await this.guard(accountId, async (p, a) => {
       const [m] = await p.messages(a, [messageId], true)
-      return m && p.rawMessage
-        ? [await this.encryption.read(m, await p.rawMessage(a, messageId, maxMessageBytes))]
-        : [m]
+      return [m && (await this.readMessage(p, a, m))]
     })
     if (!message?.keywords.$draft) throw new Error('This message is no longer a draft.')
     if (message.security && !['decrypted', 'signed'].includes(message.security.state))
@@ -1398,7 +1448,7 @@ export class MailService {
       await this.persistDrafts()
       if (input.serverId && input.serverId !== serverId)
         await this.removePreviousDraft(provider, account, input)
-      this.emit({ type: 'changed', accountId: account.id })
+      this.changed(account.id)
       return saved
     } catch (error) {
       const saved: Draft = {
@@ -1523,7 +1573,7 @@ export class MailService {
       this.journals.delete(id)
       await this.persistJournal()
     }
-    this.emit({ type: 'changed' })
+    this.changed()
   }
   deleteServerDraft = async (accountId: string, messageId: string) => {
     const linked = [...this.localDrafts.values()].find(
@@ -1541,7 +1591,7 @@ export class MailService {
       }),
     )
     if (result.failures.length) throw new Error('The server draft could not be deleted.')
-    this.emit({ type: 'changed', accountId })
+    this.changed(accountId)
   }
   private mimePath(draftId: string) {
     return join(this.store.directory, 'outgoing', draftId + '.eml')
@@ -1700,7 +1750,7 @@ export class MailService {
         await this.removePreviousDraft(provider, account, draft).catch(() =>
           this.log('old-draft-cleanup-failed'),
         )
-      this.emit({ type: 'changed', accountId: draft.accountId })
+      this.changed(draft.accountId)
       return this.sendResult(journal, uploaded)
     } catch (error) {
       if (accepted) {
@@ -1809,7 +1859,7 @@ export class MailService {
       setTimeout(() => void this.release(draft.id), seconds * 1000),
     )
     this.emitHeld()
-    this.emit({ type: 'changed', accountId: draft.accountId })
+    this.changed(draft.accountId)
     return this.heldList().find((h) => h.draftId === draft.id)!
   }
   /** Ends a message's undo window and sends it. Reports the outcome as an event. */
@@ -1869,7 +1919,7 @@ export class MailService {
     this.emitHeld()
     await this.persistJournal()
     await this.persistDrafts()
-    this.emit({ type: 'changed', accountId: draft.accountId })
+    this.changed(draft.accountId)
     return draft
   }
   /** Sends a held message without waiting for the rest of its undo window. */
@@ -1958,7 +2008,7 @@ export class MailService {
         journal.state = 'sent'
         await this.persistJournal()
         if (draft) await this.completeDraft(draft)
-        this.emit({ type: 'changed', accountId: journal.accountId })
+        this.changed(journal.accountId)
         return { status: 'sent', message: 'Delivery confirmed.', sentCopy: 'filed' }
       }
     }
@@ -2181,9 +2231,7 @@ export class MailService {
   unsubscribe = async (accountId: string, messageId: string) => {
     const [message] = await this.guard(accountId, async (p, a) => {
       const [m] = await p.messages(a, [messageId], true)
-      return m && p.rawMessage
-        ? [await this.encryption.read(m, await p.rawMessage(a, messageId, maxMessageBytes))]
-        : [m]
+      return [m && (await this.readMessage(p, a, m))]
     })
     const info = message?.unsubscribe
     if (!info) throw new Error('This message has no supported unsubscribe method.')
@@ -2302,12 +2350,9 @@ export class MailService {
     // Limit body work to fresh arrivals; fetching never marks them as read or opens a URL.
     for (const arrival of arrivals) {
       try {
-        let [message] = await provider.messages(account, [arrival.id], true)
-        if (!message) continue
-        if (provider.rawMessage) {
-          const raw = await provider.rawMessage(account, message.id, maxMessageBytes)
-          message = await this.encryption.read(message, raw)
-        }
+        const [fetched] = await provider.messages(account, [arrival.id], true)
+        if (!fetched) continue
+        const message = await this.readMessage(provider, account, fetched)
         const candidate = this.messageAuthCandidate(message)
         if (candidate) {
           selected = { message, candidate }
@@ -2360,90 +2405,113 @@ export class MailService {
     this.authCopyQueue = copy.catch(() => {})
     return copy
   }
+  /**
+   * Checks a connection's accounts for new mail and changes, in the background. A request to check
+   * again while a check runs leads to one more check right after it.
+   */
   async refreshConnection(id: string) {
-    if (this.refreshing.has(id)) return
+    if (this.refreshing.has(id)) {
+      this.refreshAgain.add(id)
+      return
+    }
     this.refreshing.add(id)
     try {
-      for (const account of this.accounts.filter((a) => a.connectionId === id)) {
-        try {
-          const { provider } = this.provider(account.id)
-          const mailboxes = await provider.mailboxes(account)
-          this.unreadCounts.set(
-            account.id,
-            mailboxes.filter((b) => b.role === 'inbox').reduce((sum, b) => sum + b.unreadEmails, 0),
-          )
-          this.emit({
-            type: 'unread',
-            count: [...this.unreadCounts.values()].reduce((sum, n) => sum + n, 0),
-          })
-          const page = await provider.query(account, { view: 'inbox' }, 0, 25)
-          const authMessages = page.items.flatMap((conversation) => conversation.messages)
-          // A burst of normal mail must not hide an authentication email behind the first page.
-          let tail = page
-          if (this.authArrivals.has(account.id) && this.settings.autoCopyAuth !== false) {
-            const since = Math.max(
-              this.authArrivals.get(account.id)!.since,
-              Date.now() - 5 * 60_000,
-            )
-            while (
-              tail.next !== undefined &&
-              tail.items.length &&
-              Date.parse(tail.items.at(-1)!.receivedAt) >= since
-            ) {
-              const next = await provider.query(account, { view: 'inbox' }, tail.next, 25)
-              authMessages.push(...next.items.flatMap((conversation) => conversation.messages))
-              if (next.next !== undefined && next.next <= tail.next) break
-              tail = next
-            }
-          }
-          const arrivals = this.authArrivalMessages(
-            account,
-            authMessages,
-            new Set(mailboxes.filter((box) => box.role === 'inbox').map((box) => box.id)),
-          )
-          const copiedThread = await this.copyIncomingAuth(provider, account, arrivals)
-          const current = page.items[0]?.receivedAt || new Date().toISOString(),
-            previous = this.notificationBaseline.get(account.id)
-          const newItems = previous
-            ? page.items.filter((c) => c.receivedAt > previous && c.unread && c.id !== copiedThread)
-            : []
-          this.notificationBaseline.set(
-            account.id,
-            previous && previous > current ? previous : current,
-          )
-          if (
-            previous &&
-            newItems.length &&
-            this.settings.notifications &&
-            Notification.isSupported()
-          ) {
-            const notification = new Notification({
-              title:
-                newItems.length === 1
-                  ? newItems[0].from[0]?.name || 'New email'
-                  : newItems.length + ' new conversations',
-              body: newItems.length === 1 ? newItems[0].subject : account.name,
-              silent: false,
-            })
-            notification.on('click', () =>
-              this.emit({ type: 'open', accountId: account.id, threadId: newItems[0].id }),
-            )
-            notification.show()
-          }
-          this.status(id, 'connected')
-          this.emit({ type: 'changed', accountId: account.id })
-        } catch (error) {
-          this.status(
-            id,
-            error instanceof ProviderError && error.code === 'authentication'
-              ? 'authentication'
-              : 'offline',
-            friendlyError(error),
-          )
-        }
-      }
+      do {
+        this.refreshAgain.delete(id)
+        await withPriority('background', () => this.checkConnection(id))
+      } while (this.refreshAgain.has(id) && !this.disposed && this.providers.has(id))
     } finally {
       this.refreshing.delete(id)
+      this.refreshAgain.delete(id)
+    }
+  }
+  private async checkConnection(id: string) {
+    for (const account of this.accounts.filter((a) => a.connectionId === id)) {
+      try {
+        const { provider } = this.provider(account.id)
+        const mailboxes = await provider.mailboxes(account)
+        this.unreadCounts.set(
+          account.id,
+          mailboxes.filter((b) => b.role === 'inbox').reduce((sum, b) => sum + b.unreadEmails, 0),
+        )
+        this.emit({
+          type: 'unread',
+          count: [...this.unreadCounts.values()].reduce((sum, n) => sum + n, 0),
+        })
+        const page = await provider.query(account, { view: 'inbox' }, 0, 25)
+        const authMessages = page.items.flatMap((conversation) => conversation.messages)
+        // A burst of normal mail must not hide an authentication email behind the first page.
+        let tail = page
+        if (this.authArrivals.has(account.id) && this.settings.autoCopyAuth !== false) {
+          const since = Math.max(this.authArrivals.get(account.id)!.since, Date.now() - 5 * 60_000)
+          while (
+            tail.next !== undefined &&
+            tail.items.length &&
+            Date.parse(tail.items.at(-1)!.receivedAt) >= since
+          ) {
+            const next = await provider.query(account, { view: 'inbox' }, tail.next, 25)
+            authMessages.push(...next.items.flatMap((conversation) => conversation.messages))
+            if (next.next !== undefined && next.next <= tail.next) break
+            tail = next
+          }
+        }
+        const arrivals = this.authArrivalMessages(
+          account,
+          authMessages,
+          new Set(mailboxes.filter((box) => box.role === 'inbox').map((box) => box.id)),
+        )
+        const copiedThread = await this.copyIncomingAuth(provider, account, arrivals)
+        const current = page.items[0]?.receivedAt || new Date().toISOString(),
+          previous = this.notificationBaseline.get(account.id)
+        const newItems = previous
+          ? page.items.filter((c) => c.receivedAt > previous && c.unread && c.id !== copiedThread)
+          : []
+        this.notificationBaseline.set(
+          account.id,
+          previous && previous > current ? previous : current,
+        )
+        if (
+          previous &&
+          newItems.length &&
+          this.settings.notifications &&
+          Notification.isSupported()
+        ) {
+          const notification = new Notification({
+            title:
+              newItems.length === 1
+                ? newItems[0].from[0]?.name || 'New email'
+                : newItems.length + ' new conversations',
+            body: newItems.length === 1 ? newItems[0].subject : account.name,
+            silent: false,
+          })
+          notification.on('click', () =>
+            this.emit({ type: 'open', accountId: account.id, threadId: newItems[0].id }),
+          )
+          notification.show()
+        }
+        this.status(id, 'connected')
+        // The window reloads only for something it doesn't show yet.
+        const state = provider.getStateToken(account)
+        const shape = JSON.stringify(
+          mailboxes.map((b) => [b.id, b.name, b.parentId, b.role, b.rights]),
+        )
+        const reshaped = this.folderShapes.get(account.id) !== shape
+        this.folderShapes.set(account.id, shape)
+        if (!state || reshaped || this.reported.get(account.id) !== state) this.changed(account.id)
+      } catch (error) {
+        // A pause the server asked for is not an outage; the next check tries again.
+        if (isProviderError(error, 'rateLimit')) {
+          this.log('refresh-paused')
+          break
+        }
+        this.status(
+          id,
+          error instanceof ProviderError && error.code === 'authentication'
+            ? 'authentication'
+            : 'offline',
+          friendlyError(error),
+        )
+      }
     }
   }
   private async syncPendingDrafts() {
@@ -2466,7 +2534,8 @@ export class MailService {
       }
     }
   }
-  async refresh() {
+  refresh = () => withPriority('background', () => this.refreshAll())
+  private async refreshAll() {
     await Promise.allSettled(
       this.connections.map(async (c) => {
         const connected = this.accounts.some(

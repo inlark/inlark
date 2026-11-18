@@ -23,6 +23,7 @@ import {
   type Attachment,
   type MessageChanges,
   type OutgoingMessage,
+  type RequestPriority,
   type SubmissionOutcome,
 } from '@inlark/core'
 
@@ -71,6 +72,38 @@ export interface JmapOptions {
   timeoutMs?: number
   /** Finds a list row's code or link in its subject and opening text. */
   detectAuth?: AuthDetector
+  /** How soon the requests started now should run when they have to wait for a turn. */
+  priority?: () => RequestPriority
+}
+const priorityRank: Record<RequestPriority, number> = { interactive: 0, normal: 1, background: 2 }
+/** The longest a request quietly waits out a pause the server asked for before reporting it. */
+const quietPause = 5_000
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+/** A JMAP result reference: this argument comes from an earlier call in the same request. */
+const ref = (resultOf: string, name: string, path: string) => ({ resultOf, name, path })
+/** Method errors after which a combined request is repeated as smaller, separate ones. */
+const splitCodes = ['requestTooLarge', 'invalidResultReference']
+const mustSplit = (error: unknown) => error instanceof JmapError && splitCodes.includes(error.code)
+const pgpArmor = /-----BEGIN PGP (?:SIGNED )?MESSAGE-----/
+/** Seconds to pause after a 429, from Retry-After or else the RateLimit header's reset. */
+function pauseSeconds(headers: Headers): number {
+  const value =
+    headers.get('retry-after') ?? headers.get('ratelimit')?.match(/(?:^|[;,\s])t=(\d+)/)?.[1]
+  const seconds = !value
+    ? 30
+    : /^\d+$/.test(value)
+      ? Number(value)
+      : (Date.parse(value) - Date.now()) / 1000
+  return Number.isFinite(seconds) ? Math.max(1, Math.min(3600, Math.ceil(seconds))) : 30
+}
+/** The server limit a 400 response names, such as `maxConcurrentRequests` (RFC 8620 §3.6.1). */
+async function requestLimit(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as Json
+    return body?.type === 'urn:ietf:params:jmap:error:limit' ? String(body.limit || '') : undefined
+  } catch {
+    return undefined
+  }
 }
 /** The opening text fetched with each list row for its code or link. */
 const excerptBytes = 4096
@@ -95,6 +128,111 @@ const summaryProperties = [
   'references',
   'bodyStructure',
 ]
+/**
+ * What an Email/get fetches: list fields, list fields with each row's opening text for its code
+ * or link, or a whole message for reading.
+ */
+type EmailView = 'summary' | 'excerpt' | 'body'
+function emailView(view: EmailView): Json {
+  if (view === 'summary') return { properties: summaryProperties }
+  if (view === 'excerpt')
+    return {
+      properties: [...summaryProperties, 'textBody', 'bodyValues'],
+      fetchTextBodyValues: true,
+      maxBodyValueBytes: excerptBytes,
+      bodyProperties: ['partId', 'type'],
+    }
+  return {
+    properties: [
+      ...summaryProperties,
+      'bodyValues',
+      'textBody',
+      'htmlBody',
+      'attachments',
+      // RFC 8621 forbids asText for List-Unsubscribe; keep raw values for parsing.
+      'header:List-Unsubscribe',
+      'header:List-Unsubscribe-Post',
+      'header:Autocrypt:all',
+    ],
+    fetchAllBodyValues: true,
+    maxBodyValueBytes: 5_000_000,
+    bodyProperties: [
+      'partId',
+      'blobId',
+      'size',
+      'name',
+      'type',
+      'charset',
+      'disposition',
+      'cid',
+      'subParts',
+      'header:Content-Transfer-Encoding:asText',
+    ],
+  }
+}
+/**
+ * Whether reading a message needs its full source: it is or may be signed or encrypted, or it has
+ * parts whose content wasn't fetched and could hold armor as plain text. Base64 can't: its
+ * alphabet has no dashes or spaces. (Armor in a multipart preamble, outside every part, is no
+ * signed or encrypted message format and isn't looked for.)
+ */
+function needsSource(raw: Json): boolean {
+  const values = Object.values<Json>(raw.bodyValues || {})
+  if (values.some((value) => value.isTruncated || pgpArmor.test(value.value || ''))) return true
+  const fetched = new Set(Object.keys(raw.bodyValues || {}))
+  const visit = (part: Json | undefined): boolean => {
+    if (!part) return true
+    const type = String(part.type || '').toLowerCase()
+    if (/^multipart\/(?:encrypted|signed)$/.test(type) || type.startsWith('application/pgp'))
+      return true
+    if (/\.(?:asc|gpg|pgp|sig)$/i.test(part.name || '')) return true
+    if (type.startsWith('multipart/')) return (part.subParts || []).some(visit)
+    if (part.partId && fetched.has(part.partId)) return false
+    const encoding = String(part['header:Content-Transfer-Encoding:asText'] || '')
+    return encoding.trim().toLowerCase() !== 'base64'
+  }
+  return visit(raw.bodyStructure)
+}
+/** The headers that reading a plain message uses from its source: Content-Type and Autocrypt. */
+function plainSource(raw: Json): Uint8Array {
+  const line = (value: string) => value.replace(/[\r\n]+[ \t]*/g, ' ')
+  const autocrypt: unknown[] = raw['header:Autocrypt:all'] || []
+  const headers = [
+    'Content-Type: ' + line(String(raw.bodyStructure?.type || 'text/plain')),
+    ...autocrypt
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => 'Autocrypt:' + line(value)),
+  ]
+  return new TextEncoder().encode(headers.join('\r\n') + '\r\n\r\n')
+}
+/**
+ * The changes one server-sent event announces: one per account with its new Email state when the
+ * event is a StateChange, else a single change of unknown scope.
+ */
+export function stateChanges(event: string, connectionId: string): ProviderEvent[] {
+  const data = event
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).replace(/^ /, ''))
+    .join('\n')
+  let parsed: Json | undefined
+  try {
+    parsed = data ? JSON.parse(data) : undefined
+  } catch {
+    parsed = undefined
+  }
+  if (parsed?.['@type'] === 'StateChange' && parsed.changed && typeof parsed.changed === 'object')
+    return Object.entries<Json>(parsed.changed).map(([remoteId, types]) => ({
+      type: 'changed',
+      accountId: accountKey(connectionId, remoteId),
+      ...(typeof types?.Email === 'string' ? { emailState: types.Email } : {}),
+    }))
+  return event.includes('event: state') ||
+    event.includes('"@type":"StateChange"') ||
+    event.includes('"changed"')
+    ? [{ type: 'changed' }]
+    : []
+}
 function batches<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
   for (let i = 0; i < items.length; i += Math.max(1, size))
@@ -254,6 +392,15 @@ export class JmapProvider implements MailProvider {
   private controller?: AbortController
   private disposed = false
   private cooldownUntil = 0
+  /**
+   * Requests run a few at a time, as the server allows, so it never turns any away for being too
+   * many at once. Waiting ones start in order of priority, then arrival.
+   */
+  private concurrency = 4
+  /** How many method calls the server accepts in one request. */
+  private maxCalls = 16
+  private active = 0
+  private waiting: { rank: number; start: () => void }[] = []
   private requestFetch: typeof fetch
   constructor(private options: JmapOptions) {
     this.requestFetch = options.fetch || fetch
@@ -271,20 +418,101 @@ export class JmapProvider implements MailProvider {
       )
     return url.toString()
   }
-  private async request(url: string, init: RequestInit = {}, redirects = 0): Promise<Response> {
-    if (Date.now() < this.cooldownUntil)
-      throw new JmapError(
-        'rateLimit',
-        'The server requested a pause. Please try again shortly.',
-        Math.ceil((this.cooldownUntil - Date.now()) / 1000),
-      )
+  private acquire(rank: number): Promise<void> {
+    if (this.active < this.concurrency) {
+      this.active++
+      return Promise.resolve()
+    }
+    return new Promise((start) => {
+      const at = this.waiting.findIndex((w) => w.rank > rank)
+      this.waiting.splice(at < 0 ? this.waiting.length : at, 0, { rank, start })
+    })
+  }
+  private release() {
+    const next = this.waiting.shift()
+    // The turn passes straight to the next request, so nothing can take it in between.
+    if (next) next.start()
+    else this.active--
+  }
+  private rateLimited() {
+    const seconds = Math.max(1, Math.ceil((this.cooldownUntil - Date.now()) / 1000))
+    return new JmapError(
+      'rateLimit',
+      'The mail server asked inlark to pause. Try again in ' +
+        seconds +
+        (seconds === 1 ? ' second.' : ' seconds.'),
+      seconds,
+    )
+  }
+  /** Waits out a short pause the server asked for before sending, or reports a longer one. */
+  private async paused() {
+    const remaining = this.cooldownUntil - Date.now()
+    if (remaining <= 0) return
+    if (remaining > quietPause) throw this.rateLimited()
+    await delay(remaining)
+  }
+  /**
+   * Sends a request when its turn comes and reads the response within that turn. With `retry`,
+   * for requests that change nothing, one the server turned away unprocessed (during a short
+   * pause, or with too many in flight) is sent again.
+   */
+  private async request<T>(
+    url: string,
+    init: RequestInit,
+    read: (response: Response) => Promise<T>,
+    {
+      queue = true,
+      retry = true,
+      timeout = this.options.timeoutMs || 20_000,
+    }: { queue?: boolean; retry?: boolean; timeout?: number } = {},
+  ): Promise<T> {
+    const rank = priorityRank[this.options.priority?.() ?? 'normal']
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await this.paused()
+        if (queue) await this.acquire(rank)
+        try {
+          if (this.disposed) throw new JmapError('offline', 'Account disconnected.')
+          // A pause began while this request waited for its turn. Nothing was sent, so it waits too.
+          if (Date.now() < this.cooldownUntil) {
+            attempt--
+            continue
+          }
+          return await read(await this.send(url, init, timeout))
+        } finally {
+          if (queue) this.release()
+        }
+      } catch (error) {
+        if (retry && attempt < 3 && error instanceof JmapError) {
+          if (error.code === 'rateLimit' && this.cooldownUntil - Date.now() <= quietPause) continue
+          if (error.code === 'busy') {
+            await delay(150 * 2 ** (attempt - 1))
+            continue
+          }
+        }
+        if (error instanceof JmapError && error.code === 'busy')
+          throw new JmapError(
+            'rateLimit',
+            'The mail server is busy with other requests from this account. Try again in a moment.',
+            1,
+          )
+        throw error
+      }
+    }
+  }
+  private async send(
+    url: string,
+    init: RequestInit,
+    timeout: number,
+    redirects = 0,
+  ): Promise<Response> {
     let response: Response
     try {
       response = await this.requestFetch(this.endpoint(url), {
         ...init,
         redirect: 'manual',
         headers: { ...init.headers, Authorization: this.options.authorization },
-        signal: init.signal || AbortSignal.timeout(this.options.timeoutMs || 20_000),
+        signal: init.signal || AbortSignal.timeout(timeout),
       })
     } catch (error) {
       if (this.disposed) throw new JmapError('offline', 'Account disconnected.')
@@ -304,7 +532,7 @@ export class JmapProvider implements MailProvider {
           'The server redirected an operation. Reconnect with its canonical URL.',
         )
       const target = this.endpoint(new URL(response.headers.get('location')!, url).toString())
-      return this.request(target, init, redirects + 1)
+      return this.send(target, init, timeout, redirects + 1)
     }
     if (response.status === 401 || response.status === 403)
       throw new JmapError(
@@ -312,12 +540,18 @@ export class JmapProvider implements MailProvider {
         'Sign in again. The server rejected these credentials or permissions.',
       )
     if (response.status === 429) {
-      const header = response.headers.get('retry-after') || '30'
-      const delay = /^\d+$/.test(header) ? Number(header) : (Date.parse(header) - Date.now()) / 1000
-      const seconds = Number.isFinite(delay) ? Math.max(1, Math.min(3600, delay)) : 30
-      this.cooldownUntil = Date.now() + seconds * 1000
-      throw new JmapError('rateLimit', 'The server is busy. Please try again shortly.', seconds)
+      this.cooldownUntil = Math.max(
+        this.cooldownUntil,
+        Date.now() + pauseSeconds(response.headers) * 1000,
+      )
+      throw this.rateLimited()
     }
+    const limit = response.status === 400 ? await requestLimit(response) : undefined
+    if (limit?.startsWith('maxConcurrent'))
+      throw new JmapError('busy', 'Too many requests were in flight at once.')
+    // Such as too many calls in one request: smaller requests can still succeed.
+    if (limit !== undefined)
+      throw new JmapError('requestTooLarge', 'The mail server refused a request this large.')
     if (!response.ok)
       throw new JmapError('http', 'The mail server returned HTTP ' + response.status + '.')
     return response
@@ -329,14 +563,16 @@ export class JmapProvider implements MailProvider {
       base.pathname === '/' || !base.pathname
         ? new URL('/.well-known/jmap', base).toString()
         : base.toString()
-    let response = await this.request(url)
-    this.session = (await response.json()) as Session
+    this.session = await this.request(url, {}, (response) => response.json() as Promise<Session>)
     if (!this.session.apiUrl || !this.session.accounts || !this.session.capabilities?.[MAIL])
       throw new JmapError('capability', 'This endpoint does not provide JMAP Mail.')
     this.endpoint(this.session.apiUrl)
     this.endpoint(this.session.uploadUrl)
     this.endpoint(this.session.downloadUrl)
     const core = this.session.capabilities[CORE] || {}
+    // RFC 8620 counts concurrent API requests per account; a few at once is plenty for one client.
+    this.concurrency = Math.max(1, Math.min(8, Number(core.maxConcurrentRequests) || 4))
+    this.maxCalls = Math.max(1, Number(core.maxCallsInRequest) || 16)
     this.capabilities = {
       mail: true,
       submission: !!this.session.capabilities[SUBMISSION],
@@ -362,15 +598,26 @@ export class JmapProvider implements MailProvider {
   }
   async call(calls: Call[], submission = false): Promise<Json[]> {
     if (!this.session) throw new JmapError('session', 'Reconnect this account first.')
-    const response = await this.request(this.session.apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        using: submission ? [CORE, MAIL, SUBMISSION] : [CORE, MAIL],
-        methodCalls: calls,
-      }),
-    })
-    const body = (await response.json()) as Json
+    // Nothing is sent, so a combined request can still be split into smaller ones.
+    if (calls.length > this.maxCalls)
+      throw new JmapError(
+        'requestTooLarge',
+        'The mail server accepts fewer operations per request.',
+      )
+    const body = await this.request(
+      this.session.apiUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          using: submission ? [CORE, MAIL, SUBMISSION] : [CORE, MAIL],
+          methodCalls: calls,
+        }),
+      },
+      (response) => response.json() as Promise<Json>,
+      // Only requests that change nothing are repeated automatically.
+      { retry: calls.every(([name]) => /\/(?:get|query|changes|queryChanges)$/.test(name)) },
+    )
     if (!Array.isArray(body.methodResponses))
       throw new JmapError('response', 'The server returned an invalid JMAP response.')
     for (const [method, result] of body.methodResponses as Call[])
@@ -425,117 +672,79 @@ export class JmapProvider implements MailProvider {
       accountId: account.id,
     }))
   }
-  /** List rows, with the opening text of each fetched in the same request for its code or link. */
-  private async summaries(
-    account: Account,
-    ids: string[],
-  ): Promise<{ message: Message; auth?: Conversation['auth'] }[]> {
-    const detect = this.options.detectAuth
-    if (!detect) return (await this.messages(account, ids)).map((message) => ({ message }))
-    const result: { message: Message; auth?: Conversation['auth'] }[] = []
+  private noteState(account: Account, data: Json) {
+    if (data.state) this.emailState.set(account.id, data.state)
+  }
+  /** Raw Email/get results, a request per `maxObjectsInGet` messages. */
+  private async getEmails(account: Account, ids: string[], view: EmailView): Promise<Json[]> {
+    const list: Json[] = []
     for (const batch of batches([...new Set(ids)], this.capabilities.maxObjectsInGet)) {
-      if (!batch.length) continue
       const [data] = await this.call([
-        [
-          'Email/get',
-          {
-            accountId: account.remoteId,
-            ids: batch,
-            properties: [...summaryProperties, 'textBody', 'bodyValues'],
-            fetchTextBodyValues: true,
-            maxBodyValueBytes: excerptBytes,
-            bodyProperties: ['partId', 'type'],
-          },
-          'e',
-        ],
+        ['Email/get', { accountId: account.remoteId, ids: batch, ...emailView(view) }, 'e'],
       ])
-      if (data.state) this.emailState.set(account.id, data.state)
-      for (const raw of data.list) {
-        const message = asMessage(account, raw, false)
-        result.push({ message, auth: listAuth(message, raw, detect) })
+      this.noteState(account, data)
+      list.push(...data.list)
+    }
+    return list
+  }
+  private async getThreads(account: Account, ids: string[]): Promise<Json[]> {
+    const list: Json[] = []
+    for (const batch of batches([...new Set(ids)], this.capabilities.maxObjectsInGet)) {
+      const [data] = await this.call([
+        ['Thread/get', { accountId: account.remoteId, ids: batch }, 't'],
+      ])
+      list.push(...data.list)
+    }
+    return list
+  }
+  private async readEmails(account: Account, list: Json[], bodies: boolean): Promise<Message[]> {
+    const result: Message[] = []
+    for (const raw of list) {
+      const message = asMessage(account, raw, bodies)
+      if (bodies) {
+        for (const [type, field] of [
+          ['text/html', 'html'],
+          ['text/plain', 'text'],
+        ] as const) {
+          if (message[field]?.trim()) continue
+          const part = [
+            ...bodyParts(raw, type),
+            ...structuredBodyParts(raw.bodyStructure, type),
+          ].find((part) => part.blobId && (!part.size || part.size <= 5_000_000))
+          if (!part) continue
+          try {
+            const bytes = await this.download(account, {
+              blobId: part.blobId,
+              name: 'body',
+              type: part.type || type,
+              size: part.size || 0,
+            })
+            message[field] = renderBodyPart(
+              part,
+              new TextDecoder(part.charset || 'utf-8').decode(bytes),
+              type,
+            )
+          } catch {
+            // Keep the other body representation or the message preview available.
+          }
+        }
+        if (
+          !message.security?.encrypted &&
+          !needsSource(raw) &&
+          !pgpArmor.test((message.text || '') + '\n' + (message.html || ''))
+        )
+          message.plainSource = plainSource(raw)
       }
+      result.push(message)
     }
     return result
   }
   async messages(account: Account, ids: string[], bodies = false): Promise<Message[]> {
-    const result: Message[] = []
-    for (const batch of batches([...new Set(ids)], this.capabilities.maxObjectsInGet)) {
-      if (!batch.length) continue
-      const [data] = await this.call([
-        [
-          'Email/get',
-          {
-            accountId: account.remoteId,
-            ids: batch,
-            properties: bodies
-              ? [
-                  ...summaryProperties,
-                  'bodyStructure',
-                  'bodyValues',
-                  'textBody',
-                  'htmlBody',
-                  'attachments',
-                  // RFC 8621 forbids asText for List-Unsubscribe; keep raw values for parsing.
-                  'header:List-Unsubscribe',
-                  'header:List-Unsubscribe-Post',
-                ]
-              : summaryProperties,
-            ...(bodies
-              ? {
-                  fetchAllBodyValues: true,
-                  maxBodyValueBytes: 5_000_000,
-                  bodyProperties: [
-                    'partId',
-                    'blobId',
-                    'size',
-                    'name',
-                    'type',
-                    'charset',
-                    'disposition',
-                    'cid',
-                    'subParts',
-                  ],
-                }
-              : {}),
-          },
-          'e',
-        ],
-      ])
-      if (data.state) this.emailState.set(account.id, data.state)
-      for (const raw of data.list) {
-        const message = asMessage(account, raw, bodies)
-        if (bodies) {
-          for (const [type, field] of [
-            ['text/html', 'html'],
-            ['text/plain', 'text'],
-          ] as const) {
-            if (message[field]?.trim()) continue
-            const part = [
-              ...bodyParts(raw, type),
-              ...structuredBodyParts(raw.bodyStructure, type),
-            ].find((part) => part.blobId && (!part.size || part.size <= 5_000_000))
-            if (!part) continue
-            try {
-              const bytes = await this.download(account, {
-                blobId: part.blobId,
-                name: 'body',
-                type: part.type || type,
-                size: part.size || 0,
-              })
-              message[field] = renderBodyPart(
-                part,
-                new TextDecoder(part.charset || 'utf-8').decode(bytes),
-                type,
-              )
-            } catch {
-              // Keep the other body representation or the message preview available.
-            }
-          }
-        }
-        result.push(message)
-      }
-    }
-    return result
+    return this.readEmails(
+      account,
+      await this.getEmails(account, ids, bodies ? 'body' : 'summary'),
+      bodies,
+    )
   }
   async query(account: Account, query: MailQuery, position = 0, limit = 50): Promise<ProviderPage> {
     const boxes = this.mailboxCache.get(account.id) || (await this.mailboxes(account))
@@ -547,40 +756,71 @@ export class JmapProvider implements MailProvider {
       !boxes.some((b) => b.role === query.view)
     )
       return { items: [], total: 0 }
-    const [result] = await this.call([
-      [
-        'Email/query',
-        {
-          accountId: account.remoteId,
-          filter: jmapFilter(query, boxes),
-          sort: [{ property: 'receivedAt', isAscending: false }],
-          collapseThreads: true,
-          position,
-          limit,
-          calculateTotal: true,
-        },
-        'q',
-      ],
-    ])
-    const fetched = new Map(
-      (await this.summaries(account, result.ids)).map((item) => [item.message.id, item]),
-    )
-    const messages: Message[] = result.ids.flatMap((id: string) =>
-      fetched.has(id) ? [fetched.get(id)!.message] : [],
-    )
-    // Only fetch thread metadata for this page, never all IDs in the mailbox.
-    const threads: Json[] = []
-    for (const ids of batches(
-      [...new Set(messages.map((m) => m.threadId))],
-      this.capabilities.maxObjectsInGet,
-    )) {
-      const [data] = await this.call([['Thread/get', { accountId: account.remoteId, ids }, 't']])
-      threads.push(...data.list)
+    const accountId = account.remoteId
+    const search: Call = [
+      'Email/query',
+      {
+        accountId,
+        filter: jmapFilter(query, boxes),
+        sort: [{ property: 'receivedAt', isAscending: false }],
+        collapseThreads: true,
+        position,
+        limit,
+        calculateTotal: true,
+      },
+      'q',
+    ]
+    const detect = this.options.detectAuth
+    // Rows carry their opening text, so each row's code or link is found without opening it.
+    const rows: EmailView = detect ? 'excerpt' : 'summary'
+    let result: Json, found: Json[], threads: Json[], members: Json[]
+    try {
+      // One request: the page, its rows, their threads, and the other messages in those threads.
+      const [q, e, t, o] = await this.call([
+        search,
+        [
+          'Email/get',
+          { accountId, '#ids': ref('q', 'Email/query', '/ids'), ...emailView(rows) },
+          'e',
+        ],
+        ['Thread/get', { accountId, '#ids': ref('e', 'Email/get', '/list/*/threadId') }, 't'],
+        [
+          'Email/get',
+          {
+            accountId,
+            '#ids': ref('t', 'Thread/get', '/list/*/emailIds'),
+            ...emailView('summary'),
+          },
+          'o',
+        ],
+      ])
+      this.noteState(account, e)
+      this.noteState(account, o)
+      ;[result, found, threads, members] = [q, e.list, t.list, o.list]
+    } catch (error) {
+      if (!mustSplit(error)) throw error
+      ;[result] = await this.call([search])
+      found = await this.getEmails(account, result.ids, rows)
+      threads = await this.getThreads(
+        account,
+        found.map((raw) => raw.threadId),
+      )
+      const listed = new Set<string>(result.ids)
+      members = await this.getEmails(
+        account,
+        threads.flatMap((t) => t.emailIds).filter((id: string) => !listed.has(id)),
+        'summary',
+      )
     }
-    const otherIds = threads
-      .flatMap((t) => t.emailIds)
-      .filter((id: string) => !messages.some((m) => m.id === id))
-    const threadMessages = [...messages, ...(await this.messages(account, otherIds))]
+    const rowsById = new Map(found.map((raw) => [raw.id as string, raw]))
+    const messages: Message[] = result.ids.flatMap((id: string) =>
+      rowsById.has(id) ? [asMessage(account, rowsById.get(id)!, false)] : [],
+    )
+    const listed = new Set(messages.map((m) => m.id))
+    const threadMessages = [
+      ...messages,
+      ...members.filter((raw) => !listed.has(raw.id)).map((raw) => asMessage(account, raw, false)),
+    ]
     const items = messages.map((m) => {
       const c = conversationFromMessages(
         account.id,
@@ -592,8 +832,7 @@ export class JmapProvider implements MailProvider {
       c.subject = m.subject || '(No subject)'
       c.preview = m.preview
       c.count = threads.find((t) => t.id === m.threadId)?.emailIds.length || 1
-      const auth = fetched.get(m.id)?.auth
-      if (auth) c.auth = auth
+      if (detect) c.auth = listAuth(m, rowsById.get(m.id)!, detect)
       return c
     })
     return {
@@ -607,22 +846,62 @@ export class JmapProvider implements MailProvider {
     }
   }
   async conversationMetadata(account: Account, threadIds: string[]): Promise<Message[]> {
-    const ids: string[] = []
-    for (const batch of batches([...new Set(threadIds)], this.capabilities.maxObjectsInGet)) {
-      const [data] = await this.call([
-        ['Thread/get', { accountId: account.remoteId, ids: batch }, 't'],
-      ])
-      ids.push(...data.list.flatMap((t: Json) => t.emailIds))
+    const result: Message[] = []
+    for (const ids of batches([...new Set(threadIds)], this.capabilities.maxObjectsInGet)) {
+      let list: Json[]
+      try {
+        const [, e] = await this.call([
+          ['Thread/get', { accountId: account.remoteId, ids }, 't'],
+          [
+            'Email/get',
+            {
+              accountId: account.remoteId,
+              '#ids': ref('t', 'Thread/get', '/list/*/emailIds'),
+              ...emailView('summary'),
+            },
+            'e',
+          ],
+        ])
+        this.noteState(account, e)
+        list = e.list
+      } catch (error) {
+        if (!mustSplit(error)) throw error
+        const threads = await this.getThreads(account, ids)
+        list = await this.getEmails(
+          account,
+          threads.flatMap((t) => t.emailIds),
+          'summary',
+        )
+      }
+      result.push(...(await this.readEmails(account, list, false)))
     }
-    return this.messages(account, ids)
+    return result
   }
   async conversation(account: Account, threadId: string): Promise<Message[]> {
-    const [result] = await this.call([
-      ['Thread/get', { accountId: account.remoteId, ids: [threadId] }, 't'],
-    ])
-    if (!result.list.length)
-      throw new JmapError('notFound', 'This conversation is no longer available.')
-    return (await this.messages(account, result.list[0].emailIds, true)).sort((a, b) =>
+    let thread: Json | undefined, list: Json[]
+    try {
+      // The thread and all of its messages in one request.
+      const [t, e] = await this.call([
+        ['Thread/get', { accountId: account.remoteId, ids: [threadId] }, 't'],
+        [
+          'Email/get',
+          {
+            accountId: account.remoteId,
+            '#ids': ref('t', 'Thread/get', '/list/*/emailIds'),
+            ...emailView('body'),
+          },
+          'e',
+        ],
+      ])
+      this.noteState(account, e)
+      ;[thread, list] = [t.list[0], e.list]
+    } catch (error) {
+      if (!mustSplit(error)) throw error
+      ;[thread] = await this.getThreads(account, [threadId])
+      list = thread ? await this.getEmails(account, thread.emailIds, 'body') : []
+    }
+    if (!thread) throw new JmapError('notFound', 'This conversation is no longer available.')
+    return (await this.readEmails(account, list, true)).sort((a, b) =>
       a.receivedAt.localeCompare(b.receivedAt),
     )
   }
@@ -715,13 +994,12 @@ export class JmapProvider implements MailProvider {
     if (data.byteLength > this.capabilities.maxUploadSize)
       throw new JmapError('tooLarge', 'This attachment exceeds the server upload limit.')
     const url = this.session.uploadUrl.replace('{accountId}', encodeURIComponent(account.remoteId))
-    const response = await this.request(url, {
-      method: 'POST',
-      headers: { 'Content-Type': type },
-      body: data as BodyInit,
-      signal: AbortSignal.timeout(120_000),
-    })
-    const result = (await response.json()) as Json
+    const result = await this.request(
+      url,
+      { method: 'POST', headers: { 'Content-Type': type }, body: data as BodyInit },
+      (response) => response.json() as Promise<Json>,
+      { timeout: 120_000, retry: false },
+    )
     if (result.accountId !== account.remoteId || !result.blobId)
       throw new JmapError('upload', 'The upload could not be verified.')
     return result.blobId
@@ -740,24 +1018,31 @@ export class JmapProvider implements MailProvider {
       name: attachment.name,
     }))
       url = url.replace('{' + key + '}', encodeURIComponent(value))
-    const response = await this.request(url, { signal: AbortSignal.timeout(120_000) })
-    const reader = response.body?.getReader()
-    if (!reader) throw new JmapError('download', 'Empty attachment response.')
-    const chunks: Uint8Array[] = []
-    let size = 0
-    while (true) {
-      const part = await reader.read()
-      if (part.done) break
-      size += part.value.byteLength
-      if (size > maxBytes) {
-        await reader.cancel()
-        throw new JmapError(
-          'tooLarge',
-          'Attachments over 100 MB are not supported in this version.',
-        )
-      }
-      chunks.push(part.value)
-    }
+    const { chunks, size } = await this.request(
+      url,
+      {},
+      async (response) => {
+        const reader = response.body?.getReader()
+        if (!reader) throw new JmapError('download', 'Empty attachment response.')
+        const chunks: Uint8Array[] = []
+        let size = 0
+        while (true) {
+          const part = await reader.read()
+          if (part.done) break
+          size += part.value.byteLength
+          if (size > maxBytes) {
+            await reader.cancel()
+            throw new JmapError(
+              'tooLarge',
+              'Attachments over 100 MB are not supported in this version.',
+            )
+          }
+          chunks.push(part.value)
+        }
+        return { chunks, size }
+      },
+      { timeout: 120_000 },
+    )
     const bytes = new Uint8Array(size)
     let offset = 0
     for (const chunk of chunks) {
@@ -1024,32 +1309,32 @@ export class JmapProvider implements MailProvider {
           .replace('{types}', 'Email,Mailbox,Thread,EmailSubmission')
           .replace('{closeafter}', 'no')
           .replace('{ping}', '30')
-        const response = await this.request(url, {
-          headers: { Accept: 'text/event-stream' },
-          signal: this.controller.signal,
-        })
-        if (!response.body) throw new Error('No stream')
-        attempt = 0
-        const reader = response.body.getReader(),
-          decoder = new TextDecoder()
-        let buffer = ''
-        while (!this.disposed) {
-          const { value, done } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-          if (buffer.length > 1_000_000) throw new Error('Invalid event stream')
-          let boundary: number
-          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
-            const event = buffer.slice(0, boundary)
-            buffer = buffer.slice(boundary + 2)
-            if (
-              event.includes('event: state') ||
-              event.includes('"@type":"StateChange"') ||
-              event.includes('"changed"')
-            )
-              this.emit({ type: 'changed' })
-          }
-        }
+        // The stream stays open, so it never takes one of the turns other requests wait for.
+        await this.request(
+          url,
+          { headers: { Accept: 'text/event-stream' }, signal: this.controller.signal },
+          async (response) => {
+            if (!response.body) throw new Error('No stream')
+            attempt = 0
+            const reader = response.body.getReader(),
+              decoder = new TextDecoder()
+            let buffer = ''
+            while (!this.disposed) {
+              const { value, done } = await reader.read()
+              if (done) break
+              buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+              if (buffer.length > 1_000_000) throw new Error('Invalid event stream')
+              let boundary: number
+              while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+                const event = buffer.slice(0, boundary)
+                buffer = buffer.slice(boundary + 2)
+                for (const change of stateChanges(event, this.options.connectionId))
+                  this.emit(change)
+              }
+            }
+          },
+          { queue: false, retry: false },
+        )
       } catch {
         /* Main service polls independently and reports actual account reachability. */
       } finally {

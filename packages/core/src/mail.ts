@@ -163,7 +163,7 @@ export function mailtoDraft(url: string): Partial<Draft> {
 }
 export function friendlyError(error: unknown): string {
   return error instanceof Error
-    ? error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')
+    ? error.message.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, '')
     : 'Something went wrong. Please try again.'
 }
 /** The first HTTPS (or else mailto) List-Unsubscribe target, never one carrying credentials. */

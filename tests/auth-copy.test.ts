@@ -154,6 +154,7 @@ describe.each(['imap', 'jmap'] as const)('automatic copying on %s arrival', (pro
         listener = callback
         return () => {}
       }),
+      getStateToken: vi.fn(() => undefined),
       dispose: vi.fn(),
     } as unknown as MailProvider
     if (protocol === 'jmap') {

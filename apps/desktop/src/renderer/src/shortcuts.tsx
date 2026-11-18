@@ -291,7 +291,8 @@ export function useShortcutText() {
 }
 
 export type ShortcutHandler = {
-  run: () => void
+  /** Receives the key event when a key ran it, so a held key's repeats can be told apart. */
+  run: (event?: KeyboardEvent) => void
   /** Defaults to the hook's `enabled`. */
   enabled?: boolean
   /** Defaults to true so focused fields keep their native editing shortcuts. */
