@@ -210,7 +210,7 @@ inlark tries to make everyday email excellent before adding more features. AI, s
 
 ## Support inlark
 
-inlark is free and made by one person, with no ads, subscriptions or tracking. If you'd like to say thanks, you can [buy me a coffee](https://buymeacoffee.com/poeck). No account needed.
+inlark is free and made by one person, with no ads, subscriptions or tracking. If you'd like to say thanks, you can [sponsor inlark on GitHub](https://github.com/sponsors/inlark), or [buy me a coffee](https://buymeacoffee.com/poeck) without an account.
 
 ## Credits
 
