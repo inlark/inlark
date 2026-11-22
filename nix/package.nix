@@ -19,7 +19,9 @@ stdenv.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
     pnpm typecheck
-    pnpm test
+    # Nix often builds this alongside other packages, which can slow CPU-heavy
+    # tests well past their usual timing. Allow more time than in development.
+    pnpm test --testTimeout=60000
     pnpm --filter @inlark/desktop build
     runHook postBuild
   '';
