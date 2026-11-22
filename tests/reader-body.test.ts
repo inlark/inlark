@@ -5,7 +5,14 @@ import { readFileSync } from 'node:fs'
 import type { Message } from '../packages/core/src'
 import { emailBodyHtml } from '../apps/desktop/src/renderer/src/email-html'
 
-describe('email body fallback', () => {
+describe('email body fallback', async () => {
+  // Import the reader while collecting, so its large module graph is not
+  // transformed inside a test's timeout on a busy machine.
+  vi.stubGlobal('location', { search: '', protocol: 'file:' })
+  vi.stubGlobal('window', {})
+  const { EmailBody } = await import('../apps/desktop/src/renderer/src/Reader')
+  vi.unstubAllGlobals()
+
   it('repairs cached messages with the plain-text body duplicated in the HTML field', () => {
     const text = readFileSync(new URL('./fixtures/plain-email.txt', import.meta.url), 'utf8')
     const html = emailBodyHtml({ text, html: text, preview: 'Hi, I’m Bartek…' })
@@ -48,24 +55,15 @@ describe('email body fallback', () => {
     expect(html).not.toContain(' title="unexpected')
     expect(html).not.toContain('<br>')
   })
-  it('shows plain text outside the HTML frame until the frame has readable content', async () => {
-    vi.stubGlobal('location', { search: '', protocol: 'file:' })
-    vi.stubGlobal('window', {})
-    try {
-      const { EmailBody } = await import('../apps/desktop/src/renderer/src/Reader')
-      const message = {
-        id: 'message',
-        accountId: 'account',
-        from: [],
-        text: 'The message body remains readable.',
-      } as Message
-      const markup = renderToStaticMarkup(
-        createElement(EmailBody, { message, remoteImages: false }),
-      )
-      expect(markup).toMatch(/class="[^"]*\bemail-fallback\b[^"]*"/)
-      expect(markup).toContain('The message body remains readable.')
-    } finally {
-      vi.unstubAllGlobals()
-    }
+  it('shows plain text outside the HTML frame until the frame has readable content', () => {
+    const message = {
+      id: 'message',
+      accountId: 'account',
+      from: [],
+      text: 'The message body remains readable.',
+    } as Message
+    const markup = renderToStaticMarkup(createElement(EmailBody, { message, remoteImages: false }))
+    expect(markup).toMatch(/class="[^"]*\bemail-fallback\b[^"]*"/)
+    expect(markup).toContain('The message body remains readable.')
   })
 })

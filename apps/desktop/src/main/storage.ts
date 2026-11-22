@@ -101,6 +101,23 @@ export class JsonStore {
     return operation
   }
 }
+/**
+ * Chromium keeps secrets in plain text on Linux desktops it does not recognise,
+ * such as Hyprland or Sway, even when a Secret Service is running. Ask for the
+ * Secret Service there, unless the user chose a store. KDE keeps its KWallet
+ * default, because switching stores would hide existing saved credentials.
+ * Call before the app is ready.
+ */
+export function preferSecretService(
+  commandLine: Pick<Electron.CommandLine, 'hasSwitch' | 'appendSwitch'>,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  if (platform !== 'linux' || commandLine.hasSwitch('password-store')) return
+  const desktop = [env.XDG_CURRENT_DESKTOP, env.DESKTOP_SESSION].join(':')
+  if (/kde|plasma/i.test(desktop) || env.KDE_FULL_SESSION) return
+  commandLine.appendSwitch('password-store', 'gnome-libsecret')
+}
 export function secureStorageAvailable(): boolean {
   return (
     safeStorage.isEncryptionAvailable() &&

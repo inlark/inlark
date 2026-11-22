@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { JsonStore } from '../apps/desktop/src/main/storage'
+import { JsonStore, preferSecretService } from '../apps/desktop/src/main/storage'
 
 const fs = vi.hoisted(() => ({ open: vi.fn(), rename: vi.fn(), rm: vi.fn() }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
@@ -101,5 +101,51 @@ describe('JsonStore atomic writes', () => {
     await expect(new JsonStore(directory).write('drafts', [])).rejects.toBe(error)
 
     expect(dir.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('secret store selection', () => {
+  function commandLine(switches: string[] = []) {
+    const appended: [string, string?][] = []
+    return {
+      appended,
+      hasSwitch: (name: string) => switches.includes(name),
+      appendSwitch: (name: string, value?: string) => {
+        appended.push([name, value])
+      },
+    }
+  }
+
+  it.each([
+    ['Hyprland', { XDG_CURRENT_DESKTOP: 'Hyprland' }],
+    ['Sway', { XDG_CURRENT_DESKTOP: 'sway', DESKTOP_SESSION: 'sway' }],
+    ['GNOME', { XDG_CURRENT_DESKTOP: 'ubuntu:GNOME' }],
+    ['no desktop', {}],
+  ])('asks for the Secret Service on %s', (_name, env) => {
+    const line = commandLine()
+    preferSecretService(line, env, 'linux')
+    expect(line.appended).toEqual([['password-store', 'gnome-libsecret']])
+  })
+
+  it.each([
+    ['KDE', { XDG_CURRENT_DESKTOP: 'KDE' }],
+    ['a KDE session', { DESKTOP_SESSION: 'plasma' }],
+    ['an older KDE session', { KDE_FULL_SESSION: 'true' }],
+  ])('keeps KWallet on %s', (_name, env) => {
+    const line = commandLine()
+    preferSecretService(line, env, 'linux')
+    expect(line.appended).toEqual([])
+  })
+
+  it('respects a store the user chose', () => {
+    const line = commandLine(['password-store'])
+    preferSecretService(line, { XDG_CURRENT_DESKTOP: 'Hyprland' }, 'linux')
+    expect(line.appended).toEqual([])
+  })
+
+  it.each(['darwin', 'win32'] as const)('leaves %s alone', (platform) => {
+    const line = commandLine()
+    preferSecretService(line, {}, platform)
+    expect(line.appended).toEqual([])
   })
 })

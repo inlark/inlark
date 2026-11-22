@@ -19,7 +19,7 @@ import { requestBackground } from './startup-portal'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { ipcSchemas, type AppEvent, type Settings } from '@inlark/core'
-import { JsonStore } from './storage'
+import { JsonStore, preferSecretService } from './storage'
 import { MailService } from './service'
 import { imapProviders } from './imap-accounts'
 import { MicrosoftAuth } from './microsoft-auth'
@@ -44,6 +44,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 configureAppIdentity(app)
+preferSecretService(app.commandLine)
 if (process.platform === 'linux' && process.env.FLATPAK_ID)
   app.setDesktopName(process.env.FLATPAK_ID + '.desktop')
 let window: BrowserWindow | null = null,
