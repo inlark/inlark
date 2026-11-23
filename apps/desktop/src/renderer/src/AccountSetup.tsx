@@ -1,7 +1,9 @@
 import { cn } from '@inlark/ui'
 import {
+  Fragment,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -51,6 +53,7 @@ import {
 import { api, isDemo } from './api'
 import { queryClient } from './cache'
 import { SegmentedControl } from './SegmentedControl'
+import { chordKeys } from './shortcuts'
 import { FolderMappingEditor, initialFolderChoices, needsFolderReview } from './FolderMappings'
 import { GoogleAppPasswordGuide } from './GoogleAppPasswordGuide'
 import {
@@ -61,6 +64,8 @@ import {
 
 /** `signIn` repeats a saved connection's login; `edit` opens its server settings for changes. */
 export type SetupMode = 'add' | 'signIn' | 'edit'
+/** The step of setup on screen: the address, its server and login, or folders that need a choice. */
+export type SetupPhase = 'email' | 'server' | 'folders'
 type ServerKind = 'incoming' | 'outgoing'
 type ServerFields = {
   host: string
@@ -491,20 +496,70 @@ function ServerSummary({ fields }: { fields: Fields }) {
   )
 }
 
+/**
+ * Says where a typed password goes, beside the field that takes it: the moment someone decides
+ * whether to trust a new mail app with it.
+ */
+function PasswordDestination({ fields, app }: { fields: Fields; app: boolean }) {
+  const jmap = fields.protocol === 'jmap'
+  const hosts = [
+    ...new Set(
+      jmap
+        ? [hostOf(fields.serverUrl.trim())]
+        : [fields.incoming.host.trim(), fields.outgoing.host.trim()],
+    ),
+  ].filter(Boolean)
+  // JMAP is allowed over plain HTTP only to a server on this computer.
+  const encrypted = !jmap || /^https:/i.test(fields.serverUrl.trim())
+  return (
+    <p className="password-destination flex gap-2 mt-3 mb-0 mx-0 text-[11px] leading-[1.6] text-muted [&_svg]:shrink-0 [&_svg]:mt-[3px]">
+      <LockKeyhole size={13} />
+      <span>
+        {!jmap && !fields.sameLogin ? (
+          'Each password is sent only to its own server'
+        ) : (
+          <>
+            {'Your ' + (app ? 'app password' : 'password') + ' is sent only to '}
+            {hosts.length
+              ? hosts.map((host, index) => (
+                  <Fragment key={host}>
+                    {index > 0 && ' and '}
+                    <span className="text-secondary [overflow-wrap:anywhere]">{host}</span>
+                  </Fragment>
+                ))
+              : jmap
+                ? 'the server above'
+                : 'the servers above'}
+          </>
+        )}
+        {encrypted ? ', over an encrypted connection.' : '.'} It never passes through inlark.
+      </span>
+    </p>
+  )
+}
+
 export function AccountSetup({
   bootstrap,
   existing,
   mode = existing ? 'signIn' : 'add',
+  welcome = false,
   onDone,
   onBack,
+  onPhaseChange,
 }: {
   bootstrap: Bootstrap
   existing?: Account
   mode?: SetupMode
+  /**
+   * The first account, set up on the welcome screen: there is nothing to go back to, and the
+   * screen introduces the first step itself.
+   */
+  welcome?: boolean
   onDone: (message: string) => void
-  onBack: () => void
+  onBack?: () => void
+  onPhaseChange?: (phase: SetupPhase) => void
 }) {
-  const [phase, setPhase] = useState<'email' | 'server' | 'folders'>(existing ? 'server' : 'email')
+  const [phase, setPhase] = useState<SetupPhase>(existing ? 'server' : 'email')
   const [email, setEmail] = useState(existing?.email || '')
   const [emailError, setEmailError] = useState('')
   const [discovering, setDiscovering] = useState(false)
@@ -569,6 +624,8 @@ export function AccountSetup({
     }
   }, [savedSettings, saved.isError])
   const loadingSaved = !!existing && saved.isPending
+  // Before paint, so whatever frames the form never shows the previous step's surroundings.
+  useLayoutEffect(() => onPhaseChange?.(phase), [phase])
   useEffect(() => {
     // The folder step replaces the focused button, so move focus to its first choice.
     if (phase === 'folders')
@@ -962,12 +1019,38 @@ export function AccountSetup({
     if (input) void check(input)
   }
 
+  /** The check appears at the end of a form that may be scrolled, where its outcome is needed. */
+  const checkSection = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (busy === 'testing' || test)
+      checkSection.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      })
+  }, [busy === 'testing', test])
   /** What the form holds now, for work that resumes after a long wait. */
   const latest = useRef({ fields, validate, check })
   latest.current = { fields, validate, check }
 
   const title =
-    mode === 'edit' ? 'Edit connection' : mode === 'signIn' ? 'Sign in again' : 'Connect an account'
+    mode === 'edit'
+      ? 'Edit connection'
+      : mode === 'signIn'
+        ? 'Sign in again'
+        : welcome
+          ? 'Connect your account'
+          : 'Connect an account'
+  /** Returns to the address, which also ends a sign-in that was made for the old one. */
+  const changeAddress = () => {
+    // A sign-in under way was for this address and has nothing to return to.
+    signInRun.current++
+    cancelSignIn()
+    setSignIn({ phase: 'idle' })
+    setSignInProblem(undefined)
+    if (busy === 'signingIn') setBusy(undefined)
+    setPhase('email')
+    setError('')
+  }
   const accountProblem = existing?.outgoingError
     ? 'Sending unavailable: ' + existing.outgoingError
     : existing && existing.status !== 'connected'
@@ -1031,57 +1114,80 @@ export function AccountSetup({
   const trustLabel =
     mode === 'add' ? 'Trust and connect' : mode === 'edit' ? 'Trust and save' : 'Trust and sign in'
   const google = usesGoogle(fields)
+  // On the welcome screen this is the page's own heading; in settings it sits under theirs.
+  const Heading = welcome ? 'h1' : 'h3'
 
   return (
-    <form className="account-form max-w-140" ref={form} onSubmit={(e) => void submit(e)} noValidate>
-      <Button
-        variant="ghost"
-        size="small"
-        className="account-form-back -ml-2.5 text-muted"
-        onClick={onBack}
-      >
-        <ArrowLeft size={13} />
-        Back to accounts
-      </Button>
-      <header className="account-form-title [&_p]:text-muted [&_p]:text-[12px] [&_p]:leading-[1.6] [&_p]:mt-1.5 [&_p]:mb-0 [&_p]:mx-0 mt-4.5 mb-2 mx-0">
-        <h3 className="m-0 text-[20px] font-[550] tracking-[-0.5px]">
-          {phase === 'folders' ? 'Check folders' : title}
-        </h3>
-        {phase === 'email' ? (
-          <p>
-            Enter your email address and inlark looks up your server settings. You’ll see them
-            before your password is sent anywhere.
-          </p>
-        ) : phase === 'folders' ? (
-          <p>
-            Some folders on {review && fields.incoming.host} couldn’t be confirmed. Choose where
-            inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash put
-            conversations. You can change this later.
-          </p>
-        ) : (
-          <p className="account-form-address [&>span]:text-secondary [&>span]:[overflow-wrap:anywhere] [&_.text-action]:text-[12px] flex items-baseline gap-2.5">
-            <span>{email}</span>
-            {mode === 'add' && (
-              <button
-                type="button"
-                className="border-0 bg-none bg-transparent text-primary text-[11px] p-0 text-left hover:underline"
-                onClick={() => {
-                  // A sign-in under way was for this address and has nothing to return to.
-                  signInRun.current++
-                  cancelSignIn()
-                  setSignIn({ phase: 'idle' })
-                  setSignInProblem(undefined)
-                  if (busy === 'signingIn') setBusy(undefined)
-                  setPhase('email')
-                  setError('')
-                }}
-              >
-                Change
-              </button>
+    <form
+      className={cn(
+        'account-form',
+        welcome
+          ? // Each part of a step arrives as the step does, and the check that follows a sign-in too.
+            '[&_.account-form-section]:animate-[rise-in_420ms_cubic-bezier(0.2,0.8,0.2,1)_both]'
+          : 'max-w-140',
+      )}
+      ref={form}
+      onSubmit={(e) => void submit(e)}
+      noValidate
+    >
+      {onBack && (
+        <Button
+          variant="ghost"
+          size="small"
+          className="account-form-back -ml-2.5 text-muted"
+          onClick={onBack}
+        >
+          <ArrowLeft size={13} />
+          Back to accounts
+        </Button>
+      )}
+      {/* The welcome screen introduces the first step itself. */}
+      {!(welcome && phase === 'email') && (
+        <header
+          className={cn(
+            'account-form-title [&_p]:text-muted [&_p]:text-[12px] [&_p]:leading-[1.6] [&_p]:mt-1.5 [&_p]:mb-0 [&_p]:mx-0 mb-2 mx-0',
+            welcome
+              ? 'mt-0 animate-[rise-in_420ms_cubic-bezier(0.2,0.8,0.2,1)_both] [&_p]:text-[13px]'
+              : 'mt-4.5',
+          )}
+        >
+          <Heading
+            className={cn(
+              'm-0 font-[550]',
+              welcome
+                ? 'text-[24px] tracking-[-0.7px] leading-[1.25]'
+                : 'text-[20px] tracking-[-0.5px]',
             )}
-          </p>
-        )}
-      </header>
+          >
+            {phase === 'folders' ? 'Check folders' : title}
+          </Heading>
+          {phase === 'email' ? (
+            <p>
+              Enter your email address and inlark looks up your server settings. You’ll see them
+              before your password is sent anywhere.
+            </p>
+          ) : phase === 'folders' ? (
+            <p>
+              Some folders on {review && fields.incoming.host} couldn’t be confirmed. Choose where
+              inlark keeps sent mail and drafts, and where Archive, Mark as spam and Move to trash
+              put conversations. You can change this later.
+            </p>
+          ) : (
+            <p className="account-form-address [&>span]:text-secondary [&>span]:[overflow-wrap:anywhere] [&_.text-action]:text-[12px] flex items-baseline gap-2.5">
+              <span>{email}</span>
+              {mode === 'add' && (
+                <button
+                  type="button"
+                  className="border-0 bg-none bg-transparent text-primary text-[11px] p-0 text-left hover:underline"
+                  onClick={changeAddress}
+                >
+                  Change
+                </button>
+              )}
+            </p>
+          )}
+        </header>
+      )}
       {accountProblem && phase === 'server' && (
         <div className="form-error flex gap-2 text-[11px] leading-[1.6] my-3.75 text-danger [&_svg]:shrink-0 [&_svg]:mt-[3px] account-form-problem mt-3.5 mb-0 mx-0">
           <AlertCircle size={14} />
@@ -1095,6 +1201,7 @@ export function AccountSetup({
             'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
             '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
             '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+            welcome && 'pt-0',
           )}
         >
           <TextField
@@ -1104,6 +1211,11 @@ export function AccountSetup({
             autoComplete="email"
             spellCheck={false}
             placeholder="you@example.com"
+            className={
+              welcome
+                ? 'mt-0 [&_input]:mt-2 [&_input]:h-11 [&_input]:px-3.5 [&_input]:text-[14px] [&_input]:rounded-lg'
+                : undefined
+            }
             value={email}
             error={emailError}
             onChange={(e) => {
@@ -1477,6 +1589,8 @@ export function AccountSetup({
                       )}
                     </>
                   )}
+                  {/* The demo sends nothing anywhere, and says so below. */}
+                  {!isDemo && <PasswordDestination fields={fields} app={google} />}
                 </>
               )}
               <label className="checkbox-label flex items-center gap-2.25 text-[12px]">
@@ -1510,15 +1624,23 @@ export function AccountSetup({
                 )}
               >
                 <h4>How it appears</h4>
-                <div className="form-row grid grid-cols-[1fr_1fr] gap-[0_14px] items-start">
-                  <TextField
-                    label="Label"
-                    placeholder="Personal"
-                    maxLength={100}
-                    hint="Only you see this."
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+                <div
+                  className={cn(
+                    'form-row grid gap-[0_14px] items-start',
+                    !welcome && 'grid-cols-[1fr_1fr]',
+                  )}
+                >
+                  {/* A label tells accounts apart, so a first account is asked for less. */}
+                  {!welcome && (
+                    <TextField
+                      label="Label"
+                      placeholder="Personal"
+                      maxLength={100}
+                      hint="Only you see this."
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  )}
                   <TextField
                     label="Your name"
                     placeholder="Jane Doe"
@@ -1545,8 +1667,10 @@ export function AccountSetup({
                   'account-form-section pt-5.5 pb-1 px-0 [&+.account-form-section]:border-t [&+.account-form-section]:border-solid',
                   '[&+.account-form-section]:border-t-border [&+.account-form-section]:mt-4.5 [&_h4]:text-[11px]',
                   '[&_h4]:font-medium [&_h4]:mt-0 [&_h4]:mb-[2px] [&_h4]:mx-0 [&_h4]:text-secondary [&>.checkbox-label]:mt-4.5',
+                  welcome ? 'scroll-mb-24' : 'scroll-mb-4',
                 )}
                 aria-live="polite"
+                ref={checkSection}
               >
                 <h4>Connection check</h4>
                 <ul className="connection-checks list-none mt-2.5 mb-0 mx-0 p-0 border border-solid border-border-strong rounded-lg">
@@ -1618,7 +1742,22 @@ export function AccountSetup({
           <span>{error}</span>
         </div>
       )}
-      <footer className="account-form-footer flex justify-end gap-2 mt-5.5 pt-4.5 border-t border-solid border-t-border">
+      <footer
+        className={cn(
+          'account-form-footer flex justify-end gap-2',
+          welcome && phase === 'email'
+            ? 'mt-1.5'
+            : 'mt-5.5 pt-4.5 border-t border-solid border-t-border',
+          // The welcome screen scrolls as a whole, so what comes next stays in reach below it.
+          welcome &&
+            phase !== 'email' && [
+              'sticky bottom-0 z-1 pb-4.5 bg-sidebar',
+              // What scrolls beneath fades out instead of being cut off mid-line.
+              "before:content-[''] before:absolute before:inset-x-0 before:bottom-full before:mb-px before:h-5",
+              'before:bg-linear-to-t before:from-sidebar before:to-transparent before:pointer-events-none',
+            ],
+        )}
+      >
         {phase === 'email' && (
           <Button
             variant="ghost"
@@ -1632,17 +1771,32 @@ export function AccountSetup({
           <Button onClick={() => setPhase('server')} disabled={!!busy}>
             Back
           </Button>
-        ) : (
+        ) : onBack ? (
           <Button onClick={onBack}>Cancel</Button>
+        ) : (
+          // With no account list to return to, the way back is to the address.
+          phase === 'server' && mode === 'add' && <Button onClick={changeAddress}>Back</Button>
         )}
-        <Button type="submit" variant="primary" disabled={isBusy || loadingSaved}>
+        <Button
+          type="submit"
+          variant="primary"
+          className={welcome && phase === 'email' ? 'min-h-9 px-3.5 text-[13px]' : undefined}
+          disabled={isBusy || loadingSaved}
+        >
           {isBusy ? (
             <>
               <Spinner size={14} />
               {busyLabel}
             </>
           ) : (
-            primaryLabel
+            <>
+              {primaryLabel}
+              {welcome && phase === 'email' && (
+                <kbd className="-mr-1 border-white/25 text-white/85" aria-hidden="true">
+                  {chordKeys('Enter').join('')}
+                </kbd>
+              )}
+            </>
           )}
         </Button>
       </footer>

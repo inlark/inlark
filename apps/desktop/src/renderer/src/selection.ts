@@ -1,3 +1,11 @@
+/**
+ * Where a step of `delta` from `current` lands in a list of `count`, staying inside it. With
+ * nothing current (`-1`) any step lands on the first item, and at either end a step outward
+ * lands where it started.
+ */
+export const stepIndex = (count: number, current: number, delta: number) =>
+  Math.max(0, Math.min(count - 1, current + delta))
+
 /** Select a visible range while retaining selections outside that range. */
 export function selectConversation(
   keys: string[],

@@ -10,6 +10,7 @@ export function SegmentedControl<Value extends string>({
   options,
   onChange,
   label,
+  size = 'default',
   disabled,
   className,
 }: {
@@ -17,6 +18,8 @@ export function SegmentedControl<Value extends string>({
   options: readonly { value: Value; label: string }[]
   onChange: (value: Value) => void
   label: string
+  /** `small` suits a place where the choice is on offer but isn't the subject. */
+  size?: 'default' | 'small'
   disabled?: boolean
   className?: string
 }) {
@@ -38,7 +41,8 @@ export function SegmentedControl<Value extends string>({
           className={cn(
             'segmented-option has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-solid',
             'has-[:focus-visible]:outline-primary has-[:focus-visible]:outline-offset-2 inline-flex',
-            'items-center h-7.5 py-0 px-2.75 rounded-sm text-[12px] text-muted whitespace-nowrap cursor-pointer',
+            'items-center py-0 rounded-sm text-muted whitespace-nowrap cursor-pointer',
+            size === 'small' ? 'h-6 px-2 text-[11px]' : 'h-7.5 px-2.75 text-[12px]',
             'transition-[background,color] duration-120 ease-[ease] hover:text-foreground',
             option.value === value &&
               'chosen bg-selected text-strong hover:text-strong font-medium shadow-[0_1px_2px_#0000001a]',

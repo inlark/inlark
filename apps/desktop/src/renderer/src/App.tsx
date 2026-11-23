@@ -1,6 +1,15 @@
 import { clearDecryptedCache } from './cache'
 import { cn } from '@inlark/ui'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, lazy, Suspense } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  lazy,
+  Suspense,
+} from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -11,7 +20,6 @@ import {
   FileText,
   Trash2,
   Mail,
-  Plus,
   Settings as SettingsIcon,
   ChevronRight,
   ChevronDown,
@@ -101,7 +109,7 @@ import {
 import { messageText } from './message-text'
 import { signatureBlock, signatureText } from './signature'
 import { textSignatureMarker } from './composer-document'
-import { selectConversation } from './selection'
+import { selectConversation, stepIndex } from './selection'
 import {
   ignoreInputsForCommand,
   sameBinding,
@@ -141,6 +149,9 @@ import {
 } from './search-scope'
 import { version as packagedVersion } from '../../../package.json'
 import { reloader } from './reload'
+import { Welcome } from './Welcome'
+import { expectsAccounts } from './first-run'
+import { noteFirstKey, restartFirstKeys, startFirstKeys, updateFirstKeys } from './first-keys'
 const Composer = lazy(() => import('./Composer').then((m) => ({ default: m.Composer })))
 const SettingsPanel = lazy(() => import('./Settings').then((m) => ({ default: m.SettingsPanel })))
 
@@ -167,6 +178,39 @@ export function App() {
     version: packagedVersion,
   }
   const { accounts, settings } = bootstrap
+  /** Whether this device had an account when inlark last ran, known before anything loads. */
+  const [hadAccounts] = useState(() =>
+    expectsAccounts(
+      localStorage.getItem('has-accounts'),
+      // Mail kept from an earlier session is restored before the window first renders.
+      queryClient
+        .getQueryCache()
+        .findAll()
+        .some((q) => q.queryKey[0] === 'mailboxes' || q.queryKey[0] === 'mail'),
+    ),
+  )
+  useEffect(() => {
+    if (boot.data) localStorage.setItem('has-accounts', String(accounts.length > 0))
+  }, [!!boot.data, accounts.length])
+  /**
+   * Nothing is connected yet, so the window is the welcome screen instead of an empty mailbox.
+   * A first launch stays blank for the moment it takes to find that out, rather than flashing
+   * the mailbox's frame.
+   */
+  const firstRun = boot.data ? !accounts.length : !hadAccounts && !boot.isError
+  /** Set while the window settles in after the first account was connected. */
+  const [arriving, setArriving] = useState(false)
+  const welcomed = useRef(false)
+  useEffect(() => {
+    if (!boot.data) return
+    if (!accounts.length) welcomed.current = true
+    else if (welcomed.current) {
+      // The first account is connected, from the welcome screen or from Settings opened over it.
+      welcomed.current = false
+      updateFirstKeys(startFirstKeys)
+      setArriving(true)
+    }
+  }, [!!boot.data, accounts.length])
   const view = (
     views.some((v) => v.id === route.view) || route.view === 'all' ? route.view : 'inbox'
   ) as View
@@ -177,7 +221,8 @@ export function App() {
   const encryption = useEncryption()
   const [unlock, unlockDialog] = useUnlock()
   const [settingsOpen, setSettingsOpen] = useState(false),
-    [settingsTab, setSettingsTab] = useState('general')
+    [settingsTab, setSettingsTab] = useState('general'),
+    [addingAccount, setAddingAccount] = useState(false)
   const [composer, setComposer] = useState<Draft>(),
     [paletteOpen, setPaletteOpen] = useState(false),
     [help, setHelp] = useState(false)
@@ -512,6 +557,7 @@ export function App() {
             }[action],
         undoId: result.undoId,
       })
+      if (action === 'archive' && result.changed) noteFirstKey('archive')
       setSelected(new Set())
       setAllMatching(false)
     } catch (e) {
@@ -549,8 +595,8 @@ export function App() {
       message?.accountId ||
       newMessageAccount(accounts, route.account, settings.defaultAccountId)?.id
     if (!id) {
-      setSettingsTab('accounts')
-      setSettingsOpen(true)
+      // With no account at all, the welcome screen is already asking for one.
+      if (accounts.length) openSettings('accounts')
       return
     }
     try {
@@ -660,9 +706,9 @@ export function App() {
   const onMailto = (url: string) => {
     try {
       if (!accounts.length) {
+        // The welcome screen is already asking for an account; the message opens once one exists.
         pendingMailto.current = url
-        setSettingsTab('accounts')
-        setSettingsOpen(true)
+        notify('Connect an account and inlark starts your message.', 'info')
         return
       }
       void compose(undefined, 'reply', mailtoDraft(url))
@@ -670,8 +716,11 @@ export function App() {
       fail(e)
     }
   }
-  /** `repeat` is set for the repeats of a held key, which skim without loading each conversation. */
-  const step = (delta: number, repeat = false) => {
+  /**
+   * `repeat` is set for the repeats of a held key, which skim without loading each conversation.
+   * `byKey` is set when a shortcut asked for the step, rather than a button in the reader.
+   */
+  const step = (delta: number, repeat = false, byKey = false) => {
     if (repeat && route.thread) setSkimming(true)
     if (
       route.thread &&
@@ -686,7 +735,10 @@ export function App() {
           const next = result.data?.pages
             .flatMap((p) => p.items)
             .find((c) => !conversations.some((old) => old.key === c.key))
-          if (next) open(next)
+          if (next) {
+            if (byKey) noteFirstKey('move')
+            open(next)
+          }
         })
         .catch((e) => fail(e))
       return
@@ -696,8 +748,11 @@ export function App() {
         ? c.id === route.thread && c.accountId === route.threadAccount
         : c.key === focused,
     )
-    const next = conversations[Math.max(0, Math.min(conversations.length - 1, current + delta))]
+    const target = stepIndex(conversations.length, current, delta)
+    const next = conversations[target]
     if (next) {
+      // A key pressed at the end of the list goes nowhere, and has taught nothing.
+      if (byKey && target !== current) noteFirstKey('move')
       if (route.thread) open(next)
       else {
         setFocused(next.key)
@@ -967,10 +1022,20 @@ export function App() {
   useEffect(() => {
     toasts.undoHandler = (target) => void undo(target)
   })
-  const openSettings = (tab = 'general') => {
+  /** `addAccount` goes straight to connecting another account. */
+  const openSettings = (tab = 'general', addAccount = false) => {
     setSettingsTab(tab)
+    setAddingAccount(addAccount)
     setSettingsOpen(true)
   }
+  useEffect(() => {
+    if (paletteOpen) noteFirstKey('commands')
+  }, [paletteOpen])
+  useEffect(() => {
+    if (!arriving) return
+    const timer = window.setTimeout(() => setArriving(false), 700)
+    return () => window.clearTimeout(timer)
+  }, [arriving])
   const focusSearch = () => {
     setSearchOpen(true)
     requestAnimationFrame(() => searchInput.current?.select())
@@ -1019,9 +1084,14 @@ export function App() {
         : 'star',
     )
   const hasTarget = !!route.thread || !!selected.size || !!focused
+  /** Opens a conversation the user picked, as opposed to one the reader moved on to by itself. */
+  const openChosen = (c: Conversation) => {
+    noteFirstKey('open')
+    open(c)
+  }
   const openFocused = () => {
     const c = conversations.find((c) => c.key === focused) || conversations[0]
-    if (c && !route.thread) open(c)
+    if (c && !route.thread) openChosen(c)
   }
   // In Drafts, the trash keys delete the selected drafts rather than moving conversations.
   const trashKey = () => (view === 'drafts' ? discardDrafts(draftSelected) : void act('trash'))
@@ -1088,8 +1158,8 @@ export function App() {
       toggleUnread: { run: toggleUnread, enabled: inMailList },
       toggleDensity: { run: toggleDensity, enabled: inMailList },
       createFolder: { run: createFolder, enabled: !blocked && !!accounts.length },
-      next: { run: (event) => step(1, event?.repeat) },
-      previous: { run: (event) => step(-1, event?.repeat) },
+      next: { run: (event) => step(1, event?.repeat, true) },
+      previous: { run: (event) => step(-1, event?.repeat, true) },
       open: { run: openFocused },
       authAction: {
         run: () => authTarget && void applyAuth(authTarget.candidate, authTarget.key),
@@ -1630,6 +1700,22 @@ export function App() {
       keywords: 'help keys hotkeys',
       run: () => setHelp(true),
     },
+    ...(accounts.length
+      ? [
+          {
+            id: 'first-keys',
+            group: 'Help',
+            label: 'Learn the essential shortcuts',
+            icon: Keyboard,
+            keywords: 'getting started intro introduction tutorial guide onboarding keys basics',
+            run: () => {
+              // The card lives in the sidebar, which may be collapsed.
+              setCollapsed(false)
+              updateFirstKeys(restartFirstKeys)
+            },
+          },
+        ]
+      : []),
     {
       id: 'shortcut-settings',
       group: 'Help',
@@ -1653,6 +1739,14 @@ export function App() {
   const hasFilters = Object.values(filters).some(Boolean)
   // The Unread tab is a filter too, but an empty Unread list isn't a failed search.
   const hasSearchFilters = Object.entries(filters).some(([key, value]) => key !== 'unread' && value)
+  /** Nothing is listed yet only because a first sync hasn't reached this view. */
+  const arrivingMail =
+    !conversations.length &&
+    !mail.isLoading &&
+    incomplete.length > 0 &&
+    !route.q &&
+    !hasFilters &&
+    view !== 'drafts'
   const filterLabels: Record<string, string> = {
     from: 'From',
     to: 'To',
@@ -1705,6 +1799,123 @@ export function App() {
       fail(e)
     }
   }
+  /**
+   * Toasts and dialogs, which the welcome screen needs as much as the mailbox does. The key keeps
+   * them mounted when one gives way to the other, so an open dialog or a toast isn't lost.
+   */
+  const overlays = (
+    <Fragment key="overlays">
+      <Toaster />
+      <AuthAnnouncer />
+      <Suspense fallback={<ProgressToast text="Opening…" />}>
+        {composer && (
+          <Composer
+            key={composer.id}
+            initial={composer}
+            suggestions={suggestions}
+            accounts={accounts}
+            settings={settings}
+            onClose={() => setComposer(undefined)}
+            onOpenAccounts={() => openSettings('accounts')}
+            onOpenEncryption={() => openSettings('encryption')}
+            notify={notify}
+            onSaved={() => void queryClient.invalidateQueries({ queryKey: ['drafts'] })}
+          />
+        )}
+        {settingsOpen && (
+          <SettingsPanel
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            bootstrap={bootstrap}
+            onChange={(settings) =>
+              queryClient.setQueryData(['bootstrap'], { ...bootstrap, settings })
+            }
+            notify={notify}
+            initialTab={settingsTab}
+            addAccount={addingAccount}
+          />
+        )}
+      </Suspense>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onSearch={(q) => {
+          setSearchOpen(true)
+          go({ q, view: 'all' })
+        }}
+        commands={commands}
+      />
+      <ShortcutDialog open={help} onClose={() => setHelp(false)} />
+      {unlockDialog}
+      <FilterDialog
+        key={filterOpen ? 'filter-open' : 'filter-closed'}
+        open={filterOpen}
+        filters={filters}
+        location={filterLocations.value}
+        locations={filterLocations.options}
+        onClose={() => setFilterOpen(false)}
+        onApply={(next, place) => {
+          setFilters(next)
+          setFilterOpen(false)
+          // Picking a folder moves the list there, so clearing the search later stays in it.
+          if (
+            place.view !== view ||
+            place.account !== route.account ||
+            place.folder !== route.folder
+          )
+            go({ view: place.view, account: place.account, folder: place.folder }, false)
+        }}
+      />
+      <FolderDialog
+        key={
+          folderDialog
+            ? 'folder-' + folderDialog.operation + ':' + (folderDialog.folder?.id || '')
+            : 'folder-closed'
+        }
+        dialog={folderDialog}
+        onClose={() => setFolderDialog(undefined)}
+        onSave={(name) => void changeFolder(name)}
+      />
+      <MoveDialog
+        targets={moveTargets}
+        accounts={accounts}
+        onClose={() => setMoveTargets(undefined)}
+        onMove={(id) => {
+          void act('move', moveTargets, id)
+          setMoveTargets(undefined)
+        }}
+      />
+      <ConfirmActionDialog
+        action={confirmAction}
+        count={allMatching ? total : targets().length}
+        onClose={() => setConfirmAction(undefined)}
+        onConfirm={(action) => {
+          setConfirmAction(undefined)
+          void act(action, undefined, undefined, true)
+        }}
+      />
+    </Fragment>
+  )
+  if (firstRun)
+    return (
+      <div className="app-shell flex h-full min-w-0 bg-sidebar">
+        {boot.data ? (
+          <Welcome
+            bootstrap={bootstrap}
+            onTheme={(theme) => void savePreferences({ theme })}
+            onSettings={() => openSettings()}
+          />
+        ) : (
+          // Starting usually takes no time at all; only a slow start is worth mentioning.
+          <div className="flex-1 flex animate-[fade-in_300ms_ease-out_500ms_both]">
+            <EmptyState icon={Mail} title="Starting inlark">
+              <Spinner />
+            </EmptyState>
+          </div>
+        )}
+        {overlays}
+      </div>
+    )
   return (
     <div
       className={cn(
@@ -1714,6 +1925,9 @@ export function App() {
         'max-[1100px]:[&:not(.sidebar-collapsed)]:[--rail:204px] max-[700px]:[&:not(.sidebar-collapsed)]:[--rail:188px]',
         collapsed && 'sidebar-collapsed',
         'density-' + density,
+        // The window the welcome screen gives way to settles in instead of snapping into place.
+        arriving &&
+          '[&>.sidebar]:animate-[fade-in_480ms_ease-out_both] [&>.main-content]:animate-[rise-in_520ms_cubic-bezier(0.2,0.8,0.2,1)_both]',
       )}
     >
       <Sidebar
@@ -1731,10 +1945,10 @@ export function App() {
         onSearch={() => setPaletteOpen(true)}
         onCompose={() => void compose()}
         onNavigate={go}
-        onSettings={(tab) => {
-          setSettingsTab(tab)
-          setSettingsOpen(true)
-        }}
+        onSettings={(tab) =>
+          tab === 'addAccount' ? openSettings('accounts', true) : openSettings(tab)
+        }
+        onShortcuts={() => setHelp(true)}
         onFolderAction={(operation, accountId, folder) =>
           setFolderDialog({ operation, accountId, folder })
         }
@@ -1748,23 +1962,6 @@ export function App() {
             description={boot.isError ? friendlyError(boot.error) : undefined}
           >
             {!boot.isError && <Spinner />}
-          </EmptyState>
-        ) : !accounts.length ? (
-          <EmptyState
-            icon={Inbox}
-            title="Welcome to inlark"
-            description="Connect your email account to get started."
-          >
-            <Button
-              variant="primary"
-              onClick={() => {
-                setSettingsTab('accounts')
-                setSettingsOpen(true)
-              }}
-            >
-              <Plus size={14} />
-              Connect an account
-            </Button>
           </EmptyState>
         ) : route.thread && readerAccount ? (
           thread.data ? (
@@ -2302,7 +2499,7 @@ export function App() {
                 <button onClick={() => void refresh()}>Retry</button>
               </div>
             )}
-            {!!incomplete.length && view !== 'drafts' && (
+            {!!incomplete.length && view !== 'drafts' && !arrivingMail && (
               <div
                 className={cn(
                   'indexing-notice flex flex-wrap items-center justify-between gap-[4px_14px] py-2 px-7 border-b border-solid',
@@ -2479,9 +2676,17 @@ export function App() {
                     searching: !!route.q || hasSearchFilters,
                     unreadOnly: !!filters.unread,
                     scope: narrowed ? title : undefined,
+                    syncing: arrivingMail
+                      ? { names: incomplete.map((a) => a.name), only: accounts.length === 1 }
+                      : undefined,
                     keys,
                   })}
                 >
+                  {arrivingMail && incomplete.length === 1 && !!incomplete[0].indexing?.total && (
+                    <span className="text-[11px] text-muted">
+                      <IndexingMeter indexing={incomplete[0].indexing} label="Indexed" />
+                    </span>
+                  )}
                   {(hasSearchFilters || (!!route.q && wider)) && (
                     <div className="empty-actions flex flex-wrap justify-center gap-2">
                       {wider && <Button onClick={searchWider}>{wider.label}</Button>}
@@ -2490,11 +2695,15 @@ export function App() {
                       )}
                     </div>
                   )}
-                  {view === 'inbox' && !route.q && !hasFilters && keys('compose') && (
-                    <span className="empty-hint inline-flex items-center gap-2 text-[12px] text-faint">
-                      <ShortcutHint id="compose" /> Write a message
-                    </span>
-                  )}
+                  {view === 'inbox' &&
+                    !route.q &&
+                    !hasFilters &&
+                    !arrivingMail &&
+                    keys('compose') && (
+                      <span className="empty-hint inline-flex items-center gap-2 text-[12px] text-faint">
+                        <ShortcutHint id="compose" /> Write a message
+                      </span>
+                    )}
                 </EmptyState>
               )
             ) : (
@@ -2516,7 +2725,7 @@ export function App() {
                 handleRef={listHandle}
                 offsets={offsets}
                 onFetchNextPage={() => void mail.fetchNextPage()}
-                onOpen={open}
+                onOpen={openChosen}
                 onFocus={setFocused}
                 onSelect={toggle}
                 onAction={(action, conversation) =>
@@ -2580,94 +2789,7 @@ export function App() {
           </>
         )}
       </main>
-      <Toaster />
-      <AuthAnnouncer />
-      <Suspense fallback={<ProgressToast text="Opening…" />}>
-        {composer && (
-          <Composer
-            key={composer.id}
-            initial={composer}
-            suggestions={suggestions}
-            accounts={accounts}
-            settings={settings}
-            onClose={() => setComposer(undefined)}
-            onOpenAccounts={() => openSettings('accounts')}
-            onOpenEncryption={() => openSettings('encryption')}
-            notify={notify}
-            onSaved={() => void queryClient.invalidateQueries({ queryKey: ['drafts'] })}
-          />
-        )}
-        {settingsOpen && (
-          <SettingsPanel
-            open={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            bootstrap={bootstrap}
-            onChange={(settings) =>
-              queryClient.setQueryData(['bootstrap'], { ...bootstrap, settings })
-            }
-            notify={notify}
-            initialTab={settingsTab}
-          />
-        )}
-      </Suspense>
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        onSearch={(q) => {
-          setSearchOpen(true)
-          go({ q, view: 'all' })
-        }}
-        commands={commands}
-      />
-      <ShortcutDialog open={help} onClose={() => setHelp(false)} />
-      {unlockDialog}
-      <FilterDialog
-        key={filterOpen ? 'filter-open' : 'filter-closed'}
-        open={filterOpen}
-        filters={filters}
-        location={filterLocations.value}
-        locations={filterLocations.options}
-        onClose={() => setFilterOpen(false)}
-        onApply={(next, place) => {
-          setFilters(next)
-          setFilterOpen(false)
-          // Picking a folder moves the list there, so clearing the search later stays in it.
-          if (
-            place.view !== view ||
-            place.account !== route.account ||
-            place.folder !== route.folder
-          )
-            go({ view: place.view, account: place.account, folder: place.folder }, false)
-        }}
-      />
-      <FolderDialog
-        key={
-          folderDialog
-            ? 'folder-' + folderDialog.operation + ':' + (folderDialog.folder?.id || '')
-            : 'folder-closed'
-        }
-        dialog={folderDialog}
-        onClose={() => setFolderDialog(undefined)}
-        onSave={(name) => void changeFolder(name)}
-      />
-      <MoveDialog
-        targets={moveTargets}
-        accounts={accounts}
-        onClose={() => setMoveTargets(undefined)}
-        onMove={(id) => {
-          void act('move', moveTargets, id)
-          setMoveTargets(undefined)
-        }}
-      />
-      <ConfirmActionDialog
-        action={confirmAction}
-        count={allMatching ? total : targets().length}
-        onClose={() => setConfirmAction(undefined)}
-        onConfirm={(action) => {
-          setConfirmAction(undefined)
-          void act(action, undefined, undefined, true)
-        }}
-      />
+      {overlays}
     </div>
   )
 }

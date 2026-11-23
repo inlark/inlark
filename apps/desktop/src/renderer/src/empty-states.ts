@@ -41,12 +41,18 @@ export function emptyListState(
     searching,
     unreadOnly,
     scope,
+    syncing,
     keys = () => undefined,
   }: {
     searching: boolean
     unreadOnly: boolean
     /** The folder a search was limited to, named so a miss there isn't mistaken for a miss everywhere. */
     scope?: string
+    /**
+     * Accounts whose mail is still being brought in, so “nothing here” isn't said too soon. One
+     * is named when there are others to tell it from.
+     */
+    syncing?: { names: string[]; only: boolean }
     keys?: KeyText
   },
 ): { icon: IconComponent; title: string; description: string } {
@@ -61,6 +67,19 @@ export function emptyListState(
           : 'Try a different search or adjust your filters.',
     }
   const icon = views.find((v) => v.id === view)?.icon || Folder
+  // An empty list during a first sync means the mail hasn't arrived, not that there is none.
+  if (syncing?.names.length && !unreadOnly && view !== 'drafts')
+    return {
+      icon,
+      title: 'Bringing in your mail',
+      description:
+        (syncing.only
+          ? 'Your mail is'
+          : syncing.names.length === 1
+            ? syncing.names[0] + ' is'
+            : 'Some accounts are') +
+        ' still being indexed. Conversations appear here as they arrive.',
+    }
   if (unreadOnly)
     return { icon, title: 'No unread conversations', description: 'You’ve read everything here.' }
   const { title, description } = copy[view === 'drafts' ? 'all' : view]

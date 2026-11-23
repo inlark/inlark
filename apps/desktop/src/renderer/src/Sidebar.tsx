@@ -1,5 +1,5 @@
 import { cn } from '@inlark/ui'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   Archive,
   ChevronDown,
@@ -28,6 +28,8 @@ import { AccountMark } from './AccountMark'
 import { ShortcutHint, useShortcutText, type ShortcutId } from './shortcuts'
 import { useEncryption } from './encryption-ui'
 import { SupportCard } from './SupportCard'
+import { FirstKeysCard } from './FirstKeysCard'
+import { firstKeysSnapshot, subscribeFirstKeys } from './first-keys'
 
 export const views: { id: View; title: string; icon: typeof Inbox; shortcut?: ShortcutId }[] = [
   { id: 'inbox', title: 'Inbox', icon: Inbox, shortcut: 'goInbox' },
@@ -61,6 +63,7 @@ export function Sidebar({
   onCompose,
   onNavigate,
   onSettings,
+  onShortcuts,
   onFolderAction,
 }: {
   accounts: Account[]
@@ -78,7 +81,9 @@ export function Sidebar({
   onSearch: () => void
   onCompose: () => void
   onNavigate: (next: { view: View; account?: string; folder?: string }) => void
-  onSettings: (tab: 'accounts' | 'general' | 'encryption') => void
+  /** `addAccount` opens the accounts on connecting another one. */
+  onSettings: (tab: 'accounts' | 'general' | 'encryption' | 'addAccount') => void
+  onShortcuts: () => void
   onFolderAction: (
     operation: 'create' | 'rename' | 'delete',
     accountId: string,
@@ -103,6 +108,10 @@ export function Sidebar({
       : unavailable.length + ' accounts unavailable'
   const sendingText =
     sendingIssues === 1 ? '1 message needs attention' : sendingIssues + ' messages need attention'
+  // Cards above Settings stay out of a collapsed sidebar and out of the way of a problem.
+  const quiet = collapsed || !!needsBackup || sendingIssues > 0 || unavailable.length > 0
+  const learningKeys =
+    useSyncExternalStore(subscribeFirstKeys, firstKeysSnapshot).phase === 'active'
   const [accountsExpanded, setAccountsExpanded] = useState(
     () => localStorage.getItem('sidebar-accounts-expanded') !== 'false',
   )
@@ -499,9 +508,16 @@ export function Sidebar({
             {!collapsed && <span>{statusText}</span>}
           </button>
         )}
+        <FirstKeysCard
+          quiet={quiet}
+          canAddAccount={accounts.length === 1}
+          onAddAccount={() => onSettings('addAccount')}
+          onShortcuts={onShortcuts}
+        />
+        {/* One card at a time: asking for support waits until the first keys are out of the way. */}
         <SupportCard
           connected={accounts.some((a) => a.status === 'connected')}
-          quiet={collapsed || !!needsBackup || sendingIssues > 0 || unavailable.length > 0}
+          quiet={quiet || learningKeys}
         />
         <div
           className={cn(
