@@ -73,16 +73,21 @@ const demoStates: Partial<Account>[] = [
   { protocol: 'imap', outgoingError: 'The outgoing server rejected the username or password.' },
   {},
 ]
-export const demoAccounts: Account[] = names.map((name, i) => ({
-  id: accountKey('demo-' + i, 'mail'),
-  connectionId: 'demo-' + i,
-  remoteId: 'mail',
-  name,
-  email: emails[i],
-  color: palette[i],
-  status: 'connected',
-  ...demoStates[i],
-}))
+/** “?welcome” starts with nothing connected, to show what a first launch looks like. */
+const welcome =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('welcome')
+export const demoAccounts: Account[] = welcome
+  ? []
+  : names.map((name, i) => ({
+      id: accountKey('demo-' + i, 'mail'),
+      connectionId: 'demo-' + i,
+      remoteId: 'mail',
+      name,
+      email: emails[i],
+      color: palette[i],
+      status: 'connected',
+      ...demoStates[i],
+    }))
 const catalog = [
   [
     'GitHub',
@@ -471,6 +476,31 @@ const indexing = (account: Account) => !!account.indexing && !account.indexing.c
 function changed() {
   listeners.forEach((fn) => fn({ type: 'changed' }))
 }
+/** Accounts whose sample mail is still arriving, newest first, as a first sync brings it in. */
+const firstSyncs = new Set<string>()
+/** How many of an account's sample messages have arrived: all of them, except during a first sync. */
+const arrived = (account: Account) =>
+  firstSyncs.has(account.id) && account.indexing
+    ? Math.floor((perAccount * account.indexing.indexed) / Math.max(1, account.indexing.total))
+    : perAccount
+/** Plays a first sync for an account connected from the welcome screen. */
+function simulateFirstSync(account: Account) {
+  const total = 1_840
+  account.indexing = { indexed: 0, total, complete: false }
+  firstSyncs.add(account.id)
+  const advance = () => {
+    const indexed = Math.min(total, (account.indexing?.indexed || 0) + 230)
+    if (indexed < total) account.indexing = { indexed, total, complete: false }
+    else {
+      account.indexing = undefined
+      firstSyncs.delete(account.id)
+    }
+    emitAccounts()
+    changed()
+    if (account.indexing) setTimeout(advance, 900)
+  }
+  setTimeout(advance, 1800)
+}
 
 /* ——— Account setup: simulated locally, nothing leaves the browser ——— */
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -703,6 +733,8 @@ function sampleDraft(
   }
 }
 let submissions: SubmissionSummary[] = (() => {
+  // A first launch has sent nothing yet.
+  if (welcome) return []
   const filed = sampleDraft(
     0,
     'Quarterly figures',
@@ -854,7 +886,7 @@ const unfileDraft = (draft: Draft | undefined) => {
   if (draft) serverDrafts.delete(draft.serverId || 'draft-' + draft.id)
 }
 // One reply waits unsent in Maya's conversation, to show how a draft reads in a thread.
-{
+if (!welcome) {
   const original = message(0, 2)
   const sender = original.from[0]
   const reply =
@@ -918,16 +950,16 @@ const encryption: EncryptionStatus = {
   protection: 'os',
   identities: [
     {
-      accountId: demoAccounts[0].id,
+      accountId: accountKey('demo-0', 'mail'),
       identityId: 'identity',
-      email: demoAccounts[0].email,
+      email: emails[0],
       fingerprint: sampleFingerprint('personal'),
       enabled: true,
       prefer: true,
     },
   ],
   keys: [
-    sampleKey(demoAccounts[0].email, 'personal', {
+    sampleKey(emails[0], 'personal', {
       sources: ['own'],
       confirmed: true,
       backup: 'needed',
@@ -938,6 +970,8 @@ const encryption: EncryptionStatus = {
     sampleKey('daniel.fischer@outlook.com', 'daniel-new', { accepted: false }),
   ],
 }
+// A first launch has no keys yet.
+if (welcome) Object.assign(encryption, { vault: 'absent', identities: [], keys: [] })
 /** Contacts whose sample mail says they prefer encryption. */
 const prefersEncryption = new Set(['maya.chen@gmail.com'])
 const encryptionState = (): EncryptionStatus => structuredClone(encryption)
@@ -1202,7 +1236,8 @@ export const demoAPI: DesktopMailAPI = {
     return {}
   },
   bootstrap: async () => ({
-    accounts: demoAccounts,
+    // A copy, as the desktop app's would be: the cache must be able to tell when accounts change.
+    accounts: demoAccounts.map((a) => ({ ...a })),
     settings,
     secureStorage: false,
     demo: true,
@@ -1297,7 +1332,8 @@ export const demoAPI: DesktopMailAPI = {
       status: 'connected',
     }
     Object.assign(account, {
-      name: input.name.trim() || existing?.name || email.split('@')[1].split('.')[0],
+      // As the desktop app names an account that was given no label.
+      name: input.name.trim() || existing?.name || email,
       senderName: input.senderName?.trim() || undefined,
       protocol: input.config.protocol,
       status: 'connected',
@@ -1306,6 +1342,7 @@ export const demoAPI: DesktopMailAPI = {
       sessionOnly: !input.remember,
     })
     if (!existing) demoAccounts.push(account)
+    if (!existing && welcome && demoAccounts.length === 1) simulateFirstSync(account)
     demoConnections.set(account.connectionId, { config: input.config, remember: input.remember })
     if (input.folders) demoFolderChoices.set(account.id, input.folders)
     return emitAccounts()
@@ -1449,7 +1486,7 @@ export const demoAPI: DesktopMailAPI = {
       }
       const selected: Message[] = []
       let total = 0
-      for (let index = 0; index < perAccount; index++) {
+      for (let index = 0; index < arrived(account); index++) {
         const m = get(accountIndex, index, false)
         if (!m || !matches(m, query)) continue
         if (total >= position && selected.length < 50) selected.push(m)

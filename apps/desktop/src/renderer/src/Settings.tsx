@@ -176,6 +176,7 @@ export function SettingsPanel({
   onChange,
   notify,
   initialTab = 'general',
+  addAccount = false,
 }: {
   open: boolean
   onClose: () => void
@@ -183,10 +184,14 @@ export function SettingsPanel({
   onChange: (settings: Preferences) => void
   notify: (message: string, tone?: 'error' | 'info') => void
   initialTab?: string
+  /** Opens Accounts on connecting another account instead of on the list. */
+  addAccount?: boolean
 }) {
   // With nothing connected yet, opening Accounts can only mean adding one.
   const initialSetup = (): { mode: SetupMode } | undefined =>
-    initialTab === 'accounts' && !bootstrap.accounts.length ? { mode: 'add' } : undefined
+    initialTab === 'accounts' && (addAccount || !bootstrap.accounts.length)
+      ? { mode: 'add' }
+      : undefined
   const [tab, setTab] = useState(initialTab),
     [setup, setSetup] = useState<{ mode: SetupMode; account?: Account } | undefined>(initialSetup),
     [remove, setRemove] = useState<Account>(),
@@ -208,7 +213,7 @@ export function SettingsPanel({
       setTab(initialTab)
       setSetup(initialSetup())
     }
-  }, [open, initialTab])
+  }, [open, initialTab, addAccount])
   const updateAppearance = (account: Account, appearance: AccountAppearance) => {
     // Show the change everywhere at once, and put it back if it cannot be saved.
     queryClient.setQueryData<Bootstrap>(

@@ -68,6 +68,44 @@ describe('action wording', async () => {
     ).toBe('Try a different search.')
   })
 
+  it('says mail is still arriving instead of calling a list empty during a first sync', () => {
+    const idle = { searching: false, unreadOnly: false }
+    expect(
+      emptyListState('inbox', { ...idle, syncing: { names: ['Personal'], only: true } }),
+    ).toMatchObject({
+      title: 'Bringing in your mail',
+      description: 'Your mail is still being indexed. Conversations appear here as they arrive.',
+    })
+    // An account is named only when there are others to tell it from.
+    expect(
+      emptyListState('archive', { ...idle, syncing: { names: ['Studio'], only: false } })
+        .description,
+    ).toMatch(/^Studio is still being indexed\./)
+    expect(
+      emptyListState('inbox', { ...idle, syncing: { names: ['Studio', 'Personal'], only: false } })
+        .description,
+    ).toMatch(/^Some accounts are still being indexed\./)
+    // Once nothing is syncing, an empty inbox is simply empty.
+    expect(emptyListState('inbox', { ...idle, syncing: { names: [], only: true } }).title).toBe(
+      'You’re all caught up',
+    )
+    // A search or filter that finds nothing says so, whatever is still arriving.
+    expect(
+      emptyListState('inbox', {
+        searching: true,
+        unreadOnly: false,
+        syncing: { names: ['Personal'], only: true },
+      }).title,
+    ).toBe('No conversations found')
+    expect(
+      emptyListState('inbox', {
+        searching: false,
+        unreadOnly: true,
+        syncing: { names: ['Personal'], only: true },
+      }).title,
+    ).toBe('No unread conversations')
+  })
+
   it('finds folders by any part of their name, word starts first', () => {
     const folders = [{ name: 'Archive' }, { name: 'Receipts' }, { name: 'Projects' }]
     expect(matchFolders(folders, 'r').map((f) => f.name)).toEqual([

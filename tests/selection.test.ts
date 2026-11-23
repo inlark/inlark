@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectConversation } from '../apps/desktop/src/renderer/src/selection'
+import { selectConversation, stepIndex } from '../apps/desktop/src/renderer/src/selection'
 
 describe('conversation selection', () => {
   const keys = ['personal:1', 'studio:1', 'personal:2', 'studio:2', 'personal:3']
@@ -30,5 +30,29 @@ describe('conversation selection', () => {
     expect(selectConversation(keys, new Set(['personal:1']), 'removed', 'studio:1')).toEqual(
       new Set(['personal:1']),
     )
+  })
+})
+
+describe('stepping through conversations', () => {
+  it('moves one conversation at a time', () => {
+    expect(stepIndex(5, 1, 1)).toBe(2)
+    expect(stepIndex(5, 1, -1)).toBe(0)
+  })
+
+  it('stays put at either end, which is how a key that went nowhere is told apart', () => {
+    expect(stepIndex(5, 0, -1)).toBe(0)
+    expect(stepIndex(5, 4, 1)).toBe(4)
+    expect(stepIndex(1, 0, 1)).toBe(0)
+  })
+
+  it('lands on the first conversation when none is current, whichever way the step goes', () => {
+    expect(stepIndex(5, -1, 1)).toBe(0)
+    expect(stepIndex(5, -1, -1)).toBe(0)
+    // Even a single conversation can be reached by key.
+    expect(stepIndex(1, -1, 1)).toBe(0)
+  })
+
+  it('has nowhere to land in an empty list', () => {
+    expect([][stepIndex(0, -1, 1)]).toBeUndefined()
   })
 })
