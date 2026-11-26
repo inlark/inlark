@@ -45,13 +45,14 @@ import { inspectCertificate } from './certificate'
 import { isInbox, reviewFolders, rolesByPath } from './folders'
 import { ImapFlowPort } from './imapflow-port'
 import type {
+  BodyPart,
   ConversationCursor,
   ConversationFilter,
   IndexedMailbox,
   IndexedMessage,
   MetadataIndex,
 } from './metadata-index'
-import { composeMime, parseMime } from './mime'
+import { composeMime, decodeText, parseMime } from './mime'
 import type { ImapPort, ImapServerOptions, PortFactory, SearchCriteria } from './port'
 import { submitSmtp, verifySmtp, type SmtpSettings } from './smtp'
 
@@ -149,6 +150,15 @@ const bodyLimit = 10_000_000
 const partLimit = 5_000_000
 /** The opening text read for a preview and its code or link. */
 const previewBytes = 4096
+/** Up to `maxBytes` of a text part, in the charset its bytes are really in. */
+async function readText(port: ImapPort, uid: number, part: BodyPart, maxBytes: number) {
+  const { content, charset } = await port.text(uid, partSection(part), maxBytes)
+  const partial = content.length >= maxBytes
+  return {
+    content: decodeText(content, { charset, html: part.type === 'text/html', partial }),
+    partial,
+  }
+}
 const byMailbox = <T extends { mailboxId: string }>(items: T[]) => {
   const groups = new Map<string, T[]>()
   for (const item of items)
@@ -825,15 +835,14 @@ export class ImapProvider implements MailProvider {
           const part = text || html
           if (!part) continue
           try {
-            const bytes = await port.download(row.uid, partSection(part), previewBytes, true)
-            const content = new TextDecoder().decode(bytes)
+            const { content, partial } = await readText(port, row.uid, part, previewBytes)
             const preview = previewText(content, part === html)
             // The same opening text finds the code or link, so a row never needs the full body.
             const auth = this.options.detectAuth
               ? (this.options.detectAuth({
                   subject: row.subject,
                   [part === html ? 'html' : 'text']: content,
-                  partial: bytes.length >= previewBytes,
+                  partial,
                 }) ?? null)
               : undefined
             if (preview || auth !== undefined)
@@ -1113,12 +1122,8 @@ export class ImapProvider implements MailProvider {
     } else {
       // Large messages: fetch only the readable parts, never the attachments.
       const { html, text } = textParts(row.bodyStructure)
-      const read = async (part?: typeof html) =>
-        part
-          ? new TextDecoder().decode(
-              await port.download(row.uid, partSection(part), partLimit, true),
-            )
-          : ''
+      const read = async (part?: BodyPart) =>
+        part ? (await readText(port, row.uid, part, partLimit)).content : ''
       body = { html: await read(html), text: await read(text) }
     }
     this.bodies.set(row.id, body)

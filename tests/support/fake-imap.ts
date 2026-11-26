@@ -24,7 +24,15 @@ export interface FakeMessageInput {
   html?: string
   attachments?: { name: string; type: string; content: string; cid?: string }[]
   flags?: string[]
+  /** Writes the text and HTML in Latin-1 rather than UTF-8, as older mail software does. */
+  latin1?: boolean
+  /** The charset the text and HTML declare, 'utf-8' unless given; null declares none. */
+  charset?: string | null
 }
+const declaredCharset = (input: FakeMessageInput) =>
+  input.charset === undefined ? 'utf-8' : input.charset
+const bodyBytes = (input: FakeMessageInput, value: string): Uint8Array =>
+  input.latin1 ? new Uint8Array(Buffer.from(value, 'latin1')) : new TextEncoder().encode(value)
 interface FakeMessage {
   uid: number
   modseq: number
@@ -48,14 +56,16 @@ function rfc822(input: FakeMessageInput): Uint8Array {
   const list = (a?: Address[]) =>
     a?.map((x) => (x.name ? `"${x.name}" <${x.email}>` : x.email)).join(', ')
   const boundary = 'fake-boundary'
+  const charset = declaredCharset(input)
+  const textType = (type: string) => type + (charset ? '; charset=' + charset : '')
   const parts = [
-    ['text/plain; charset=utf-8', input.text ?? ''],
-    ...(input.html ? [['text/html; charset=utf-8', input.html]] : []),
+    [textType('text/plain'), input.text ?? ''],
+    ...(input.html ? [[textType('text/html'), input.html]] : []),
   ]
   let body: string
   let type: string
   if (!input.attachments?.length && parts.length === 1) {
-    type = 'text/plain; charset=utf-8'
+    type = textType('text/plain')
     body = input.text ?? ''
   } else {
     type = 'multipart/mixed; boundary="' + boundary + '"'
@@ -82,7 +92,8 @@ function rfc822(input: FakeMessageInput): Uint8Array {
       boundary +
       '--\r\n'
   }
-  return new TextEncoder().encode(
+  return bodyBytes(
+    input,
     header('Message-ID', input.messageId && '<' + input.messageId + '>') +
       header('In-Reply-To', input.inReplyTo && '<' + input.inReplyTo + '>') +
       header('References', input.references?.map((r) => '<' + r + '>').join(' ')) +
@@ -97,11 +108,13 @@ function rfc822(input: FakeMessageInput): Uint8Array {
   )
 }
 function structure(input: FakeMessageInput): BodyPart {
+  const charset = declaredCharset(input)
+  const parameters = charset ? { charset } : {}
   const text: BodyPart[] = [
     {
       part: '1',
       type: 'text/plain',
-      parameters: { charset: 'utf-8' },
+      parameters,
       size: (input.text ?? '').length,
     },
     ...(input.html
@@ -109,7 +122,7 @@ function structure(input: FakeMessageInput): BodyPart {
           {
             part: '2',
             type: 'text/html',
-            parameters: { charset: 'utf-8' },
+            parameters,
             size: input.html.length,
           },
         ]
@@ -431,6 +444,21 @@ export class FakePort implements ImapPort {
     const bytes = new TextEncoder().encode(value)
     if (bytes.length > maxBytes && !truncate) throw new ProviderError('tooLarge', 'Too large.')
     return bytes.subarray(0, maxBytes)
+  }
+  /** Like ImapFlow: a declared legacy charset arrives converted to UTF-8, anything else as is. */
+  async text(uid: number, part: string, maxBytes: number) {
+    this.check('FETCH')
+    const m = this.selectedBox().messages.find((x) => x.uid === uid)
+    if (!m) throw new ProviderError('notFound', 'Gone.')
+    const i = m.input
+    const value = [i.text ?? '', ...(i.html ? [i.html] : [])][
+      Number(part === 'TEXT' ? 1 : part) - 1
+    ]
+    if (value === undefined) throw new ProviderError('notFound', 'Gone.')
+    const declared = declaredCharset(i) ?? undefined
+    const converted = !!declared && !/^(us-?)?ascii$|^utf-?8$/i.test(declared)
+    const bytes = converted ? new TextEncoder().encode(value) : bodyBytes(i, value)
+    return { content: bytes.subarray(0, maxBytes), charset: converted ? 'utf-8' : declared }
   }
   async store(
     uids: number[],

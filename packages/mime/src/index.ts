@@ -1,6 +1,9 @@
 import MailComposer from 'nodemailer/lib/mail-composer'
 import { simpleParser, type AddressObject } from 'mailparser'
 import { parseUnsubscribe, ProviderError, type Address } from '@inlark/core'
+import { labelTextCharsets } from './charset'
+
+export { decodeText, textEncoding, type TextOptions } from './charset'
 
 export interface ComposeInput {
   from: Address
@@ -110,10 +113,24 @@ export async function parseMime(
   const maxBytes = options.maxBytes ?? defaultMaxMimeBytes
   if (source.byteLength > maxBytes)
     throw new ProviderError('tooLarge', 'This message is too large to open.')
-  const mail = await simpleParser(
+  const parserOptions = {
+    skipTextToHtml: true,
+    skipTextLinks: true,
+    skipImageLinks: true,
+    keepCidLinks: true,
+  }
+  let mail = await simpleParser(
     Buffer.from(source.buffer, source.byteOffset, source.byteLength),
-    { skipTextToHtml: true, skipTextLinks: true, skipImageLinks: true, keepCidLinks: true },
+    parserOptions,
   )
+  // mailparser reads a text part without a usable charset as UTF-8, which turns each byte of
+  // legacy text it can't read into a replacement character. Only then is the message worth
+  // labelling with the charsets its parts are really in and reading again.
+  const unreadable = (value: unknown) => typeof value === 'string' && value.includes('\uFFFD')
+  if (unreadable(mail.html) || unreadable(mail.text)) {
+    const labelled = labelTextCharsets(source)
+    if (labelled) mail = await simpleParser(labelled, parserOptions)
+  }
   const header = (key: string) => {
     const line = mail.headerLines?.find((h) => h.key === key)?.line
     return line

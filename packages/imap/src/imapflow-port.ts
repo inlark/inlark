@@ -376,6 +376,19 @@ export class ImapFlowPort implements ImapPort {
       return bytes(content, maxBytes, truncate)
     })
   }
+  text(uid: number, part: string, maxBytes: number) {
+    return this.wrap(async () => {
+      const { meta, content } = await this.client.download(String(uid), part, {
+        uid: true,
+        maxBytes: maxBytes + 1,
+        chunkSize: Math.min(65536, Math.max(1024, maxBytes)),
+      })
+      if (!content)
+        throw new ProviderError('notFound', 'This message is no longer available on the server.')
+      // ImapFlow converts a declared charset it knows to UTF-8 and says so here.
+      return { content: await bytes(content, maxBytes, true), charset: meta?.charset || undefined }
+    })
+  }
   store(uids: number[], operation: 'add' | 'remove', flags: string[], unchangedSince?: string) {
     return this.wrap(async () => {
       const options = {

@@ -766,6 +766,79 @@ describe('IMAP list codes and links', () => {
   })
 })
 
+describe('IMAP text in legacy charsets', () => {
+  const french = 'la référence est citée, le retourner dûment tamponné'
+  const html =
+    '<html><head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">' +
+    '</head><body><p>' +
+    french +
+    '</p></body></html>'
+  // No charset, a wrong one, and a right one, which the server converts to UTF-8.
+  const labels = [null, 'utf-8', 'us-ascii', 'iso-8859-1']
+  const deliver = () =>
+    labels.forEach((charset, i) =>
+      server.deliver('INBOX', {
+        messageId: 'legacy-' + i + '@x',
+        subject: 'Ordre de service ' + i,
+        date: at(i + 1),
+        text: french,
+        html,
+        latin1: true,
+        charset,
+      }),
+    )
+  const read = async (p: ImapProvider) => {
+    const { items } = await p.query(account, { view: 'inbox' })
+    return Promise.all(items.map(async (thread) => (await p.conversation(account, thread.id))[0]))
+  }
+
+  it('opens Latin-1 mail with or without a charset', async () => {
+    deliver()
+    const p = await connected()
+    await sync(p)
+    const messages = await read(p)
+    expect(messages).toHaveLength(labels.length)
+    for (const message of messages) {
+      expect(message.text).toContain(french)
+      expect(message.text + message.html).not.toContain('\uFFFD')
+      expect(message.html).toContain('<p>' + french + '</p>')
+    }
+  })
+
+  it('opens large Latin-1 mail part by part', async () => {
+    deliver()
+    const p = await connected()
+    const port = server.commandPorts[0]
+    const fetch = port.fetch.bind(port)
+    vi.spyOn(port, 'fetch').mockImplementation(async (...args) =>
+      (await fetch(...args)).map((m) => ({
+        ...m,
+        ...(args[1].size ? { size: 10_000_001 } : {}),
+      })),
+    )
+    await sync(p)
+    const messages = await read(p)
+    expect(messages).toHaveLength(labels.length)
+    for (const message of messages) {
+      expect(message.text).toBe(french)
+      expect(message.html).toBe(html)
+    }
+  })
+
+  it('previews Latin-1 mail with or without a charset', async () => {
+    deliver()
+    const p = await connected({
+      timing: { sentCopyGraceMs: 0, initialBatch: 5, historicalBatch: 5, previews: 5 },
+    })
+    await sync(p)
+    await vi.waitFor(async () =>
+      expect(
+        (await p.query(account, { view: 'inbox' })).items.map((c) => c.messages[0].preview),
+      ).toEqual(labels.map(() => french)),
+    )
+  })
+})
+
 describe('IMAP organization', () => {
   async function inboxMessage(p: ImapProvider) {
     await sync(p)
