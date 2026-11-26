@@ -30,15 +30,7 @@ export const queryClient = new QueryClient({
     mutations: { networkMode: 'always', retry: false },
   },
 })
-let suspended = 0,
-  timer: ReturnType<typeof setTimeout> | undefined
-export function suspendPersistence() {
-  suspended++
-  if (timer) clearTimeout(timer)
-}
-export function resumePersistence() {
-  suspended = Math.max(0, suspended - 1)
-}
+let timer: ReturnType<typeof setTimeout> | undefined
 export async function restoreCache() {
   try {
     const value = await (await database).get('cache', 'queries-v1')
@@ -51,16 +43,9 @@ export async function restoreCache() {
     /* A cache failure must not prevent the mail client starting. */
   }
   queryClient.getQueryCache().subscribe((event) => {
-    if (
-      suspended ||
-      event.type !== 'updated' ||
-      event.action.type !== 'success' ||
-      event.action.manual
-    )
-      return
+    if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
-      if (suspended) return
       const state = dehydrate(queryClient, {
         shouldDehydrateMutation: () => false,
         shouldDehydrateQuery: (q) =>

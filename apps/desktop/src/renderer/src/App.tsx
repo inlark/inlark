@@ -3,6 +3,7 @@ import { cn } from '@inlark/ui'
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -78,20 +79,12 @@ import {
   type MailQuery,
   type Message,
   type MutationTarget,
-  type QueryPage,
   type SubmissionSummary,
   type UpdateStatus,
   type View,
 } from '@inlark/core'
 import { api, isDemo } from './api'
-import {
-  queryClient,
-  localDrafts,
-  localSaveDraft,
-  localDeleteDraft,
-  suspendPersistence,
-  resumePersistence,
-} from './cache'
+import { queryClient, localDrafts, localSaveDraft, localDeleteDraft } from './cache'
 import { Reader, type UnsubscribeState } from './Reader'
 import { MoveDialog } from './MoveDialog'
 import { CommandPalette, type Command } from './CommandPalette'
@@ -109,7 +102,18 @@ import {
 import { messageText } from './message-text'
 import { signatureBlock, signatureText } from './signature'
 import { textSignatureMarker } from './composer-document'
-import { selectConversation, stepIndex } from './selection'
+import { focusAfterRemoval, selectConversation, stepIndex } from './selection'
+import {
+  forgettable,
+  isLeaving,
+  leavesList,
+  listConversations,
+  requestTime,
+  targetKey,
+  withPendingFlags,
+  type ListPage,
+  type PendingChange,
+} from './pending-changes'
 import {
   ignoreInputsForCommand,
   sameBinding,
@@ -149,6 +153,7 @@ import {
 } from './search-scope'
 import { version as packagedVersion } from '../../../package.json'
 import { reloader } from './reload'
+import { serial } from './serial'
 import { Welcome } from './Welcome'
 import { expectsAccounts } from './first-run'
 import { noteFirstKey, restartFirstKeys, startFirstKeys, updateFirstKeys } from './first-keys'
@@ -161,6 +166,13 @@ const discardKeys = (item: DraftItem) =>
     : [item.key]
 /** Reloads what the window shows; a burst of requests shares one reload. */
 const refresh = reloader(queryClient)
+/**
+ * Sends changes to mail to the server one at a time, in the order they were made, though the
+ * window shows each at once: the user's actions, their undos, and marking an opened conversation
+ * read. A later change never overtakes an earlier one on the same conversation, and none can
+ * change which conversations match while an action on every matching conversation lists them.
+ */
+const inOrder = serial()
 const escapeHtml = (s: string) =>
   s.replace(
     /[&<>"']/g,
@@ -234,8 +246,22 @@ export function App() {
     [focused, setFocused] = useState(''),
     [allMatching, setAllMatching] = useState(false)
   const undoTarget = useSyncExternalStore(toasts.subscribe, toasts.undoTarget)
+  /** Whether an action on every matching conversation is running; nothing else runs meanwhile. */
   const [busy, setBusy] = useState(false),
     [progress, setProgress] = useState('')
+  /** Actions the list already shows as done while the server carries them out. */
+  const [pending, setPending] = useState<readonly PendingChange[]>([]),
+    pendingNow = useRef(pending),
+    changeIds = useRef(0),
+    /** How many of them the server hasn't answered yet. */
+    [unanswered, setUnanswered] = useState(0)
+  /** Keeps `pendingNow` current within the same event, for a key pressed twice in a row. */
+  const updatePending = (
+    update: (current: readonly PendingChange[]) => readonly PendingChange[],
+  ) => {
+    pendingNow.current = update(pendingNow.current)
+    setPending(pendingNow.current)
+  }
   /** Whether a held next or previous key is skimming past conversations. */
   const [skimming, setSkimming] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ phase: 'idle' })
@@ -319,17 +345,46 @@ export function App() {
   }, [queryId])
   const mail = useInfiniteQuery({
     queryKey: ['mail', query],
-    queryFn: ({ pageParam }) => api.query(query, pageParam),
+    // Each page notes when it was asked for, to tell which actions it can't show yet.
+    queryFn: async ({ pageParam }): Promise<ListPage> => {
+      const requestedAt = requestTime()
+      return { ...(await api.query(query, pageParam)), requestedAt }
+    },
     initialPageParam: undefined as Record<string, number> | undefined,
     getNextPageParam: (last) => last.next,
     enabled: accounts.length > 0,
   })
   const conversations = useMemo(
-    () => [
-      ...new Map((mail.data?.pages.flatMap((p) => p.items) || []).map((c) => [c.key, c])).values(),
-    ],
-    [mail.data],
+    () => listConversations(mail.data?.pages || [], pending, queryId),
+    [mail.data, pending, queryId],
   )
+  /** The pages of the list a change was made in, as they're kept now. */
+  const listPages = (change: PendingChange) =>
+    queryClient.getQueryData<{ pages: ListPage[] }>(['mail', JSON.parse(change.list)])?.pages
+  useEffect(() => {
+    if (pending.some((change) => forgettable(change, listPages(change))))
+      updatePending((current) =>
+        current.filter((change) => !forgettable(change, listPages(change))),
+      )
+  }, [pending, mail.data])
+  // When the focused conversation leaves the list, deleted here or elsewhere, focus moves on to
+  // the one that takes its place, so the next key carries on from there instead of the top.
+  const shown = useRef({ queryId, keys: [] as string[] })
+  useLayoutEffect(() => {
+    const before = shown.current
+    const keys = conversations.map((c) => c.key)
+    shown.current = { queryId, keys }
+    if (before.queryId !== queryId || !focused) return
+    const present = new Set(keys)
+    if (present.has(focused)) return
+    const next = focusAfterRemoval(
+      before.keys,
+      new Set(before.keys.filter((key) => !present.has(key))),
+      focused,
+      settings.afterArchive === 'previous' ? 'previous' : 'next',
+    )
+    if (next !== focused) setFocused(next ?? '')
+  }, [conversations])
   const total = mail.data?.pages[0]?.total || 0
   // Accounts still indexing may be missing older mail, so their results are never the whole story.
   const incomplete = useMemo(
@@ -421,6 +476,14 @@ export function App() {
       ? [...listed.messages].sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
       : undefined,
   })
+  /** The open conversation as the user left it, with read and star changes still on their way. */
+  const threadMessages = useMemo(
+    () =>
+      thread.data && route.thread && route.threadAccount
+        ? withPendingFlags(thread.data, pending, scopeKey(route.threadAccount, route.thread))
+        : thread.data,
+    [thread.data, pending, route.thread, route.threadAccount],
+  )
   useEffect(() => {
     localStorage.setItem('mail-density', density)
   }, [density])
@@ -457,17 +520,25 @@ export function App() {
       : conversations
           .filter((c) => selected.has(c.key) || (!selected.size && c.key === focused))
           .map((c) => ({ accountId: c.accountId, threadId: c.id }))
+  const deselect = (keys: ReadonlySet<string>) =>
+    setSelected((current) =>
+      [...current].some((key) => keys.has(key))
+        ? new Set([...current].filter((key) => !keys.has(key)))
+        : current,
+    )
   const act = async (
     action: MailAction,
     explicit?: MutationTarget[],
     mailboxId?: string,
     confirmed = false,
   ) => {
+    // An action on every matching conversation runs alone, with its progress in the footer.
     if (busy) return
+    const bulk = allMatching && !explicit
     // A server that can't do this safely explains why instead of failing halfway.
     const limit = targetLimit(
       accounts,
-      allMatching && !explicit
+      bulk
         ? route.account
           ? [route.account]
           : accounts.map((a) => a.id)
@@ -478,13 +549,15 @@ export function App() {
       explain(limit)
       return
     }
-    if (!confirmed && ((allMatching && !explicit) || action === 'destroy')) {
+    if (!confirmed && (bulk || action === 'destroy')) {
       setConfirmAction(action)
       return
     }
-    const chosen = explicit || targets()
-    if (!chosen.length && !allMatching) return
-    const leaves = ['archive', 'trash', 'spam', 'move', 'destroy'].includes(action)
+    // A conversation on its way out has already left; a key pressed again before the reader
+    // moved on must not act on it twice.
+    const chosen = (explicit || targets()).filter((t) => !isLeaving(pendingNow.current, t))
+    if (!chosen.length && !bulk) return
+    const leaves = leavesList(action)
     // Triage flows straight into the next conversation instead of bouncing to the list.
     const current = conversations.findIndex(
       (c) => c.id === route.thread && c.accountId === route.threadAccount,
@@ -496,47 +569,30 @@ export function App() {
           ? (conversations[current + 1] ?? conversations[current - 1])
           : (conversations[current - 1] ?? conversations[current + 1])
         : undefined
-    setBusy(true)
-    suspendPersistence()
-    const saved = queryClient.getQueriesData({ queryKey: ['mail'] })
-    await queryClient.cancelQueries({ queryKey: ['mail'] })
-    if (!allMatching)
-      queryClient.setQueriesData<{ pages: QueryPage[] }>(
-        { queryKey: ['mail'] },
-        (current) =>
-          current && {
-            ...current,
-            pages: current.pages.map((p) => ({
-              ...p,
-              items: p.items.flatMap((c) => {
-                if (!chosen.some((t) => t.accountId === c.accountId && t.threadId === c.id))
-                  return [c]
-                if (leaves) return []
-                return [
-                  {
-                    ...c,
-                    ...(action === 'read' || action === 'unread'
-                      ? { unread: action === 'unread' }
-                      : {}),
-                    ...(action === 'star' || action === 'unstar'
-                      ? { starred: action === 'star' }
-                      : {}),
-                  },
-                ]
-              }),
-            })),
-          },
-      )
+    // The window shows the action at once, and keeps showing it on anything asked for before the
+    // server answered, whatever reloads meanwhile. The next action can be taken straight away.
+    const change: PendingChange | undefined = bulk
+      ? undefined
+      : { id: ++changeIds.current, action, keys: new Set(chosen.map(targetKey)), list: queryId }
+    const updateChange = (update: Partial<PendingChange>) =>
+      change &&
+      updatePending((current) => current.map((c) => (c.id === change.id ? { ...c, ...update } : c)))
+    if (change) {
+      updatePending((current) => [...current, change])
+      setUnanswered((count) => count + 1)
+      if (leaves) deselect(change.keys)
+    } else setBusy(true)
     if (route.thread && (leaves || action === 'unread')) {
       if (neighbor) open(neighbor)
       else back()
     }
     try {
-      const result =
-        allMatching && !explicit
-          ? await api.mutateAll(query, action)
-          : await api.mutate({ targets: chosen, action, mailboxId })
-      const count = allMatching && !explicit ? result.changed : chosen.length
+      const result = await inOrder(() =>
+        bulk ? api.mutateAll(query, action) : api.mutate({ targets: chosen, action, mailboxId }),
+      )
+      // Whatever is asked for from now on shows what the server did, including what it couldn't.
+      updateChange({ answeredAt: requestTime() })
+      const count = bulk ? result.changed : chosen.length
       toasts.show({
         tone: result.failures.length ? 'error' : undefined,
         text: result.failures.length
@@ -558,16 +614,24 @@ export function App() {
         undoId: result.undoId,
       })
       if (action === 'archive' && result.changed) noteFirstKey('archive')
-      setSelected(new Set())
-      setAllMatching(false)
+      if (change) deselect(change.keys)
+      else {
+        setSelected(new Set())
+        setAllMatching(false)
+      }
     } catch (e) {
-      saved.forEach(([key, value]) => queryClient.setQueryData(key, value))
+      // Nothing changed, so the conversations are shown as they were right away.
+      if (change) updatePending((current) => current.filter((c) => c.id !== change.id))
       fail(e)
     } finally {
-      resumePersistence()
-      setBusy(false)
-      setProgress('')
+      if (change) setUnanswered((count) => count - 1)
+      else {
+        setBusy(false)
+        setProgress('')
+      }
       await refresh()
+      // The open conversation has reloaded too; the change is forgotten once its list has.
+      updateChange({ settled: true })
     }
   }
   const openMove = (chosen: MutationTarget[]) => {
@@ -912,14 +976,12 @@ export function App() {
       lastRead.current !== key
     ) {
       lastRead.current = key
-      if (thread.data.some((m) => !m.keywords.$seen))
-        void api
-          // The service reports the change, which reloads the list.
-          .mutate({
-            targets: [{ accountId: readerAccount.id, threadId: route.thread }],
-            action: 'read',
-          })
-          .catch((e) => fail(e))
+      if (thread.data.some((m) => !m.keywords.$seen)) {
+        const target = { accountId: readerAccount.id, threadId: route.thread }
+        // In turn with the user's actions, which it must not overtake or undo. The service reports
+        // the change, which reloads the list.
+        void inOrder(() => api.mutate({ targets: [target], action: 'read' })).catch((e) => fail(e))
+      }
     }
   }, [route.thread, route.threadAccount, thread.data, readerAccount?.status, skimming])
   useEffect(() => {
@@ -1009,7 +1071,7 @@ export function App() {
     }
     toasts.show({ text: 'Undoing…', tone: 'progress' }, target.id)
     try {
-      const result = await api.undo(target.undoId!)
+      const result = await inOrder(() => api.undo(target.undoId!))
       toasts.show(
         result.failures.length ? { text: result.failures[0], tone: 'error' } : { text: 'Undone.' },
         target.id,
@@ -1077,7 +1139,7 @@ export function App() {
     void act(
       (
         route.thread
-          ? thread.data?.some((m) => m.keywords.$flagged)
+          ? threadMessages?.some((m) => m.keywords.$flagged)
           : conversations.find((c) => c.key === focused)?.starred
       )
         ? 'unstar'
@@ -1201,15 +1263,25 @@ export function App() {
         },
         enabled: inList,
       },
-      archive: { run: () => void act('archive'), enabled: canAct },
-      trash: { run: trashKey, enabled: canTrash },
-      spam: { run: () => void act('spam'), enabled: canAct },
-      notSpam: { run: () => void act('notSpam'), enabled: canAct && view !== 'drafts' },
-      restore: { run: () => void act('restore'), enabled: canAct && view !== 'drafts' },
+      // Each action can be taken without waiting for the last, so a held key does its action once,
+      // not once for every conversation that slides into place.
+      archive: { run: () => void act('archive'), enabled: canAct, ignoreRepeat: true },
+      trash: { run: trashKey, enabled: canTrash, ignoreRepeat: true },
+      spam: { run: () => void act('spam'), enabled: canAct, ignoreRepeat: true },
+      notSpam: {
+        run: () => void act('notSpam'),
+        enabled: canAct && view !== 'drafts',
+        ignoreRepeat: true,
+      },
+      restore: {
+        run: () => void act('restore'),
+        enabled: canAct && view !== 'drafts',
+        ignoreRepeat: true,
+      },
       shortcuts: { run: () => setHelp(true) },
-      unread: { run: () => void act('unread'), enabled: canAct },
-      read: { run: () => void act('read'), enabled: canAct },
-      star: { run: toggleStar, enabled: canAct },
+      unread: { run: () => void act('unread'), enabled: canAct, ignoreRepeat: true },
+      read: { run: () => void act('read'), enabled: canAct, ignoreRepeat: true },
+      star: { run: toggleStar, enabled: canAct, ignoreRepeat: true },
       move: { run: () => openMove(targets()), enabled: canAct && !allMatching },
       undo: { run: () => toasts.undo(), enabled: !blocked && !!undoTarget, ignoreRepeat: true },
       reply: { run: () => latest && void compose(latest), enabled: inThread },
@@ -1967,7 +2039,7 @@ export function App() {
           thread.data ? (
             <Reader
               key={scopeKey(readerAccount.id, route.thread!)}
-              messages={thread.data.filter(
+              messages={(threadMessages || thread.data).filter(
                 (m) => !discarding.has('server:' + scopeKey(m.accountId, m.id)),
               )}
               view={view}
@@ -2745,7 +2817,7 @@ export function App() {
               )}
             >
               <span role="status">
-                {busy ? (
+                {busy || unanswered ? (
                   <>
                     <Spinner size={11} />
                     {progress || 'Updating…'}
