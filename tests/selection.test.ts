@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { selectConversation, stepIndex } from '../apps/desktop/src/renderer/src/selection'
+import {
+  focusAfterRemoval,
+  selectConversation,
+  stepIndex,
+} from '../apps/desktop/src/renderer/src/selection'
 
 describe('conversation selection', () => {
   const keys = ['personal:1', 'studio:1', 'personal:2', 'studio:2', 'personal:3']
@@ -54,5 +58,36 @@ describe('stepping through conversations', () => {
 
   it('has nowhere to land in an empty list', () => {
     expect([][stepIndex(0, -1, 1)]).toBeUndefined()
+  })
+})
+
+describe('focus after conversations leave the list', () => {
+  const keys = ['a', 'b', 'c', 'd', 'e']
+
+  it('moves on to the conversation that took its place', () => {
+    expect(focusAfterRemoval(keys, new Set(['b']), 'b', 'next')).toBe('c')
+  })
+
+  it('moves back instead when the user prefers the previous conversation', () => {
+    expect(focusAfterRemoval(keys, new Set(['b']), 'b', 'previous')).toBe('a')
+  })
+
+  it('turns the other way at either end of the list', () => {
+    expect(focusAfterRemoval(keys, new Set(['e']), 'e', 'next')).toBe('d')
+    expect(focusAfterRemoval(keys, new Set(['a']), 'a', 'previous')).toBe('b')
+  })
+
+  it('skips past every conversation that left with it', () => {
+    expect(focusAfterRemoval(keys, new Set(['b', 'c', 'd']), 'c', 'next')).toBe('e')
+    expect(focusAfterRemoval(keys, new Set(['a', 'b', 'c']), 'b', 'previous')).toBe('d')
+  })
+
+  it('stays on a conversation that is still there', () => {
+    expect(focusAfterRemoval(keys, new Set(['b', 'd']), 'c', 'next')).toBe('c')
+  })
+
+  it('has nothing left to focus when every conversation left', () => {
+    expect(focusAfterRemoval(keys, new Set(keys), 'c', 'next')).toBeUndefined()
+    expect(focusAfterRemoval(keys, new Set(['x']), 'x', 'next')).toBeUndefined()
   })
 })
