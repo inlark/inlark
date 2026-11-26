@@ -35,6 +35,15 @@ export interface ImapPort {
    * fail unless `truncate` is set, which returns the first `maxBytes` (for previews).
    */
   download(uid: number, part: string, maxBytes: number, truncate?: boolean): Promise<Uint8Array>
+  /**
+   * The first `maxBytes` of a text part, with transfer encoding decoded, and the charset its
+   * bytes are in: UTF-8 when the declared charset was converted, else the declared one, if any.
+   */
+  text(
+    uid: number,
+    part: string,
+    maxBytes: number,
+  ): Promise<{ content: Uint8Array; charset?: string }>
   /** UID STORE ±FLAGS, conditional on UNCHANGEDSINCE when given and CONDSTORE is enabled. */
   store(
     uids: number[],

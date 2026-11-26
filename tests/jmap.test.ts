@@ -65,7 +65,7 @@ function resolveReferences(args: any, responses: any[]): any {
 }
 function fixture(
   overrides: Record<string, (args: any) => any> = {},
-  downloadBody?: string,
+  downloadBody?: string | Uint8Array,
   options: Partial<JmapOptions> = {},
 ) {
   const calls: { name: string; args: any }[] = []
@@ -386,6 +386,68 @@ describe('JMAP provider', () => {
     const [account] = await provider.connect()
     expect((await provider.messages(account, ['blob'], true))[0].html).toBe('<p>Recovered body</p>')
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/download/'))).toBe(true)
+  })
+  it('reads again, from its bytes, a body the server could not decode', async () => {
+    const french = 'la référence est citée, le retourner dûment tamponné'
+    // Flagged as RFC 8621 allows, or left with replacement characters as Stalwart does.
+    for (const isEncodingProblem of [true, false]) {
+      const { provider, fetch } = fixture(
+        {
+          'Email/get': () => ({
+            list: [
+              {
+                ...raw('legacy'),
+                htmlBody: [
+                  { partId: '1', type: 'text/html', charset: 'us-ascii', blobId: 'b1', size: 60 },
+                ],
+                bodyValues: { 1: { value: '<p>la r\uFFFDf\uFFFDrence</p>', isEncodingProblem } },
+              },
+            ],
+          }),
+        },
+        new Uint8Array(Buffer.from('<p>' + french + '</p>', 'latin1')),
+      )
+      const [account] = await provider.connect()
+      const [message] = await provider.messages(account, ['legacy'], true)
+      expect(message.html).toBe('<p>' + french + '</p>')
+      expect(fetch.mock.calls.filter(([url]) => String(url).includes('/download/'))).toHaveLength(1)
+    }
+  })
+  it('downloads no body the server decoded well', async () => {
+    const { provider, fetch } = fixture({
+      'Email/get': () => ({
+        list: [
+          {
+            ...raw('fine'),
+            htmlBody: [{ partId: '1', type: 'text/html', blobId: 'b1', size: 20 }],
+            bodyValues: { 1: { value: '<p>Grüße</p>' } },
+          },
+        ],
+      }),
+    })
+    const [account] = await provider.connect()
+    expect((await provider.messages(account, ['fine'], true))[0].html).toBe('<p>Grüße</p>')
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/download/'))).toBe(false)
+  })
+  it('decodes a downloaded body part in the charset its bytes are in', async () => {
+    const body = (charset: string) => ({
+      'Email/get': () => ({
+        list: [
+          {
+            ...raw('blob'),
+            htmlBody: [{ type: 'text/plain', charset, blobId: 'body-blob', size: 9 }],
+            bodyValues: {},
+          },
+        ],
+      }),
+    })
+    // RFC 8621 reports US-ASCII for a text part without a charset, which is often UTF-8 instead.
+    const utf8 = fixture(body('us-ascii'), new Uint8Array(Buffer.from('Grüße')))
+    const [a] = await utf8.provider.connect()
+    expect((await utf8.provider.messages(a, ['blob'], true))[0].text).toBe('Grüße')
+    const legacy = fixture(body('us-ascii'), new Uint8Array(Buffer.from('Grüße', 'latin1')))
+    const [b] = await legacy.provider.connect()
+    expect((await legacy.provider.messages(b, ['blob'], true))[0].text).toBe('Grüße')
   })
   it('surfaces per-object mutation failures', async () => {
     const { provider } = fixture()

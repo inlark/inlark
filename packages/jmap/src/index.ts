@@ -26,6 +26,7 @@ import {
   type RequestPriority,
   type SubmissionOutcome,
 } from '@inlark/core'
+import { decodeText } from '@inlark/mime'
 
 export { draftFingerprint, parseUnsubscribe }
 
@@ -700,6 +701,7 @@ export class JmapProvider implements MailProvider {
   private async readEmails(account: Account, list: Json[], bodies: boolean): Promise<Message[]> {
     const result: Message[] = []
     for (const raw of list) {
+      if (bodies) await this.decodeUnreadable(account, raw)
       const message = asMessage(account, raw, bodies)
       if (bodies) {
         for (const [type, field] of [
@@ -721,7 +723,10 @@ export class JmapProvider implements MailProvider {
             })
             message[field] = renderBodyPart(
               part,
-              new TextDecoder(part.charset || 'utf-8').decode(bytes),
+              decodeText(bytes, {
+                charset: part.charset,
+                html: (part.type || type).toLowerCase() === 'text/html',
+              }),
               type,
             )
           } catch {
@@ -738,6 +743,45 @@ export class JmapProvider implements MailProvider {
       result.push(message)
     }
     return result
+  }
+  /**
+   * Reads again, from their bytes, the body values the server could not decode. Mail without a
+   * usable charset is often in one it doesn't declare, which decodeText can tell. Stalwart reads
+   * such text as UTF-8 without reporting a problem, leaving replacement characters behind.
+   */
+  private async decodeUnreadable(account: Account, raw: Json) {
+    const values: Json = raw.bodyValues || {}
+    const parts = new Map<string, Json>()
+    const visit = (part: Json | undefined) => {
+      if (!part) return
+      const value = values[part.partId]
+      const unreadable = value?.isEncodingProblem || String(value?.value ?? '').includes('\uFFFD')
+      if (unreadable && !value.isTruncated && part.blobId) parts.set(part.partId, part)
+      for (const child of part.subParts || []) visit(child)
+    }
+    for (const part of [...(raw.textBody || []), ...(raw.htmlBody || [])]) visit(part)
+    visit(raw.bodyStructure)
+    for (const part of parts.values()) {
+      if (part.size > 5_000_000) continue
+      try {
+        const bytes = await this.download(account, {
+          blobId: part.blobId,
+          name: 'body',
+          type: part.type || 'text/plain',
+          size: part.size || 0,
+        })
+        values[part.partId] = {
+          ...values[part.partId],
+          value: decodeText(bytes, {
+            charset: part.charset,
+            html: part.type?.toLowerCase() === 'text/html',
+          }),
+          isEncodingProblem: false,
+        }
+      } catch {
+        // Keep the server's reading of the part.
+      }
+    }
   }
   async messages(account: Account, ids: string[], bodies = false): Promise<Message[]> {
     return this.readEmails(
